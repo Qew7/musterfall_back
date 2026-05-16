@@ -1,0 +1,174 @@
+# This file is auto-generated from the current state of the database. Instead
+# of editing this file, please use the migrations feature of Active Record to
+# incrementally modify your database, and then regenerate this schema definition.
+#
+# This file is the source Rails uses to define your schema when running `bin/rails
+# db:schema:load`. When creating a new database, `bin/rails db:schema:load` tends to
+# be faster and is potentially less error prone than running all of your
+# migrations from scratch. Old migrations may fail to apply correctly if those
+# migrations use external dependencies or application code.
+#
+# It's strongly recommended that you check this file into your version control system.
+
+ActiveRecord::Schema[8.1].define(version: 2026_05_16_000400) do
+  # These are extensions that must be enabled in order to support this database
+  enable_extension "pg_catalog.plpgsql"
+
+  create_table "abilities", force: :cascade do |t|
+    t.string "category", null: false
+    t.datetime "created_at", null: false
+    t.string "description", null: false
+    t.string "key", null: false
+    t.string "name", null: false
+    t.datetime "updated_at", null: false
+    t.index ["key"], name: "index_abilities_on_key", unique: true
+  end
+
+  create_table "army_template_abilities", force: :cascade do |t|
+    t.bigint "ability_id", null: false
+    t.bigint "army_template_id", null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["ability_id"], name: "index_army_template_abilities_on_ability_id"
+    t.index ["army_template_id", "ability_id"], name: "idx_template_abilities_unique", unique: true
+    t.index ["army_template_id"], name: "index_army_template_abilities_on_army_template_id"
+  end
+
+  create_table "army_templates", force: :cascade do |t|
+    t.jsonb "abilities", default: [], null: false
+    t.string "armor_type", null: false
+    t.integer "base_depth", default: 1, null: false
+    t.integer "cost", null: false
+    t.datetime "created_at", null: false
+    t.bigint "faction_id", null: false
+    t.integer "initiative", null: false
+    t.string "kind", null: false
+    t.integer "melee", default: 0, null: false
+    t.integer "model_health", null: false
+    t.integer "models", null: false
+    t.boolean "mounted", default: false, null: false
+    t.integer "movement", default: 3, null: false
+    t.string "name", null: false
+    t.integer "ranged", default: 0, null: false
+    t.boolean "requires_line_of_sight", default: true, null: false
+    t.integer "shooting_range", default: 0, null: false
+    t.string "shooting_template", default: "single", null: false
+    t.integer "spell", default: 0, null: false
+    t.integer "spell_range", default: 0, null: false
+    t.string "spell_template", default: "single", null: false
+    t.string "template_key", null: false
+    t.datetime "updated_at", null: false
+    t.string "weapon_type", null: false
+    t.integer "width", null: false
+    t.index ["faction_id", "kind"], name: "index_army_templates_on_faction_id_and_kind"
+    t.index ["faction_id"], name: "index_army_templates_on_faction_id"
+    t.index ["template_key"], name: "index_army_templates_on_template_key", unique: true
+  end
+
+  create_table "battle_phases", force: :cascade do |t|
+    t.bigint "battle_turn_id", null: false
+    t.datetime "created_at", null: false
+    t.jsonb "events", default: [], null: false
+    t.string "label", null: false
+    t.string "phase_type", null: false
+    t.integer "position", null: false
+    t.datetime "updated_at", null: false
+    t.index ["battle_turn_id", "position"], name: "index_battle_phases_on_battle_turn_id_and_position", unique: true
+    t.index ["battle_turn_id"], name: "index_battle_phases_on_battle_turn_id"
+  end
+
+  create_table "battle_rounds", force: :cascade do |t|
+    t.bigint "battle_id", null: false
+    t.datetime "created_at", null: false
+    t.jsonb "events", default: [], null: false
+    t.integer "number", null: false
+    t.datetime "updated_at", null: false
+    t.index ["battle_id", "number"], name: "index_battle_rounds_on_battle_id_and_number", unique: true
+    t.index ["battle_id"], name: "index_battle_rounds_on_battle_id"
+  end
+
+  create_table "battle_turns", force: :cascade do |t|
+    t.bigint "battle_round_id", null: false
+    t.datetime "created_at", null: false
+    t.string "player_id", null: false
+    t.string "player_name", null: false
+    t.integer "position", null: false
+    t.datetime "updated_at", null: false
+    t.index ["battle_round_id", "position"], name: "index_battle_turns_on_battle_round_id_and_position", unique: true
+    t.index ["battle_round_id"], name: "index_battle_turns_on_battle_round_id"
+  end
+
+  create_table "battles", force: :cascade do |t|
+    t.datetime "created_at", null: false
+    t.jsonb "events", default: [], null: false
+    t.bigint "game_id", null: false
+    t.jsonb "left_payload", default: {}, null: false
+    t.string "left_player_id", null: false
+    t.string "left_player_name", null: false
+    t.jsonb "right_payload", default: {}, null: false
+    t.string "right_player_id", null: false
+    t.string "right_player_name", null: false
+    t.integer "round_number", null: false
+    t.string "summary", null: false
+    t.datetime "updated_at", null: false
+    t.string "winner_id", null: false
+    t.string "winner_name", null: false
+    t.index ["game_id", "round_number", "left_player_id", "right_player_id"], name: "index_battles_on_round_and_players", unique: true
+    t.index ["game_id"], name: "index_battles_on_game_id"
+  end
+
+  create_table "factions", force: :cascade do |t|
+    t.string "color", null: false
+    t.datetime "created_at", null: false
+    t.string "name", null: false
+    t.string "passive", null: false
+    t.integer "position", default: 0, null: false
+    t.string "slug", null: false
+    t.datetime "updated_at", null: false
+    t.string "vibe", null: false
+    t.index ["position"], name: "index_factions_on_position"
+    t.index ["slug"], name: "index_factions_on_slug", unique: true
+  end
+
+  create_table "games", force: :cascade do |t|
+    t.datetime "created_at", null: false
+    t.integer "current_round", default: 1, null: false
+    t.integer "player_count", null: false
+    t.jsonb "state_payload", default: {}, null: false
+    t.string "status", default: "draft", null: false
+    t.datetime "updated_at", null: false
+    t.index ["status"], name: "index_games_on_status"
+  end
+
+  create_table "hero_upgrades", force: :cascade do |t|
+    t.string "category", null: false
+    t.datetime "created_at", null: false
+    t.string "name", null: false
+    t.integer "position", default: 0, null: false
+    t.string "summary", null: false
+    t.datetime "updated_at", null: false
+    t.string "upgrade_key", null: false
+    t.index ["position"], name: "index_hero_upgrades_on_position"
+    t.index ["upgrade_key"], name: "index_hero_upgrades_on_upgrade_key", unique: true
+  end
+
+  create_table "round_snapshots", force: :cascade do |t|
+    t.datetime "created_at", null: false
+    t.bigint "game_id", null: false
+    t.jsonb "payload", default: {}, null: false
+    t.string "phase", null: false
+    t.integer "round_number", null: false
+    t.datetime "updated_at", null: false
+    t.index ["game_id", "round_number", "phase"], name: "index_round_snapshots_on_game_id_and_round_number_and_phase", unique: true
+    t.index ["game_id"], name: "index_round_snapshots_on_game_id"
+  end
+
+  add_foreign_key "army_template_abilities", "abilities"
+  add_foreign_key "army_template_abilities", "army_templates"
+  add_foreign_key "army_templates", "factions"
+  add_foreign_key "battle_phases", "battle_turns"
+  add_foreign_key "battle_rounds", "battles"
+  add_foreign_key "battle_turns", "battle_rounds"
+  add_foreign_key "battles", "games"
+  add_foreign_key "round_snapshots", "games"
+end
