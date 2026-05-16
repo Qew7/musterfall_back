@@ -1,5 +1,5 @@
 class BattlePhase < ApplicationRecord
-  TYPES = %w[movement magic shooting melee].freeze
+  TYPES = %w[start movement magic shooting melee].freeze
 
   belongs_to :battle_turn
 

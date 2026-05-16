@@ -47,6 +47,7 @@ module Api
         ranged: template.ranged,
         spell: template.spell,
         movement: template.movement,
+        morale: template.morale,
         shootingRange: template.shooting_range,
         spellRange: template.spell_range,
         shootingTemplate: template.shooting_template,

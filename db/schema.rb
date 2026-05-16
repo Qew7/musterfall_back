@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_05_16_000700) do
+ActiveRecord::Schema[8.1].define(version: 2026_05_16_000800) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -49,6 +49,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_05_16_000700) do
     t.string "model_class", default: "infantry", null: false
     t.integer "model_health", null: false
     t.integer "models", null: false
+    t.integer "morale", default: 5, null: false
     t.boolean "mounted", default: false, null: false
     t.integer "movement", default: 3, null: false
     t.string "name", null: false

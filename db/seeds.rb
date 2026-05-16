@@ -12,6 +12,7 @@ abilities = [
 	{ key: "leader", name: "Leader", category: "hero", description: "Командир, способный вести армию." },
 	{ key: "machine", name: "Machine", category: "siege", description: "Осадная машина с усиленным дальним уроном." },
 	{ key: "monster", name: "Monster", category: "trait", description: "Крупная цель с особой угрозой." },
+	{ key: "muster", name: "Muster", category: "hero", description: "Позволяет союзным отрядам рядом использовать мораль героя." },
 	{ key: "poison", name: "Poison", category: "combat", description: "Ослабляет цель после попадания." },
 	{ key: "precision", name: "Precision", category: "combat", description: "Точнее выбирает важные цели." },
 	{ key: "ranged", name: "Ranged", category: "combat", description: "Может атаковать на дистанции." },
@@ -25,8 +26,15 @@ abilities = [
 	{ key: "wizardAura", name: "Wizard Aura", category: "aura", description: "Поддерживает союзников магическим полем." }
 ]
 
-def default_movement_for(attributes)
+def normalized_abilities_for(attributes)
 	abilities = attributes.fetch(:abilities)
+	return abilities if attributes.fetch(:kind) != "hero"
+
+	abilities.include?("muster") ? abilities : [*abilities, "muster"]
+end
+
+def default_movement_for(attributes)
+	abilities = normalized_abilities_for(attributes)
 	return 5 if attributes.fetch(:mounted) || abilities.include?("fast")
 	return 2 if abilities.include?("machine")
 	return 4 if abilities.include?("charge") || abilities.include?("skirmisher")
@@ -36,7 +44,7 @@ end
 
 def default_base_depth_for(attributes)
 	return 2 if attributes.fetch(:mounted)
-	return 2 if attributes.fetch(:abilities).include?("machine")
+	return 2 if normalized_abilities_for(attributes).include?("machine")
 
 	1
 end
@@ -44,7 +52,7 @@ end
 def default_model_class_for(attributes)
 	return attributes.fetch(:mounted) ? "cavalry" : "infantry" if attributes.fetch(:kind) == "hero"
 
-	abilities = attributes.fetch(:abilities)
+	abilities = normalized_abilities_for(attributes)
 	return "machine" if abilities.include?("machine")
 	return "monster" if abilities.include?("monster")
 	return "cavalry" if attributes.fetch(:mounted) || abilities.include?("charge") || abilities.include?("fast")
@@ -54,22 +62,24 @@ end
 
 def default_shooting_range_for(attributes)
 	return 0 if attributes.fetch(:ranged).zero?
-	return 14 if attributes.fetch(:abilities).include?("machine")
-	return 11 if attributes.fetch(:abilities).include?("precision")
+	abilities = normalized_abilities_for(attributes)
+	return 14 if abilities.include?("machine")
+	return 11 if abilities.include?("precision")
 
 	9
 end
 
 def default_spell_range_for(attributes)
 	return 0 if attributes.fetch(:spell).zero?
-	return 8 if attributes.fetch(:abilities).include?("wizard")
+	return 8 if normalized_abilities_for(attributes).include?("wizard")
 
 	6
 end
 
 def default_shooting_template_for(attributes)
-	return "blast" if attributes.fetch(:abilities).include?("machine")
-	return "volley" if attributes.fetch(:abilities).include?("ranged")
+	abilities = normalized_abilities_for(attributes)
+	return "blast" if abilities.include?("machine")
+	return "volley" if abilities.include?("ranged")
 
 	"single"
 end
@@ -82,7 +92,17 @@ def default_spell_template_for(attributes)
 end
 
 def default_line_of_sight_for(attributes)
-	!attributes.fetch(:abilities).include?("machine")
+	!normalized_abilities_for(attributes).include?("machine")
+end
+
+def default_morale_for(attributes)
+	abilities = normalized_abilities_for(attributes)
+	return 8 if attributes.fetch(:kind) == "hero"
+	return 7 if abilities.include?("disciplined")
+	return 7 if abilities.include?("undead")
+	return 6 if abilities.include?("fear") || abilities.include?("steadfast")
+
+	5
 end
 
 factions = [
@@ -190,11 +210,13 @@ templates.each do |attributes|
 	faction = Faction.find_by!(slug: attributes.fetch(:faction_slug))
 	ArmyTemplate.find_or_initialize_by(template_key: attributes.fetch(:template_key)).update!(
 		attributes.except(:faction_slug).merge(
+			abilities: normalized_abilities_for(attributes),
 			model_class: attributes[:model_class] || default_model_class_for(attributes),
 			model_base_width: attributes[:model_base_width],
 			model_base_depth: attributes[:model_base_depth],
 			base_depth: attributes[:base_depth] || default_base_depth_for(attributes),
 			movement: attributes[:movement] || default_movement_for(attributes),
+			morale: attributes[:morale] || default_morale_for(attributes),
 			shooting_range: attributes[:shooting_range] || default_shooting_range_for(attributes),
 			spell_range: attributes[:spell_range] || default_spell_range_for(attributes),
 			shooting_template: attributes[:shooting_template] || default_shooting_template_for(attributes),

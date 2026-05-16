@@ -75,6 +75,7 @@ module BattlePersistence
       { actor_state_after: battle_combatant_state_schema },
       { target_state_before: battle_combatant_state_schema },
       { target_state_after: battle_combatant_state_schema },
+      { morale_check: battle_morale_check_schema },
       { template: battle_template_schema },
       { charge: battle_charge_schema }
     ]
@@ -103,6 +104,7 @@ module BattlePersistence
       :max_health,
       :model_health,
       :models_remaining,
+      :starting_models,
       :frontage,
       :max_files,
       :files,
@@ -110,9 +112,11 @@ module BattlePersistence
       :base_width,
       :base_depth,
       :movement,
+      :morale,
       :melee,
       :ranged,
       :spell,
+      :is_routing,
       :armor_type,
       :weapon_type,
       { attached_heroes: [:entity_id, :name, :slot] }
@@ -130,6 +134,29 @@ module BattlePersistence
       { origin: battle_point_schema },
       { start: battle_point_schema },
       { end: battle_point_schema }
+    ]
+  end
+
+  def battle_morale_check_schema
+    [
+      :source_phase,
+      :trigger,
+      :effective_morale,
+      :morale_source,
+      :threshold,
+      :roll,
+      :passed,
+      :failure_margin,
+      :combat_score_delta,
+      :phase_damage,
+      :lost_models,
+      :starting_models,
+      :phase_start_models,
+      :threshold_models,
+      :status_before,
+      :status_after,
+      :damage_applied,
+      :retreat_edge
     ]
   end
 
@@ -176,6 +203,7 @@ module BattlePersistence
     payload[:details] = Array(payload[:details]) if payload.key?(:details)
     payload[:blockers] = Array(payload[:blockers]) if payload.key?(:blockers)
     payload[:affected_ids] = Array(payload[:affected_ids]) if payload.key?(:affected_ids)
+    payload[:morale_check] = normalize_battle_morale_check_payload(payload[:morale_check]) if payload[:morale_check].present?
 
     %i[from to].each do |key|
       payload[key] = normalize_battle_position_payload(payload[key]) if payload[key].present?
@@ -289,6 +317,7 @@ module BattlePersistence
       actor_state_after: build_combatant_state_payload_from_snapshot_report(payload[:actorStateAfter]),
       target_state_before: build_combatant_state_payload_from_snapshot_report(payload[:targetStateBefore]),
       target_state_after: build_combatant_state_payload_from_snapshot_report(payload[:targetStateAfter]),
+      morale_check: build_morale_check_payload_from_snapshot_report(payload[:moraleCheck]),
       template: build_template_payload_from_snapshot_report(payload[:template]),
       charge: build_charge_payload_from_snapshot_report(payload[:charge])
     }.compact
@@ -336,6 +365,7 @@ module BattlePersistence
       max_health: payload[:maxHealth],
       model_health: payload[:modelHealth],
       models_remaining: payload[:modelsRemaining],
+      starting_models: payload[:startingModels],
       frontage: payload[:frontage],
       max_files: payload[:maxFiles],
       files: payload[:files],
@@ -343,9 +373,11 @@ module BattlePersistence
       base_width: payload[:baseWidth],
       base_depth: payload[:baseDepth],
       movement: payload[:movement],
+      morale: payload[:morale],
       melee: payload[:melee],
       ranged: payload[:ranged],
       spell: payload[:spell],
+      is_routing: payload[:isRouting],
       armor_type: payload[:armorType],
       weapon_type: payload[:weaponType],
       attached_heroes: Array(payload[:attachedHeroes]).filter_map do |hero_payload|
@@ -387,6 +419,32 @@ module BattlePersistence
       start: build_position_payload_from_snapshot_report(payload[:start]),
       destination: build_position_payload_from_snapshot_report(payload[:destination]),
       contact_point: build_point_payload_from_snapshot_report(payload[:contactPoint] || payload[:contact_point])
+    }.compact
+  end
+
+  def build_morale_check_payload_from_snapshot_report(raw_payload)
+    return nil unless raw_payload
+
+    payload = raw_payload.to_h.deep_symbolize_keys
+    {
+      source_phase: payload[:sourcePhase],
+      trigger: payload[:trigger],
+      effective_morale: payload[:effectiveMorale],
+      morale_source: payload[:moraleSource],
+      threshold: payload[:threshold],
+      roll: payload[:roll],
+      passed: payload[:passed],
+      failure_margin: payload[:failureMargin],
+      combat_score_delta: payload[:combatScoreDelta],
+      phase_damage: payload[:phaseDamage],
+      lost_models: payload[:lostModels],
+      starting_models: payload[:startingModels],
+      phase_start_models: payload[:phaseStartModels],
+      threshold_models: payload[:thresholdModels],
+      status_before: payload[:statusBefore],
+      status_after: payload[:statusAfter],
+      damage_applied: payload[:damageApplied],
+      retreat_edge: payload[:retreatEdge]
     }.compact
   end
 
@@ -437,11 +495,13 @@ module BattlePersistence
       max_health
       model_health
       models_remaining
+      starting_models
       frontage
       max_files
       files
       ranks
       movement
+      morale
       melee
       ranged
       spell
@@ -449,8 +509,36 @@ module BattlePersistence
       payload[key] = Integer(payload[key]) if payload.key?(key) && !payload[key].nil?
     end
 
+    payload[:is_routing] = ActiveModel::Type::Boolean.new.cast(payload[:is_routing]) if payload.key?(:is_routing)
+
     payload[:attached_heroes] = Array(payload[:attached_heroes]).map do |hero_payload|
       hero_payload.to_h.deep_symbolize_keys.compact
+    end
+
+    payload.compact
+  end
+
+  def normalize_battle_morale_check_payload(raw_morale_check_payload)
+    payload = raw_morale_check_payload.to_h.deep_symbolize_keys
+
+    %i[
+      effective_morale
+      threshold
+      roll
+      failure_margin
+      combat_score_delta
+      phase_damage
+      lost_models
+      starting_models
+      phase_start_models
+      threshold_models
+      damage_applied
+    ].each do |key|
+      payload[key] = Integer(payload[key]) if payload.key?(key) && !payload[key].nil?
+    end
+
+    %i[passed status_before status_after].each do |key|
+      payload[key] = ActiveModel::Type::Boolean.new.cast(payload[key]) if payload.key?(key)
     end
 
     payload.compact
