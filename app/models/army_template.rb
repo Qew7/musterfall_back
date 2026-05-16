@@ -1,4 +1,6 @@
 class ArmyTemplate < ApplicationRecord
+    validates :attacks, numericality: { greater_than: 0 }
+    # Количество атак по умолчанию 1, у героев/монстров может быть больше
   KINDS = %w[unit hero].freeze
   ATTACK_TEMPLATES = %w[single volley blast breath].freeze
   MAX_FORMATION_FILES = 5

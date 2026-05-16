@@ -55,6 +55,7 @@ module Api
         spellTemplate: template.spell_template,
         requiresLineOfSight: template.requires_line_of_sight,
         initiative: template.initiative,
+        attacks: template.attacks,
         abilities: template.abilities_list,
         mounted: template.mounted
       }

@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_05_16_000900) do
+ActiveRecord::Schema[8.1].define(version: 2026_05_16_010000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -37,6 +37,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_05_16_000900) do
   create_table "army_templates", force: :cascade do |t|
     t.jsonb "abilities", default: [], null: false
     t.string "armor_type", null: false
+    t.integer "attacks", default: 1, null: false
     t.integer "base_depth", default: 1, null: false
     t.integer "cost", null: false
     t.datetime "created_at", null: false
