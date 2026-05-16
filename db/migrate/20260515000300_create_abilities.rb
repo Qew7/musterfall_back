@@ -18,6 +18,6 @@ class CreateAbilities < ActiveRecord::Migration[8.1]
       t.timestamps
     end
 
-    add_index :army_template_abilities, [:army_template_id, :ability_id], unique: true, name: "idx_template_abilities_unique"
+    add_index :army_template_abilities, [ :army_template_id, :ability_id ], unique: true, name: "idx_template_abilities_unique"
   end
 end

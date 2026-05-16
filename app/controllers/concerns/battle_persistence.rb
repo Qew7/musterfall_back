@@ -82,11 +82,11 @@ module BattlePersistence
   end
 
   def battle_position_schema
-    [:x, :y, :facing, :row, :lane]
+    [ :x, :y, :facing, :row, :lane ]
   end
 
   def battle_point_schema
-    [:x, :y, :facing]
+    [ :x, :y, :facing ]
   end
 
   def battle_combatant_state_schema
@@ -119,7 +119,7 @@ module BattlePersistence
       :is_routing,
       :armor_type,
       :weapon_type,
-      { attached_heroes: [:entity_id, :name, :slot] }
+      { attached_heroes: [ :entity_id, :name, :slot ] }
     ]
   end
 

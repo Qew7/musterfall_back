@@ -1,14 +1,14 @@
 class ArmyTemplate < ApplicationRecord
     validates :attacks, numericality: { greater_than: 0 }
-    # Количество атак по умолчанию 1, у героев/монстров может быть больше
+  # Количество атак по умолчанию 1, у героев/монстров может быть больше
   KINDS = %w[unit hero].freeze
   ATTACK_TEMPLATES = %w[single volley blast breath].freeze
   MAX_FORMATION_FILES = 5
   MODEL_CLASSES = {
-    'infantry' => { width: 1, depth: 1 },
-    'cavalry' => { width: 1, depth: 2 },
-    'monster' => { width: 2, depth: 2 },
-    'machine' => { width: 2, depth: 2 }
+    "infantry" => { width: 1, depth: 1 },
+    "cavalry" => { width: 1, depth: 2 },
+    "monster" => { width: 2, depth: 2 },
+    "machine" => { width: 2, depth: 2 }
   }.freeze
 
   belongs_to :faction

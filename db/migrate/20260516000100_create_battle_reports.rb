@@ -17,7 +17,7 @@ class CreateBattleReports < ActiveRecord::Migration[8.1]
       t.timestamps
     end
 
-    add_index :battles, [:game_id, :round_number, :left_player_id, :right_player_id], unique: true, name: "index_battles_on_round_and_players"
+    add_index :battles, [ :game_id, :round_number, :left_player_id, :right_player_id ], unique: true, name: "index_battles_on_round_and_players"
 
     create_table :battle_rounds do |t|
       t.references :battle, null: false, foreign_key: true
@@ -27,7 +27,7 @@ class CreateBattleReports < ActiveRecord::Migration[8.1]
       t.timestamps
     end
 
-    add_index :battle_rounds, [:battle_id, :number], unique: true
+    add_index :battle_rounds, [ :battle_id, :number ], unique: true
 
     create_table :battle_turns do |t|
       t.references :battle_round, null: false, foreign_key: true
@@ -38,7 +38,7 @@ class CreateBattleReports < ActiveRecord::Migration[8.1]
       t.timestamps
     end
 
-    add_index :battle_turns, [:battle_round_id, :position], unique: true
+    add_index :battle_turns, [ :battle_round_id, :position ], unique: true
 
     create_table :battle_phases do |t|
       t.references :battle_turn, null: false, foreign_key: true
@@ -50,6 +50,6 @@ class CreateBattleReports < ActiveRecord::Migration[8.1]
       t.timestamps
     end
 
-    add_index :battle_phases, [:battle_turn_id, :position], unique: true
+    add_index :battle_phases, [ :battle_turn_id, :position ], unique: true
   end
 end

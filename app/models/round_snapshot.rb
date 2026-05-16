@@ -5,5 +5,5 @@ class RoundSnapshot < ApplicationRecord
 
   validates :round_number, numericality: { greater_than_or_equal_to: 1 }
   validates :phase, inclusion: { in: PHASES }
-  validates :phase, uniqueness: { scope: [:game_id, :round_number] }
+  validates :phase, uniqueness: { scope: [ :game_id, :round_number ] }
 end

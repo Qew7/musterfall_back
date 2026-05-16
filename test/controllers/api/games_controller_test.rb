@@ -21,7 +21,7 @@ class Api::GamesControllerTest < ActionDispatch::IntegrationTest
         round_number: 1,
         phase: "pre_round",
         payload: { armies: [] },
-        battles: [battle_payload]
+        battles: [ battle_payload ]
       }
     }
 
@@ -57,13 +57,13 @@ class Api::GamesControllerTest < ActionDispatch::IntegrationTest
 
     game_id = response.parsed_body.fetch("id")
 
-    assert_no_difference ["RoundSnapshot.count", "Battle.count"] do
+    assert_no_difference [ "RoundSnapshot.count", "Battle.count" ] do
       post "/api/games/#{game_id}/round_snapshots", params: {
         round_snapshot: {
           round_number: 1,
           phase: "post_round",
           payload: { armies: [] },
-          battles: [battle_payload.merge(rounds: [{ number: 1, events: [], turns: [{ position: 0, player_id: "player-1", player_name: "Полководец 1", phases: [{ position: 0, phase_type: "invalid", label: "Ошибка", events: [] }] }] }])]
+          battles: [ battle_payload.merge(rounds: [ { number: 1, events: [], turns: [ { position: 0, player_id: "player-1", player_name: "Полководец 1", phases: [ { position: 0, phase_type: "invalid", label: "Ошибка", events: [] } ] } ] } ]) ]
         }
       }
     end
@@ -87,7 +87,7 @@ class Api::GamesControllerTest < ActionDispatch::IntegrationTest
 
     stale_battle_payload = battle_payload.deep_dup
     stale_battle_payload[:rounds][0][:turns][0][:phases].each { |phase| phase[:actions] = [] }
-    stale_battle_payload[:rounds][0][:turns][0][:phases][0][:events] = ["Отряд выдвигается"]
+    stale_battle_payload[:rounds][0][:turns][0][:phases][0][:events] = [ "Отряд выдвигается" ]
 
     post "/api/games/#{game_id}/round_snapshots", params: {
       round_snapshot: {
@@ -98,11 +98,11 @@ class Api::GamesControllerTest < ActionDispatch::IntegrationTest
             round: 2,
             lastRoundReport: {
               round: 1,
-              matchups: [snapshot_report_battle]
+              matchups: [ snapshot_report_battle ]
             }
           }
         },
-        battles: [stale_battle_payload]
+        battles: [ stale_battle_payload ]
       }
     }
 
@@ -131,11 +131,11 @@ class Api::GamesControllerTest < ActionDispatch::IntegrationTest
       summary: "Полководец 1 10 vs 0 Полководец 2",
       left_payload: { playerId: "player-1", combatants: [] },
       right_payload: { playerId: "player-2", combatants: [] },
-      events: ["Раунд 1"],
+      events: [ "Раунд 1" ],
       rounds: [
         {
           number: 1,
-          events: ["Пассивка сработала"],
+          events: [ "Пассивка сработала" ],
           turns: [
             {
               position: 0,
@@ -146,7 +146,7 @@ class Api::GamesControllerTest < ActionDispatch::IntegrationTest
                   position: 0,
                   phase_type: "movement",
                   label: "Фаза движения",
-                  events: ["Отряд выдвигается"],
+                  events: [ "Отряд выдвигается" ],
                   actions: [
                     {
                       type: "movement",
@@ -225,7 +225,7 @@ class Api::GamesControllerTest < ActionDispatch::IntegrationTest
                   position: 3,
                   phase_type: "melee",
                   label: "Фаза боя",
-                  events: ["Нанесён урон"],
+                  events: [ "Нанесён урон" ],
                   actions: [
                     {
                       type: "melee",
@@ -246,7 +246,7 @@ class Api::GamesControllerTest < ActionDispatch::IntegrationTest
                       damage: 5,
                       blockers: [],
                       requires_line_of_sight: false,
-                      affected_ids: ["unit-2"],
+                      affected_ids: [ "unit-2" ],
                       actor_state: {
                         entity_id: "unit-1",
                         name: "Копейщики",
@@ -350,11 +350,11 @@ class Api::GamesControllerTest < ActionDispatch::IntegrationTest
       winnerId: "player-1",
       winnerName: "Полководец 1",
       summary: "Полководец 1 10 vs 0 Полководец 2",
-      events: ["Раунд 1"],
+      events: [ "Раунд 1" ],
       rounds: [
         {
           number: 1,
-          events: ["Пассивка сработала"],
+          events: [ "Пассивка сработала" ],
           turns: [
             {
               playerId: "player-1",
@@ -363,7 +363,7 @@ class Api::GamesControllerTest < ActionDispatch::IntegrationTest
                 {
                   type: "movement",
                   label: "Фаза движения",
-                  events: ["Отряд выдвигается"],
+                  events: [ "Отряд выдвигается" ],
                   actions: [
                     {
                       type: "movement",

@@ -36,7 +36,7 @@ class CreateGameCatalog < ActiveRecord::Migration[8.1]
     end
 
     add_index :army_templates, :template_key, unique: true
-    add_index :army_templates, [:faction_id, :kind]
+    add_index :army_templates, [ :faction_id, :kind ]
 
     create_table :hero_upgrades do |t|
       t.string :upgrade_key, null: false

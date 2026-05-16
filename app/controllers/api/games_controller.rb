@@ -35,7 +35,7 @@ module Api
     end
 
     def game_payload
-      params.expect(game: [:player_count, :current_round, :status, state_payload: {}])
+      params.expect(game: [ :player_count, :current_round, :status, state_payload: {} ])
     end
 
     def serialize_game(game, include_snapshots: false)
