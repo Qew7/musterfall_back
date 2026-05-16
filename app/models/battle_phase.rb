@@ -6,4 +6,6 @@ class BattlePhase < ApplicationRecord
   validates :position, numericality: { greater_than_or_equal_to: 0 }
   validates :phase_type, inclusion: { in: TYPES }
   validates :label, presence: true
+
+  attribute :actions, :json, default: []
 end

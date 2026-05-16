@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_05_16_000600) do
+ActiveRecord::Schema[8.1].define(version: 2026_05_16_000700) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -69,6 +69,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_05_16_000600) do
   end
 
   create_table "battle_phases", force: :cascade do |t|
+    t.jsonb "actions", default: [], null: false
     t.bigint "battle_turn_id", null: false
     t.datetime "created_at", null: false
     t.jsonb "events", default: [], null: false

@@ -96,7 +96,8 @@ module Api
                     position: battle_phase.position,
                     type: battle_phase.phase_type,
                     label: battle_phase.label,
-                    events: battle_phase.events
+                    events: battle_phase.events,
+                    actions: battle_phase.actions
                   }
                 end
               }
