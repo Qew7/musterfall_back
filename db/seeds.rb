@@ -41,6 +41,17 @@ def default_base_depth_for(attributes)
 	1
 end
 
+def default_model_class_for(attributes)
+	return attributes.fetch(:mounted) ? "cavalry" : "infantry" if attributes.fetch(:kind) == "hero"
+
+	abilities = attributes.fetch(:abilities)
+	return "machine" if abilities.include?("machine")
+	return "monster" if abilities.include?("monster")
+	return "cavalry" if attributes.fetch(:mounted) || abilities.include?("charge") || abilities.include?("fast")
+
+	"infantry"
+end
+
 def default_shooting_range_for(attributes)
 	return 0 if attributes.fetch(:ranged).zero?
 	return 14 if attributes.fetch(:abilities).include?("machine")
@@ -179,6 +190,9 @@ templates.each do |attributes|
 	faction = Faction.find_by!(slug: attributes.fetch(:faction_slug))
 	ArmyTemplate.find_or_initialize_by(template_key: attributes.fetch(:template_key)).update!(
 		attributes.except(:faction_slug).merge(
+			model_class: attributes[:model_class] || default_model_class_for(attributes),
+			model_base_width: attributes[:model_base_width],
+			model_base_depth: attributes[:model_base_depth],
 			base_depth: attributes[:base_depth] || default_base_depth_for(attributes),
 			movement: attributes[:movement] || default_movement_for(attributes),
 			shooting_range: attributes[:shooting_range] || default_shooting_range_for(attributes),

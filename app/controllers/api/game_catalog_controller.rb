@@ -2,6 +2,10 @@ module Api
   class GameCatalogController < ApplicationController
     def show
       render json: {
+        formationRules: {
+          maxFiles: ArmyTemplate::MAX_FORMATION_FILES
+        },
+        modelClasses: ArmyTemplate::MODEL_CLASSES.map { |key, footprint| serialize_model_class(key, footprint) },
         factions: Faction.order(:position).map { |faction| serialize_faction(faction) },
         units: Unit.includes(:faction, :abilities_records).order(:name).map { |template| serialize_template(template) },
         heroes: Hero.includes(:faction, :abilities_records).order(:name).map { |template| serialize_template(template) },
@@ -33,8 +37,10 @@ module Api
         cost: template.cost,
         models: template.models,
         modelHealth: template.model_health,
-        width: template.width,
-        baseDepth: template.base_depth,
+        frontage: template.width,
+        modelClass: template.model_class,
+        modelBaseWidth: template.effective_model_base_width,
+        modelBaseDepth: template.effective_model_base_depth,
         armorType: template.armor_type,
         weaponType: template.weapon_type,
         melee: template.melee,
@@ -49,6 +55,14 @@ module Api
         initiative: template.initiative,
         abilities: template.abilities_list,
         mounted: template.mounted
+      }
+    end
+
+    def serialize_model_class(key, footprint)
+      {
+        id: key,
+        baseWidth: footprint.fetch(:width),
+        baseDepth: footprint.fetch(:depth)
       }
     end
 
