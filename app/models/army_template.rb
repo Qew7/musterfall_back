@@ -17,8 +17,9 @@ class ArmyTemplate < ApplicationRecord
   validates :template_key, uniqueness: true
   validates :kind, inclusion: { in: KINDS }
   validates :model_class, inclusion: { in: MODEL_CLASSES.keys }
-  validates :cost, :models, :model_health, :width, :base_depth, :initiative, :movement, :morale, numericality: { greater_than: 0 }
+  validates :cost, :models, :model_health, :width, :base_depth, :initiative, :movement, :morale, :skill, numericality: { greater_than: 0 }
   validates :width, numericality: { less_than_or_equal_to: MAX_FORMATION_FILES }
+  validates :skill, numericality: { greater_than_or_equal_to: 1, less_than_or_equal_to: 6 }
   validates :model_base_width, :model_base_depth, numericality: { greater_than: 0 }, allow_nil: true
   validates :shooting_range, :spell_range, numericality: { greater_than_or_equal_to: 0 }
   validates :melee, :ranged, :spell, numericality: { greater_than_or_equal_to: 0 }

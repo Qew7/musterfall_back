@@ -46,6 +46,7 @@ module Api
         melee: template.melee,
         ranged: template.ranged,
         spell: template.spell,
+        skill: template.skill,
         movement: template.movement,
         morale: template.morale,
         shootingRange: template.shooting_range,

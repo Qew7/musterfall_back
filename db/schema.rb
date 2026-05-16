@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_05_16_000800) do
+ActiveRecord::Schema[8.1].define(version: 2026_05_16_000900) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -57,6 +57,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_05_16_000800) do
     t.boolean "requires_line_of_sight", default: true, null: false
     t.integer "shooting_range", default: 0, null: false
     t.string "shooting_template", default: "single", null: false
+    t.integer "skill", default: 3, null: false
     t.integer "spell", default: 0, null: false
     t.integer "spell_range", default: 0, null: false
     t.string "spell_template", default: "single", null: false
