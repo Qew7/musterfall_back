@@ -1,52 +1,143 @@
 module Api
   class GamesController < ApplicationController
     def create
-      game = Game.create!(create_game_params)
+      result = Games::CreateGame.call(player_count: create_params.fetch(:player_count))
+      return render_failure(result) if result.failure?
 
-      render json: serialize_game(game), status: :created
+      render json: serialize_game(result.value, include_campaign: true), status: :created
     end
 
     def show
-      game = Game.includes(battles: { battle_rounds: { battle_turns: :battle_phases } }, round_snapshots: []).find(params[:id])
+      game = Game.includes(
+        :game_players,
+        battles: { battle_rounds: { battle_turns: :battle_phases } },
+        round_snapshots: []
+      ).find(params[:id])
 
-      render json: serialize_game(game, include_snapshots: true)
+      render json: serialize_game(game, include_campaign: true, include_snapshots: true)
     end
 
-    def update
-      game = Game.find(params[:id])
-      game.update!(update_game_params)
+    def assign_faction
+      apply_command(:assign_faction, %i[player_id faction_id])
+    end
 
-      render json: serialize_game(game)
+    def recruit
+      apply_command(:recruit, %i[player_id template_id])
+    end
+
+    def dismiss
+      apply_command(:dismiss, %i[player_id entity_id])
+    end
+
+    def attach_hero
+      apply_command(:attach_hero, %i[player_id hero_id unit_id])
+    end
+
+    def deploy
+      apply_command(:deploy, %i[player_id deploy_mode entity_id x y facing direction])
+    end
+
+    def prepare_hero_draft
+      apply_command(:prepare_hero_draft, %i[player_id hero_id])
+    end
+
+    def pick_hero_draft
+      apply_command(:pick_hero_draft, %i[player_id hero_id upgrade_id])
+    end
+
+    def prepare_round
+      apply_command(:prepare_round, [])
+    end
+
+    def advance_round
+      game = Game.find(params[:id])
+      result = Games::AdvanceRound.call(game: game, base_version: command_params[:base_version])
+      return render_failure(result, game: game) if result.failure?
+
+      payload = result.value
+      render json: {
+        gameId: payload[:game].id,
+        version: payload[:campaign].version,
+        campaign: payload[:campaign].to_api_hash,
+        metaReward: camelize_meta(payload[:meta_reward]),
+        battles: payload[:battles].map { |battle| serialize_battle(battle) }
+      }
     end
 
     private
 
-    def create_game_params
-      {
-        player_count: game_payload.fetch(:player_count),
-        current_round: game_payload[:current_round] || 1,
-        status: game_payload[:status] || "draft",
-        state_payload: game_payload[:state_payload] || {}
+    def apply_command(command, keys)
+      game = Game.find(params[:id])
+      result = Games::ApplyCommand.call(
+        game: game,
+        command: command,
+        base_version: command_params[:base_version],
+        params: command_params.slice(*keys)
+      )
+      return render_failure(result, game: game) if result.failure?
+
+      payload = result.value
+      render json: {
+        gameId: payload[:game].id,
+        version: payload[:campaign].version,
+        campaign: payload[:campaign].to_api_hash
       }
     end
 
-    def update_game_params
-      game_payload.slice(:status, :current_round, :state_payload).to_h.compact
+    def render_failure(result, game: nil)
+      status = result.code == :conflict ? :conflict : :unprocessable_entity
+      body = { error: result.error }
+      if result.code == :conflict && game
+        campaign = Sim::Persistence::CampaignRepository.new.load(game)
+        body[:version] = campaign.version
+        body[:campaign] = campaign.to_api_hash
+      end
+      render json: body, status: status
     end
 
-    def game_payload
-      params.expect(game: [ :player_count, :current_round, :status, state_payload: {} ])
+    def create_params
+      params.expect(game: [ :player_count ]).to_h.symbolize_keys
     end
 
-    def serialize_game(game, include_snapshots: false)
+    def command_params
+      raw = params.permit(
+        :base_version,
+        :player_id,
+        :faction_id,
+        :template_id,
+        :entity_id,
+        :hero_id,
+        :unit_id,
+        :upgrade_id,
+        :deploy_mode,
+        :x,
+        :y,
+        :facing,
+        :direction,
+        command: {}
+      ).to_h.symbolize_keys
+
+      nested = raw.delete(:command)
+      raw.merge!(nested.to_h.symbolize_keys) if nested.present?
+      raw[:base_version] = raw[:base_version].to_i
+      raw
+    end
+
+    def serialize_game(game, include_campaign: false, include_snapshots: false)
       payload = {
         id: game.id,
         status: game.status,
         playerCount: game.player_count,
         currentRound: game.current_round,
-        statePayload: game.state_payload,
+        version: game.campaign_version,
         battles: game.battles.map { |battle| serialize_battle(battle) }
       }
+
+      if include_campaign
+        campaign = Sim::Persistence::CampaignRepository.new.load(game)
+        payload[:campaign] = campaign.to_api_hash
+        payload[:statePayload] = { campaign: campaign.to_api_hash }
+      end
 
       if include_snapshots
         payload[:snapshots] = game.round_snapshots.map { |snapshot| serialize_snapshot(snapshot) }
@@ -104,6 +195,18 @@ module Api
             end
           }
         end
+      }
+    end
+
+    def camelize_meta(meta)
+      return nil unless meta
+
+      {
+        playerId: meta[:player_id],
+        playerName: meta[:player_name],
+        factionId: meta[:faction_id],
+        experience: meta[:experience],
+        essence: meta[:essence]
       }
     end
   end

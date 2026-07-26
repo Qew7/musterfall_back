@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_05_16_010000) do
+ActiveRecord::Schema[8.1].define(version: 2026_07_26_000100) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -137,13 +137,74 @@ ActiveRecord::Schema[8.1].define(version: 2026_05_16_010000) do
     t.index ["slug"], name: "index_factions_on_slug", unique: true
   end
 
+  create_table "game_entities", force: :cascade do |t|
+    t.jsonb "abilities", default: [], null: false
+    t.jsonb "combat", default: {}, null: false
+    t.datetime "created_at", null: false
+    t.integer "current_health", null: false
+    t.jsonb "economy", default: {}, null: false
+    t.string "external_key", null: false
+    t.float "facing", default: 0.0, null: false
+    t.jsonb "formation", default: {}, null: false
+    t.bigint "game_player_id", null: false
+    t.jsonb "health", default: {}, null: false
+    t.jsonb "hero", default: {}, null: false
+    t.jsonb "identity", default: {}, null: false
+    t.boolean "is_routing", default: false, null: false
+    t.string "kind", null: false
+    t.string "lane_key", default: "center", null: false
+    t.string "name", null: false
+    t.jsonb "progression", default: {}, null: false
+    t.string "row_key", default: "reserve", null: false
+    t.string "template_key", null: false
+    t.datetime "updated_at", null: false
+    t.float "x", default: 0.0, null: false
+    t.float "y", default: 0.0, null: false
+    t.index ["game_player_id", "external_key"], name: "index_game_entities_on_game_player_id_and_external_key", unique: true
+    t.index ["game_player_id"], name: "index_game_entities_on_game_player_id"
+    t.index ["kind"], name: "index_game_entities_on_kind"
+  end
+
+  create_table "game_entity_attachments", force: :cascade do |t|
+    t.datetime "created_at", null: false
+    t.bigint "hero_entity_id", null: false
+    t.string "slot", null: false
+    t.bigint "unit_entity_id", null: false
+    t.datetime "updated_at", null: false
+    t.index ["hero_entity_id"], name: "index_game_entity_attachments_on_hero_entity_id", unique: true
+    t.index ["unit_entity_id", "slot"], name: "index_game_entity_attachments_on_unit_entity_id_and_slot", unique: true
+    t.index ["unit_entity_id"], name: "index_game_entity_attachments_on_unit_entity_id"
+  end
+
+  create_table "game_players", force: :cascade do |t|
+    t.datetime "created_at", null: false
+    t.string "external_key", null: false
+    t.string "faction_key"
+    t.bigint "game_id", null: false
+    t.boolean "is_bot", default: false, null: false
+    t.string "name", null: false
+    t.integer "position", default: 0, null: false
+    t.jsonb "round_notes", default: [], null: false
+    t.string "status", default: "active", null: false
+    t.integer "treasury", default: 36, null: false
+    t.datetime "updated_at", null: false
+    t.integer "victories", default: 0, null: false
+    t.index ["game_id", "external_key"], name: "index_game_players_on_game_id_and_external_key", unique: true
+    t.index ["game_id", "position"], name: "index_game_players_on_game_id_and_position"
+    t.index ["game_id"], name: "index_game_players_on_game_id"
+  end
+
   create_table "games", force: :cascade do |t|
+    t.integer "campaign_version", default: 0, null: false
     t.datetime "created_at", null: false
     t.integer "current_round", default: 1, null: false
+    t.jsonb "last_round_report"
     t.integer "player_count", null: false
+    t.bigint "rng_seed", default: 0, null: false
     t.jsonb "state_payload", default: {}, null: false
     t.string "status", default: "draft", null: false
     t.datetime "updated_at", null: false
+    t.string "winner_player_key"
     t.index ["status"], name: "index_games_on_status"
   end
 
@@ -177,5 +238,9 @@ ActiveRecord::Schema[8.1].define(version: 2026_05_16_010000) do
   add_foreign_key "battle_rounds", "battles"
   add_foreign_key "battle_turns", "battle_rounds"
   add_foreign_key "battles", "games"
+  add_foreign_key "game_entities", "game_players"
+  add_foreign_key "game_entity_attachments", "game_entities", column: "hero_entity_id"
+  add_foreign_key "game_entity_attachments", "game_entities", column: "unit_entity_id"
+  add_foreign_key "game_players", "games"
   add_foreign_key "round_snapshots", "games"
 end
