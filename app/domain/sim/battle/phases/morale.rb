@@ -112,7 +112,7 @@ module Sim
           end
         end
 
-        def resolve_action(combatant:, allies:, enemies:, round_number:, phase_type:, combat_score_delta:, sequence:, engaged_enemies:, trigger: nil)
+        def resolve_action(combatant:, allies:, enemies:, round_number:, phase_type:, combat_score_delta:, sequence:, engaged_enemies: [], trigger: nil)
           before = State.snapshot_combatant(combatant)
           from = position_of(combatant)
           check = resolve_check(combatant: combatant, allies: allies, enemies: enemies, round_number: round_number, phase_type: phase_type, combat_score_delta: combat_score_delta, sequence: sequence)
@@ -120,6 +120,7 @@ module Sim
           to = nil
           retreat_edge = nil
           escaped = false
+          about_faced = false
 
           if check[:passed]
             if combatant[:is_routing]
@@ -138,8 +139,15 @@ module Sim
             State.sync_combatant_footprint!(combatant)
             summary = "#{combatant[:name]} проваливает проверку морали и теряет #{damage} здоровья вместо бегства."
           else
+            newly_routing = !combatant[:is_routing]
             combatant[:is_routing] = true
-            combatant[:facing] = heading_away(combatant, engaged_enemies) if engaged_enemies.any?
+            if newly_routing
+              flee_facing = flee_facing_for(combatant, engaged_enemies, enemies)
+              if flee_facing
+                combatant[:facing] = flee_facing
+                about_faced = true
+              end
+            end
             retreat = retreat_toward_edge(combatant, combatant[:movement])
             combatant[:x] = retreat[:destination][:x]
             combatant[:y] = retreat[:destination][:y]
@@ -155,6 +163,8 @@ module Sim
               "#{combatant[:name]} в панике покидает поле боя и считается уничтоженным."
             elsif phase_type == "start"
               "#{combatant[:name]} не может восстановить строй и продолжает бегство."
+            elsif about_faced
+              "#{combatant[:name]} ломает строй, разворачивается от угрозы и обращается в бегство."
             else
               "#{combatant[:name]} ломает строй и обращается в бегство."
             end
@@ -178,10 +188,11 @@ module Sim
               "Использована мораль: #{check[:effective_morale]} (#{check[:source]}).",
               "Штраф за очки боя: #{combat_score_delta}.",
               "Фаза: #{phase_type}, отряд: #{combatant[:name]}.",
+              about_faced ? "Бесплатный разворот от угрозы при обращении в бегство (facing #{format('%.0f', combatant[:facing])}°)." : nil,
               retreat_edge ? "Отступление к краю поля: #{retreat_edge}." : "Отступление не потребовалось.",
               escaped ? "Отряд покинул поле боя и удалён из сражения." : "Отряд остаётся в пределах поля боя.",
               damage.positive? ? "Потеря здоровья из-за провала: #{damage}." : "Запас провала: #{check[:failure_margin]}."
-            ],
+            ].compact,
             morale_check: {
               source_phase: phase_type,
               trigger: trigger&.dig(:reason) || (phase_type == "melee" ? "combat_score" : phase_type == "start" ? "rally" : "phase_casualties"),
@@ -297,10 +308,19 @@ module Sim
           die_a + die_b
         end
 
+        # Face directly away from the threat that caused the break (not a blind +180 from current facing).
+        def flee_facing_for(combatant, engaged_enemies, enemies)
+          threats = Array(engaged_enemies).select { |enemy| enemy[:current_health].nil? || enemy[:current_health].to_i > 0 }
+          threats = Array(enemies).select { |enemy| enemy[:current_health].to_i > 0 } if threats.empty?
+          return nil if threats.empty?
+
+          heading_away(combatant, threats)
+        end
+
         def heading_away(combatant, enemies)
           center = enemies.each_with_object(x: 0.0, y: 0.0) do |enemy, memo|
-            memo[:x] += enemy[:x]
-            memo[:y] += enemy[:y]
+            memo[:x] += enemy[:x].to_f
+            memo[:y] += enemy[:y].to_f
           end
           average = { x: center[:x] / enemies.length, y: center[:y] / enemies.length }
           Geometry::Battlefield.heading_to(average, combatant)

@@ -45,6 +45,92 @@ module Sim
         normalize_facing(facing + delta)
       end
 
+      def shortest_facing_delta(from_facing, to_facing)
+        delta = normalize_facing(to_facing) - normalize_facing(from_facing)
+        return delta - 360 if delta > 180
+        return delta + 360 if delta < -180
+
+        delta
+      end
+
+      # Wheel pivots on a front corner: outer edge travels an arc of radius = footprint width.
+      def wheel_cost(unit, from_facing, to_facing)
+        delta = shortest_facing_delta(from_facing, to_facing).abs
+        return 0.0 if delta < 0.0001
+
+        width = unit_dimensions(unit)[:half_width] * 2.0
+        return 0.0 if width <= 0
+
+        (delta * Math::PI / 180.0) * width
+      end
+
+      # Front-right for positive (right) wheel, front-left for negative (left) wheel.
+      def wheel_pivot(unit, delta)
+        corners = unit_corners(unit)
+        delta.negative? ? corners[0] : corners[1]
+      end
+
+      # Rotate unit center around the chosen front corner by delta degrees.
+      def wheel_pose(unit, delta)
+        return unit.merge(facing: normalize_facing(unit[:facing])) if delta.abs < 0.0001
+
+        pivot = wheel_pivot(unit, delta)
+        radians = delta * (Math::PI / 180.0)
+        cos_a = Math.cos(radians)
+        sin_a = Math.sin(radians)
+        vx = unit[:x] - pivot[:x]
+        vy = unit[:y] - pivot[:y]
+        clamp_battlefield_position(
+          x: pivot[:x] + (vx * cos_a) - (vy * sin_a),
+          y: pivot[:y] + (vx * sin_a) + (vy * cos_a),
+          facing: normalize_facing(unit[:facing] + delta)
+        )
+      end
+
+      # Spend MV on an arc wheel toward to_facing. Center moves with the formation.
+      def apply_wheel(unit, to_facing, movement_budget)
+        budget = [ movement_budget.to_f, 0.0 ].max
+        from_facing = normalize_facing(unit[:facing])
+        desired = normalize_facing(to_facing)
+        delta = shortest_facing_delta(from_facing, desired)
+        idle = {
+          x: unit[:x].to_f,
+          y: unit[:y].to_f,
+          facing: from_facing,
+          cost: 0.0,
+          remaining: budget,
+          completed: delta.abs < 0.0001,
+          delta: 0.0
+        }
+        return idle if delta.abs < 0.0001
+
+        width = unit_dimensions(unit)[:half_width] * 2.0
+        return idle.merge(completed: false) if width <= 0
+
+        full_cost = (delta.abs * Math::PI / 180.0) * width
+        limited_delta = if full_cost <= budget
+          delta
+        elsif budget <= 0
+          0.0
+        else
+          max_degrees = (budget / width) * (180.0 / Math::PI)
+          delta.negative? ? -[ delta.abs, max_degrees ].min : [ delta.abs, max_degrees ].min
+        end
+        return idle if limited_delta.abs < 0.0001
+
+        pose = wheel_pose(unit, limited_delta)
+        cost = (limited_delta.abs * Math::PI / 180.0) * width
+        {
+          x: pose[:x],
+          y: pose[:y],
+          facing: pose[:facing],
+          cost: cost,
+          remaining: [ budget - cost, 0.0 ].max,
+          completed: shortest_facing_delta(pose[:facing], desired).abs < 0.05,
+          delta: limited_delta
+        }
+      end
+
       def facing_vector(facing)
         radians = normalize_facing(facing) * (Math::PI / 180)
         { x: Math.cos(radians), y: Math.sin(radians) }
