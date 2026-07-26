@@ -148,7 +148,8 @@ module Sim
                 about_faced = true
               end
             end
-            retreat = retreat_toward_edge(combatant, combatant[:movement])
+            blockers = (Array(allies) + Array(enemies)).reject { |entry| entry[:entity_id] == combatant[:entity_id] }
+            retreat = retreat_toward_edge(combatant, combatant[:movement], obstacles: blockers)
             combatant[:x] = retreat[:destination][:x]
             combatant[:y] = retreat[:destination][:y]
             retreat_edge = retreat[:edge]
@@ -326,11 +327,41 @@ module Sim
           Geometry::Battlefield.heading_to(average, combatant)
         end
 
-        def retreat_toward_edge(combatant, distance)
+        def retreat_toward_edge(combatant, distance, obstacles: [])
           edge = nearest_edge(combatant)
           heading = Geometry::Battlefield.heading_to(combatant, edge[:point])
-          destination = Geometry::Battlefield.move_along_facing(combatant.merge(facing: heading), distance)
+          desired = Geometry::Battlefield.move_along_facing(combatant.merge(facing: heading), distance)
+          destination = furthest_clear_retreat(combatant, desired, obstacles)
           { edge: edge[:label], destination: destination, escaped: outside?(destination) }
+        end
+
+        def furthest_clear_retreat(origin, desired, obstacles)
+          steps = [ 8, (Geometry::Battlefield.distance_between(origin, desired) / 0.25).ceil ].max
+          last_clear = { x: origin[:x], y: origin[:y], facing: origin[:facing] }
+          steps.times do |index|
+            t = (index + 1).to_f / steps
+            pose = origin.merge(
+              x: origin[:x] + ((desired[:x] - origin[:x]) * t),
+              y: origin[:y] + ((desired[:y] - origin[:y]) * t),
+              facing: desired[:facing] || origin[:facing]
+            )
+            break if retreat_blocked?(pose, origin, obstacles)
+
+            last_clear = pose
+          end
+          last_clear
+        end
+
+        def retreat_blocked?(pose, origin, obstacles)
+          contact = Geometry::Battlefield::CONFIG[:melee_contact_tolerance]
+          obstacles.any? do |entry|
+            next false if entry[:entity_id] == origin[:entity_id]
+            next false if entry[:current_health].to_i <= 0
+            next false if entry[:x].nil? || entry[:y].nil?
+
+            other = entry.merge(facing: entry[:facing].to_f)
+            Geometry::Battlefield.distance_between_units(pose, other) < contact
+          end
         end
 
         def outside?(position)

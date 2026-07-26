@@ -2,7 +2,7 @@ module Sim
   module Geometry
     module Battlefield
       CONFIG = {
-        width: 32,
+        width: 40,
         height: 24,
         deployment_depth: 10,
         front_arc_degrees: 120,
@@ -339,11 +339,23 @@ module Sim
         forward = facing_vector(facing)
         dims = unit_dimensions(attacker.merge(facing: facing))
         impact = closest_point_on_unit(attacker, defender)
-        clamp_battlefield_position(
+        candidate = clamp_battlefield_position(
           x: impact[:x] - (forward[:x] * (dims[:half_depth] + CONFIG[:contact_padding])),
           y: impact[:y] - (forward[:y] * (dims[:half_depth] + CONFIG[:contact_padding])),
           facing: facing
         )
+        # Back off along the approach if the OBB still clips the defender (angled contact).
+        pose = attacker.merge(candidate)
+        12.times do
+          break unless rectangles_overlap?(pose, defender)
+
+          pose = clamp_battlefield_position(
+            x: pose[:x] - (forward[:x] * 0.15),
+            y: pose[:y] - (forward[:y] * 0.15),
+            facing: facing
+          )
+        end
+        pose
       end
 
       def line_of_sight_blockers(attacker, defender, blockers)
