@@ -5,6 +5,8 @@ module Sim
 
       def play(round_number:, acting_side:, target_side:, rng:)
         context = { round_number: round_number, acting_side: acting_side, target_side: target_side, rng: rng }
+        missile_plan = Phases::Missile.plan(**context)
+        context = context.merge(missile_plan: missile_plan)
         {
           player_id: acting_side[:player_id],
           player_name: acting_side[:player_name],

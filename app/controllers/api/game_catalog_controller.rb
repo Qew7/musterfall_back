@@ -56,6 +56,7 @@ module Api
         requiresLineOfSight: template.requires_line_of_sight,
         initiative: template.initiative,
         attacks: template.attacks,
+        missileAttacks: template.missile_attacks,
         abilities: template.abilities_list,
         mounted: template.mounted
       }

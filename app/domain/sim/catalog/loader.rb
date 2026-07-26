@@ -59,6 +59,7 @@ module Sim
           requires_line_of_sight: template.requires_line_of_sight,
           initiative: template.initiative,
           attacks: template.attacks,
+          missile_attacks: template.missile_attacks,
           abilities: template.abilities_list,
           mounted: template.mounted
         }

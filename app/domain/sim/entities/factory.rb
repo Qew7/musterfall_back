@@ -91,7 +91,8 @@ module Sim
               spell_template: template[:spell_template],
               requires_line_of_sight: template[:requires_line_of_sight],
               initiative: template[:initiative],
-              attacks: template[:attacks]
+              attacks: template[:attacks],
+              missile_attacks: template[:missile_attacks] || 1
             },
             formation: {
               models: template[:models],

@@ -33,68 +33,16 @@ module Sim
 
             target = selection[:target]
             vector = selection[:vector]
-            blockers = attacker[:requires_line_of_sight] ? Geometry::Battlefield.line_of_sight_blockers(attacker, target, all_combatants) : []
-            victims = attack_type == "melee" ? [ { target: target, multiplier: 1 } ] : Geometry::Battlefield.attack_victims(attacker, target, target_side[:combatants], attack_type)
-            entries = attack_type == "melee" ? melee_entries(attacker, target, vector, round_number) : [
-              {
-                actor_id: attacker[:entity_id],
-                actor_unit_id: attacker[:entity_id],
-                actor_name: attacker[:name],
-                actor_role: attacker[:kind] == "hero" ? "hero" : "unit",
-                profile: attacker,
-                damage: damage(attacker, target, attack_type, vector, round_number)
-              }
-            ]
-
-            entries.each do |entry|
-              next if target[:current_health].to_i <= 0 || entry[:damage].to_i <= 0
-
-              attacks = entry.dig(:profile, :attacks) || attacker[:attacks] || 1
-              attacks.times do
-                attacker_for_skill = attack_type == "melee" ? entry[:profile] : attacker
-                unless hit?(attacker_for_skill, target, attack_type, rng)
-                  add_event(phase, "#{format_actor(entry[:actor_role], entry[:actor_name])} промахивается по #{target[:name]}")
-                  next
-                end
-
-                actor_state = State.snapshot_combatant(attacker)
-                before = State.snapshot_combatant(target)
-                target[:current_health] = [ 0, target[:current_health] - entry[:damage] ].max
-                State.sync_combatant_footprint!(target)
-                after = State.snapshot_combatant(target)
-
-                if attack_type == "melee"
-                  distribute_contributor_experience!(entry[:profile], entry[:damage])
-                else
-                  distribute_experience!(attacker, attack_type, entry[:damage])
-                end
-
-                add_event(phase, "#{format_actor(entry[:actor_role], entry[:actor_name])} наносит #{entry[:damage]} урона по #{target[:name]} (#{vector})")
-                action = {
-                  type: attack_type,
-                  actor_id: entry[:actor_id],
-                  actor_unit_id: entry[:actor_unit_id],
-                  actor_name: entry[:actor_name],
-                  actor_role: entry[:actor_role],
-                  target_id: target[:entity_id],
-                  target_name: target[:name],
-                  vector: vector,
-                  damage: entry[:damage],
-                  blockers: blockers.map { |blocker| blocker[:entity_id] },
-                  requires_line_of_sight: attacker[:requires_line_of_sight],
-                  template: attack_type == "melee" ? nil : template_descriptor(attacker, target, victims, attack_type),
-                  affected_ids: victims.map { |victim| victim[:target][:entity_id] },
-                  actor_state: actor_state,
-                  target_state_before: before,
-                  target_state_after: after,
-                  charge: melee_charge(attacker, target, attack_type, vector),
-                  snapshot: State.snapshot_battlefield([ acting_side, target_side ])
-                }
-                action[:summary] = summarize(action, phase[:type])
-                action[:details] = details(action)
-                phase[:actions] << action
-              end
-            end
+            resolve_melee_strike!(
+              phase: phase,
+              attacker: attacker,
+              target: target,
+              vector: vector,
+              acting_side: acting_side,
+              target_side: target_side,
+              round_number: round_number,
+              rng: rng
+            )
           end
 
           add_event(phase, "Эта фаза прошла без результата.") if phase[:events].empty?
@@ -102,12 +50,116 @@ module Sim
           phase
         end
 
+        def resolve_missile_strike!(phase:, actor:, target:, vector:, attack_type:, acting_side:, target_side:, round_number:, rng:)
+          all_combatants = acting_side[:combatants] + target_side[:combatants]
+          profile = attack_type == "magic" ? SpellCasting.profile(actor) : actor
+          blockers = profile[:requires_line_of_sight] ? Geometry::Battlefield.line_of_sight_blockers(profile, target, all_combatants) : []
+          victims = Geometry::Battlefield.attack_victims(profile, target, target_side[:combatants], attack_type)
+          strike_damage = damage(profile, target, attack_type, vector, round_number)
+          return phase if target[:current_health].to_i <= 0 || strike_damage <= 0
+
+          host = acting_side[:combatants].find { |entry| entry[:entity_id] == actor[:host_id] } || actor
+          # Melee uses `attacks`; shooting/magic use `missile_attacks` (default 1).
+          strikes = [ profile[:missile_attacks].to_i, 1 ].max
+          strikes.times do
+            unless hit?(profile, target, attack_type, rng)
+              add_event(phase, "#{format_actor(actor[:actor_role], actor[:actor_name])} промахивается по #{target[:name]}")
+              next
+            end
+
+            actor_state = State.snapshot_combatant(host)
+            before = State.snapshot_combatant(target)
+            target[:current_health] = [ 0, target[:current_health] - strike_damage ].max
+            State.sync_combatant_footprint!(target)
+            after = State.snapshot_combatant(target)
+
+            distribute_contributor_experience!(actor[:contributor] || profile, strike_damage)
+
+            add_event(phase, "#{format_actor(actor[:actor_role], actor[:actor_name])} наносит #{strike_damage} урона по #{target[:name]} (#{vector})")
+            action = {
+              type: attack_type,
+              actor_id: actor[:actor_id],
+              actor_unit_id: actor[:host_id],
+              actor_name: actor[:actor_name],
+              actor_role: actor[:actor_role],
+              target_id: target[:entity_id],
+              target_name: target[:name],
+              vector: vector,
+              damage: strike_damage,
+              blockers: blockers.map { |blocker| blocker[:entity_id] },
+              requires_line_of_sight: profile[:requires_line_of_sight],
+              template: template_descriptor(profile, target, victims, attack_type),
+              affected_ids: victims.map { |victim| victim[:target][:entity_id] },
+              actor_state: actor_state,
+              target_state_before: before,
+              target_state_after: after,
+              charge: nil,
+              snapshot: State.snapshot_battlefield([ acting_side, target_side ])
+            }
+            action[:summary] = summarize(action, phase[:type])
+            action[:details] = details(action)
+            phase[:actions] << action
+          end
+          phase
+        end
+
+        def resolve_melee_strike!(phase:, attacker:, target:, vector:, acting_side:, target_side:, round_number:, rng:)
+          blockers = []
+          victims = [ { target: target, multiplier: 1 } ]
+          entries = melee_entries(attacker, target, vector, round_number)
+
+          entries.each do |entry|
+            next if target[:current_health].to_i <= 0 || entry[:damage].to_i <= 0
+
+            attacks = entry.dig(:profile, :attacks) || attacker[:attacks] || 1
+            attacks.times do
+              unless hit?(entry[:profile], target, "melee", rng)
+                add_event(phase, "#{format_actor(entry[:actor_role], entry[:actor_name])} промахивается по #{target[:name]}")
+                next
+              end
+
+              actor_state = State.snapshot_combatant(attacker)
+              before = State.snapshot_combatant(target)
+              target[:current_health] = [ 0, target[:current_health] - entry[:damage] ].max
+              State.sync_combatant_footprint!(target)
+              after = State.snapshot_combatant(target)
+
+              distribute_contributor_experience!(entry[:profile], entry[:damage])
+
+              add_event(phase, "#{format_actor(entry[:actor_role], entry[:actor_name])} наносит #{entry[:damage]} урона по #{target[:name]} (#{vector})")
+              action = {
+                type: "melee",
+                actor_id: entry[:actor_id],
+                actor_unit_id: entry[:actor_unit_id],
+                actor_name: entry[:actor_name],
+                actor_role: entry[:actor_role],
+                target_id: target[:entity_id],
+                target_name: target[:name],
+                vector: vector,
+                damage: entry[:damage],
+                blockers: blockers.map { |blocker| blocker[:entity_id] },
+                requires_line_of_sight: attacker[:requires_line_of_sight],
+                template: nil,
+                affected_ids: victims.map { |victim| victim[:target][:entity_id] },
+                actor_state: actor_state,
+                target_state_before: before,
+                target_state_after: after,
+                charge: melee_charge(attacker, target, "melee", vector),
+                snapshot: State.snapshot_battlefield([ acting_side, target_side ])
+              }
+              action[:summary] = summarize(action, phase[:type])
+              action[:details] = details(action)
+              phase[:actions] << action
+            end
+          end
+        end
+
         def damage(attacker, defender, attack_type, vector, round_number)
           base = base_power(attacker, attack_type)
           return 0 if base <= 0
 
           abilities = Array(attacker[:abilities])
-          weapon_type = attack_type == "magic" ? "magic" : attacker[:weapon_type]
+          weapon_type = attack_type == "magic" ? SpellCasting.weapon_type(attacker) : attacker[:weapon_type]
           armor_factor = Constants::WEAPON_VS_ARMOR.dig(defender[:armor_type], weapon_type) || 1
           facing_factor = if Array(defender[:abilities]).include?("skirmisher")
             1
@@ -138,6 +190,8 @@ module Sim
             4 / 6.0
           when "shooting"
             (attacker[:skill] || 3) / 7.0
+          when "magic"
+            SpellCasting.hit_chance(attacker, defender)
           else
             1.0
           end
@@ -151,7 +205,7 @@ module Sim
           return false if attacker[:is_routing] && !(allow_routing_melee && attack_type == "melee")
 
           case attack_type
-          when "magic" then attacker[:spell].to_i > 0
+          when "magic" then SpellCasting.enabled_for?(attacker)
           when "shooting" then attacker[:ranged].to_i > 0
           else attacker[:melee].to_i > 0
           end
@@ -194,7 +248,8 @@ module Sim
         end
 
         def can_target_ranged?(attacker, target, all_combatants)
-          return false if !Array(attacker[:abilities]).include?("skirmisher") && !Geometry::Battlefield.in_front_arc?(attacker, target, attacker[:facing])
+          abilities = Array(attacker[:targeting_abilities] || attacker[:abilities])
+          return false if !abilities.include?("skirmisher") && !Geometry::Battlefield.in_front_arc?(attacker, target, attacker[:facing])
           return false if melee_contact?(target, all_combatants)
 
           Geometry::Battlefield.line_of_sight_blockers(attacker, target, all_combatants).empty?
@@ -289,7 +344,7 @@ module Sim
 
         def base_power(attacker, attack_type)
           case attack_type
-          when "magic" then attacker[:spell].to_i
+          when "magic" then SpellCasting.base_power(attacker)
           when "shooting" then attacker[:ranged].to_i
           else attacker[:melee].to_i
           end
@@ -299,17 +354,6 @@ module Sim
           return unless contributor[:kind] == "hero"
 
           contributor[:experience_gain] += [ 1, damage ].max
-        end
-
-        def distribute_experience!(attacker, attack_type, damage)
-          contributors = attacker[:contributors][attack_type == "melee" ? :melee : :ranged] || []
-          total = contributors.sum { |entry| entry[:power].to_i }
-          contributors.each do |entry|
-            next unless entry[:kind] == "hero"
-
-            ratio = total.positive? ? entry[:power].to_f / total : 0
-            entry[:experience_gain] += [ 1, (damage * ratio).round ].max
-          end
         end
 
         def vector_priority(vector)
@@ -333,7 +377,7 @@ module Sim
         end
 
         def template_descriptor(attacker, target, victims, attack_type)
-          kind = attack_type == "magic" ? attacker[:spell_template] : attacker[:shooting_template]
+          kind = attack_type == "magic" ? SpellCasting.template_kind(attacker) : attacker[:shooting_template]
           affected = victims.map { |entry| entry[:target][:entity_id] }
           case kind
           when "blast", "volley"

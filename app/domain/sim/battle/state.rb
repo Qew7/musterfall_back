@@ -166,7 +166,7 @@ module Sim
         weapon_type = combat[:weapon_type]
 
         if ranged.positive? || spell.positive?
-          ranged_contributors << contributor_from(entity, [ ranged, spell ].max)
+          ranged_contributors << missile_contributor_from(entity)
         end
 
         attached_heroes.each do |hero|
@@ -176,7 +176,7 @@ module Sim
           spell += hero_combat[:spell]
           melee_contributors << contributor_from(hero, hero_combat[:melee]).merge(attached_slot: hero[:state][:attached_slot])
           if hero_combat[:ranged].positive? || hero_combat[:spell].positive?
-            ranged_contributors << contributor_from(hero, [ hero_combat[:ranged], hero_combat[:spell] ].max).merge(attached_slot: hero[:state][:attached_slot])
+            ranged_contributors << missile_contributor_from(hero, attached_slot: hero[:state][:attached_slot])
           end
           abilities.concat(hero.dig(:components, :abilities).to_a)
           weapon_type = "magic" if hero_combat[:spell] > spell
@@ -250,7 +250,8 @@ module Sim
             end,
             abilities: ability_set,
             contributors: { melee: melee_contributors, ranged: ranged_contributors },
-            attacks: combat[:attacks]
+            attacks: combat[:attacks],
+            missile_attacks: combat[:missile_attacks] || 1
           }
         )
       end
@@ -266,6 +267,24 @@ module Sim
           abilities: entity.dig(:components, :abilities).to_a.dup,
           experience_gain: 0
         }
+      end
+
+      def missile_contributor_from(entity, attached_slot: nil)
+        combat = entity[:components][:combat]
+        ranged = combat[:ranged].to_i
+        spell = combat[:spell].to_i
+        contributor_from(entity, [ ranged, spell ].max).merge(
+          ranged: ranged,
+          spell: spell,
+          shooting_range: combat[:shooting_range],
+          spell_range: combat[:spell_range],
+          shooting_template: combat[:shooting_template],
+          spell_template: combat[:spell_template],
+          requires_line_of_sight: combat[:requires_line_of_sight],
+          missile_attacks: combat[:missile_attacks] || 1,
+          initiative: combat[:initiative],
+          attached_slot: attached_slot
+        )
       end
 
       def sync_side!(player, side)
