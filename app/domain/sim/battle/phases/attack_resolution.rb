@@ -28,6 +28,12 @@ module Sim
           end
 
           attackers.each do |attacker|
+            unless Rules.for(:melee).allow_attack?(attacker)
+              note = attacker[:fear_check_note] || "rule"
+              add_event(phase, "#{attacker[:name]} не атакует в этом раунде (#{note}).")
+              next
+            end
+
             selection = Decisions::Targeting.choose_target(attacker, target_side[:combatants], attack_type, all_combatants)
             next unless selection
 
@@ -55,53 +61,104 @@ module Sim
           profile = attack_type == "magic" ? SpellCasting.profile(actor) : actor
           blockers = profile[:requires_line_of_sight] ? Geometry::Battlefield.line_of_sight_blockers(profile, target, all_combatants) : []
           victims = Geometry::Battlefield.attack_victims(profile, target, target_side[:combatants], attack_type)
-          strike_damage = damage(profile, target, attack_type, vector, round_number)
-          return phase if target[:current_health].to_i <= 0 || strike_damage <= 0
+          return phase if victims.empty?
 
           host = acting_side[:combatants].find { |entry| entry[:entity_id] == actor[:host_id] } || actor
-          # Melee uses `attacks`; shooting/magic use `missile_attacks` (default 1).
-          strikes = [ profile[:missile_attacks].to_i, 1 ].max
+          shooting_rule = Rules.for(:shooting).find_applicable(profile, attack_type)
+          strikes = shooting_rule ? 1 : [ profile[:missile_attacks].to_i, 1 ].max
+
           strikes.times do
-            unless hit?(profile, target, attack_type, rng)
-              add_event(phase, "#{format_actor(actor[:actor_role], actor[:actor_name])} промахивается по #{target[:name]}.")
+            if shooting_rule
+              shooting_rule.resolve_missile_strike!(
+                phase: phase,
+                actor: actor,
+                host: host,
+                profile: profile,
+                primary: target,
+                vector: vector,
+                victims: victims,
+                attack_type: attack_type,
+                acting_side: acting_side,
+                target_side: target_side,
+                round_number: round_number,
+                blockers: blockers
+              )
               next
             end
 
-            actor_state = State.snapshot_combatant(host)
-            before = State.snapshot_combatant(target)
-            target[:current_health] = [ 0, target[:current_health] - strike_damage ].max
-            State.sync_combatant_footprint!(target)
-            after = State.snapshot_combatant(target)
+            victims.each do |victim_entry|
+              victim = victim_entry[:target]
+              next if victim[:current_health].to_i <= 0
 
-            distribute_contributor_experience!(actor[:contributor] || profile, strike_damage)
+              strike_damage = damage(profile, victim, attack_type, vector, round_number)
+              strike_damage = [ 1, (strike_damage * victim_entry[:multiplier].to_f).round ].max if victim_entry[:multiplier]
+              next if strike_damage <= 0
 
-            player_line = missile_player_summary(actor, target, vector, strike_damage, attack_type)
-            add_event(phase, player_line)
-            action = {
-              type: attack_type,
-              actor_id: actor[:actor_id],
-              actor_unit_id: actor[:host_id],
-              actor_name: actor[:actor_name],
-              actor_role: actor[:actor_role],
-              target_id: target[:entity_id],
-              target_name: target[:name],
-              vector: vector,
-              damage: strike_damage,
-              blockers: blockers.map { |blocker| blocker[:entity_id] },
-              requires_line_of_sight: profile[:requires_line_of_sight],
-              template: template_descriptor(profile, target, victims, attack_type),
-              affected_ids: victims.map { |victim| victim[:target][:entity_id] },
-              actor_state: actor_state,
-              target_state_before: before,
-              target_state_after: after,
-              charge: nil,
-              snapshot: State.snapshot_battlefield([ acting_side, target_side ])
-            }
-            action[:summary] = player_line
-            action[:details] = details(action)
-            phase[:actions] << action
+              unless hit?(profile, victim, attack_type, rng)
+                add_event(phase, "#{format_actor(actor[:actor_role], actor[:actor_name])} промахивается по #{victim[:name]}.")
+                next
+              end
+
+              record_missile_hit!(
+                phase: phase,
+                actor: actor,
+                host: host,
+                profile: profile,
+                victim: victim,
+                vector: vector,
+                strike_damage: strike_damage,
+                attack_type: attack_type,
+                acting_side: acting_side,
+                target_side: target_side,
+                blockers: blockers,
+                victims: victims,
+                models_hit: victim_entry[:models_hit]
+              )
+            end
           end
           phase
+        end
+
+        def record_missile_hit!(phase:, actor:, host:, profile:, victim:, vector:, strike_damage:, attack_type:, acting_side:, target_side:, blockers:, victims:, models_hit: nil, breath: false)
+          actor_state = State.snapshot_combatant(host)
+          before = State.snapshot_combatant(victim)
+          victim[:current_health] = [ 0, victim[:current_health] - strike_damage ].max
+          State.sync_combatant_footprint!(victim)
+          after = State.snapshot_combatant(victim)
+
+          distribute_contributor_experience!(actor[:contributor] || profile, strike_damage)
+
+          player_line =
+            if breath
+              Rules::Breath::Shooting.player_summary(actor, victim, models_hit, strike_damage)
+            else
+              missile_player_summary(actor, victim, vector, strike_damage, attack_type)
+            end
+          add_event(phase, player_line)
+          action = {
+            type: attack_type,
+            actor_id: actor[:actor_id],
+            actor_unit_id: actor[:host_id],
+            actor_name: actor[:actor_name],
+            actor_role: actor[:actor_role],
+            target_id: victim[:entity_id],
+            target_name: victim[:name],
+            vector: vector,
+            damage: strike_damage,
+            models_hit: models_hit,
+            blockers: blockers.map { |blocker| blocker[:entity_id] },
+            requires_line_of_sight: profile[:requires_line_of_sight],
+            template: template_descriptor(profile, victim, victims, attack_type),
+            affected_ids: victims.map { |entry| entry[:target][:entity_id] },
+            actor_state: actor_state,
+            target_state_before: before,
+            target_state_after: after,
+            charge: nil,
+            snapshot: State.snapshot_battlefield([ acting_side, target_side ])
+          }
+          action[:summary] = player_line
+          action[:details] = details(action)
+          phase[:actions] << action
         end
 
         def resolve_melee_strike!(phase:, attacker:, target:, vector:, acting_side:, target_side:, round_number:, rng:)
@@ -352,6 +409,9 @@ module Sim
 
         def template_descriptor(attacker, target, victims, attack_type)
           kind = attack_type == "magic" ? SpellCasting.template_kind(attacker) : attacker[:shooting_template]
+          rule = Rules.for(:shooting).find_applicable(attacker, attack_type)
+          return rule.template_descriptor(attacker, target, victims) if rule&.respond_to?(:template_descriptor)
+
           affected = victims.map { |entry| entry[:target][:entity_id] }
           case kind
           when "blast", "volley"
@@ -359,15 +419,6 @@ module Sim
               shape: "circle",
               radius: kind == "blast" ? Geometry::Battlefield::CONFIG[:blast_radius] : Geometry::Battlefield::CONFIG[:volley_radius],
               center: { x: target[:x], y: target[:y] },
-              kind: kind,
-              affected_ids: affected
-            }
-          when "breath"
-            {
-              shape: "cone",
-              radius: [ attacker[:shooting_range], attacker[:spell_range], 2.4 ].max,
-              facing: attacker[:facing],
-              origin: { x: attacker[:x], y: attacker[:y] },
               kind: kind,
               affected_ids: affected
             }
@@ -420,9 +471,15 @@ module Sim
             lines << "attacker pose/state: #{format_state(actor)}"
           end
           lines << "affected_ids=#{Array(action[:affected_ids]).join(",")}"
+          lines << "models_hit=#{action[:models_hit]}" if action[:models_hit]
           lines << "blockers=#{Array(action[:blockers]).join(",")}" if Array(action[:blockers]).any?
           if action[:template]
-            lines << "template=#{action[:template][:kind] || action[:template][:shape]} shape=#{action[:template][:shape]}"
+            tmpl = action[:template]
+            lines << "template=#{tmpl[:kind] || tmpl[:shape]} shape=#{tmpl[:shape]} length=#{tmpl[:length]}"
+            if tmpl[:points]
+              pts = tmpl[:points].map { |p| "(#{format('%.2f', p[:x])},#{format('%.2f', p[:y])})" }.join(" ")
+              lines << "template_points=#{pts}"
+            end
           end
           if action[:charge]
             charge = action[:charge]

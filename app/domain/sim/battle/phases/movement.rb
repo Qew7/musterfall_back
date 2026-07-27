@@ -187,7 +187,8 @@ module Sim
 
             aligned = Geometry::Battlefield.align_fronts_pose(pose, nearest, obstacles: align_obstacles)
             next unless meaningful_destination?(pose, aligned)
-            next if destination_blocked?(aligned, [], align_obstacles, contact_id: nearest[:entity_id])
+            soft_id = charge_contact_id_for(intent) || nearest[:entity_id]
+            next if destination_blocked?(aligned, [], align_obstacles, contact_id: soft_id)
 
             intent[:paid_destination] = intent[:destination].dup
             intent[:destination] = { x: aligned[:x], y: aligned[:y], facing: aligned[:facing] }
@@ -232,7 +233,7 @@ module Sim
           ranked.each do |intent|
             combatant = intent[:combatant]
             occupied.reject! { |entry| entry[:entity_id] == combatant[:entity_id] }
-            contact_id = intent.dig(:nearest, :entity_id)
+            contact_id = charge_contact_id_for(intent)
 
             pose = destination_pose(intent)
             if destination_blocked?(pose, [], occupied, contact_id: contact_id)
@@ -260,6 +261,14 @@ module Sim
             y: intent[:destination][:y],
             facing: intent[:destination][:facing]
           )
+        end
+
+        # Flyer setup sets charge_contact_id: nil so landing stays clear of everyone.
+        # Charge / ground intents omit the key and soft-contact the nearest enemy.
+        def charge_contact_id_for(intent)
+          return intent[:charge_contact_id] if intent.key?(:charge_contact_id)
+
+          intent.dig(:nearest, :entity_id)
         end
 
         def destination_blocked?(pose, static_obstacles, accepted, contact_id: nil)
@@ -407,7 +416,13 @@ module Sim
         # Player-facing: short and truthful. Wheel MV / pathing flags belong in details.
         def approach_player_summary(combatant, nearest, plan)
           note = approach_player_note(plan, nearest)
-          "#{combatant[:name]} сближается с #{nearest[:name]}#{note}."
+          if plan[:leap] && plan[:charge]
+            "#{combatant[:name]} пикирует на #{nearest[:name]}#{note}."
+          elsif plan[:leap]
+            "#{combatant[:name]} перелетает к #{nearest[:name]}#{note}."
+          else
+            "#{combatant[:name]} сближается с #{nearest[:name]}#{note}."
+          end
         end
 
         def reposition_player_summary(combatant, nearest, plan)
@@ -445,7 +460,9 @@ module Sim
 
         def approach_maneuver(plan, nearest, budget, wheel:, march_spent:, desired:, kind_override: nil)
           contact_blocker = blocker_is_target?(plan, nearest)
-          kind = kind_override || if plan[:blocked_by_ally]
+          kind = kind_override || if plan[:leap]
+            plan[:charge] ? "flyer_charge" : "flyer_leap"
+          elsif plan[:blocked_by_ally]
             "blocked_by_ally"
           elsif plan[:avoided] && !contact_blocker
             "bypass"

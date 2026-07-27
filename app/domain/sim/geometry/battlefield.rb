@@ -11,7 +11,8 @@ module Sim
         # Almost-touching band: closes the dead zone between "too close to march" and "not yet melee".
         contact_snap: 0.05,
         blast_radius: 1.6,
-        volley_radius: 1.4
+        volley_radius: 1.4,
+        breath_length: 8.0
       }.freeze
 
       extend Core
@@ -21,6 +22,7 @@ module Sim
       extend Contact
       extend Align
       extend Targeting
+      extend Templates
     end
   end
 end

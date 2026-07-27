@@ -2,6 +2,7 @@ module Sim
   module Battle
     module Decisions
       # Melee approach intents: who moves and toward which enemy.
+      # Ability planners live under Rules::<rule>/movement.rb (Flying / Ground).
       module Movement
         CONTACT = Pathing::CONTACT
         CONTACT_SNAP = Geometry::Battlefield::CONFIG[:contact_snap]
@@ -9,8 +10,17 @@ module Sim
         ENGAGE = CONTACT + CONTACT_SNAP
         ADVANCING = { "rear" => "support", "support" => "front" }.freeze
         SLOT_RANK = { "front" => 0, "flank" => 1, "rear" => 2 }.freeze
+        SETUP_RANGE_MV = 2.0
 
         module_function
+
+        def flying?(combatant)
+          Array(combatant[:abilities]).include?("flying")
+        end
+
+        def planner_for(combatant)
+          Rules.planner_for_movement(combatant)
+        end
 
         def melee_movers(combatants)
           Roles.active(combatants).select { |entry| Roles.melee_primary?(entry) }
@@ -36,6 +46,10 @@ module Sim
           Geometry::Battlefield.distance_between_units(combatant, enemy) <= ENGAGE
         end
 
+        def engaged_with_any?(combatant, enemies)
+          Pathing.active_units(enemies).any? { |enemy| engaged?(combatant, enemy) }
+        end
+
         def row_advance_target(combatant, allies)
           target_row = ADVANCING[combatant[:row]]
           return nil unless target_row
@@ -51,61 +65,14 @@ module Sim
           target_row
         end
 
-        SETUP_RANGE_MV = 2.0
-
-        # Plan assaults: front-arc only; one ally per defender side; else retarget, orbit flank, or wrap rear.
-        # Pass 3: leftovers facing away from a nearby open flank/rear wheel toward it for next turn.
+        # Dispatch ground vs flying planners; shared claimed sides across both.
         def plan_melee_entries(movers, enemies)
           living = Pathing.active_units(enemies)
-          ranked = movers.sort_by do |combatant|
-            in_arc = enemies_in_front_arc(combatant, living)
-            nearest = in_arc.min_by { |entry| Geometry::Battlefield.distance_between_units(combatant, entry) }
-            dist = nearest ? Geometry::Battlefield.distance_between_units(combatant, nearest) : Float::INFINITY
-            align = nearest ? front_alignment_to(combatant, nearest) : 999.0
-            [ align, dist, combatant[:entity_id].to_s ]
-          end
-
           claimed = Hash.new { |hash, key| hash[key] = {} }
-          entries_by_id = {}
+          flyers, grounders = movers.partition { |combatant| flying?(combatant) }
 
-          # Pass 1: claim the natural geometric side while it is free.
-          ranked.each do |combatant|
-            choice = choose_natural_side(combatant, living, claimed)
-            next unless choice
-
-            enemy = choice[:nearest]
-            side = choice[:contact_slot]
-            claimed[enemy[:entity_id]][side] = combatant[:entity_id]
-            entries_by_id[combatant[:entity_id]] = build_entry(combatant, enemy, side, :direct)
-          end
-
-          # Pass 2: leftovers retarget, else orbit a free flank, else wrap a free rear.
-          ranked.each do |combatant|
-            next if entries_by_id.key?(combatant[:entity_id])
-
-            choice = choose_fallback_target(combatant, living, claimed)
-            next unless choice
-
-            enemy = choice[:nearest]
-            side = choice[:contact_slot]
-            claimed[enemy[:entity_id]][side] = combatant[:entity_id]
-            entries_by_id[combatant[:entity_id]] = build_entry(combatant, enemy, side, choice[:approach_mode])
-          end
-
-          # Pass 3: no in-arc assault — if an open flank/rear is within MV*2, set up to strike it next turn.
-          ranked.each do |combatant|
-            next if entries_by_id.key?(combatant[:entity_id])
-
-            choice = choose_setup_flank_or_rear(combatant, living, claimed)
-            next unless choice
-
-            enemy = choice[:nearest]
-            side = choice[:contact_slot]
-            claimed[enemy[:entity_id]][side] = combatant[:entity_id]
-            entries_by_id[combatant[:entity_id]] = build_entry(combatant, enemy, side, choice[:approach_mode])
-          end
-
-          ranked.filter_map { |combatant| entries_by_id[combatant[:entity_id]] }
+          Rules::Flying::Movement.plan_entries(flyers, living, claimed) +
+            Rules::Ground::Movement.plan_entries(grounders, living, claimed)
         end
 
         def build_entry(combatant, enemy, side, approach_mode)
@@ -119,102 +86,23 @@ module Sim
           }
         end
 
-        def choose_natural_side(combatant, enemies, claimed)
-          candidates = enemies_in_front_arc(combatant, enemies).sort_by do |entry|
-            [
-              entry[:is_routing] ? 0 : 1,
-              Geometry::Battlefield.distance_between_units(combatant, entry),
-              entry[:entity_id].to_s
-            ]
-          end
-          candidates.each do |enemy|
-            side = Geometry::Battlefield.classify_attack_vector(combatant, enemy)
-            next if claimed[enemy[:entity_id]].key?(side)
-
-            return { nearest: enemy, contact_slot: side, approach_mode: :direct }
-          end
-          nil
-        end
-
-        # Other in-arc enemy with matching free side, else orbit free flank, else wrap free rear.
-        def choose_fallback_target(combatant, enemies, claimed)
-          candidates = enemies_in_front_arc(combatant, enemies).sort_by do |entry|
-            [
-              entry[:is_routing] ? 0 : 1,
-              Geometry::Battlefield.distance_between_units(combatant, entry),
-              entry[:entity_id].to_s
-            ]
-          end
-          return nil if candidates.empty?
-
-          candidates.each do |enemy|
-            %w[front flank rear].each do |side|
-              next if claimed[enemy[:entity_id]].key?(side)
-              # Only claim a side that matches geometry on another (or same) in-arc foe.
-              geo = Geometry::Battlefield.classify_attack_vector(combatant, enemy)
-              next unless side == geo
-
-              return { nearest: enemy, contact_slot: side, approach_mode: :direct }
-            end
-          end
-
-          primary = candidates.first
-          claimed_sides = claimed[primary[:entity_id]]
-          unless claimed_sides.key?("flank")
-            return { nearest: primary, contact_slot: "flank", approach_mode: :orbit_flank }
-          end
-          return nil if claimed_sides.key?("rear")
-
-          { nearest: primary, contact_slot: "rear", approach_mode: :wrap_rear }
-        end
-
-        # Nearby open flank/rear outside the front arc: claim and wheel/approach for next turn.
-        def choose_setup_flank_or_rear(combatant, enemies, claimed)
-          return nil if engaged_with_any?(combatant, enemies)
-
-          range = combatant[:movement].to_f * SETUP_RANGE_MV
-          return nil if range <= 0.05
-
-          candidates = Pathing.active_units(enemies).select do |enemy|
-            Geometry::Battlefield.distance_between_units(combatant, enemy) <= range
-          end
-          return nil if candidates.empty?
-
-          # Prefer foes already on our geometric flank/rear — less travel to set up.
-          ordered = candidates.sort_by do |enemy|
-            geo = Geometry::Battlefield.classify_attack_vector(combatant, enemy)
-            geo_rank = %w[flank rear].include?(geo) ? 0 : 1
-            [
-              geo_rank,
-              enemy[:is_routing] ? 0 : 1,
-              Geometry::Battlefield.distance_between_units(combatant, enemy),
-              enemy[:entity_id].to_s
-            ]
-          end
-
-          ordered.each do |enemy|
-            claimed_sides = claimed[enemy[:entity_id]]
-            unless claimed_sides.key?("flank")
-              return { nearest: enemy, contact_slot: "flank", approach_mode: :orbit_flank }
-            end
-            next if claimed_sides.key?("rear")
-
-            return { nearest: enemy, contact_slot: "rear", approach_mode: :wrap_rear }
-          end
-          nil
-        end
-
-        def engaged_with_any?(combatant, enemies)
-          Pathing.active_units(enemies).any? { |enemy| engaged?(combatant, enemy) }
-        end
-
-        # Pick a free side on an in-arc enemy, else orbit flank, else wrap rear.
-        def choose_assault_target(combatant, enemies, claimed)
-          choose_natural_side(combatant, enemies, claimed) || choose_fallback_target(combatant, enemies, claimed)
-        end
-
         def orbit_mode?(approach_mode)
-          approach_mode == :orbit_flank || approach_mode == :wrap_rear
+          approach_mode == :orbit_flank ||
+            approach_mode == :wrap_rear ||
+            approach_mode == :flyer_setup_rear ||
+            approach_mode == :flyer_setup_flank ||
+            approach_mode == :flyer_approach
+        end
+
+        def build_approach_intent(combatant:, nearest:, obstacles:, contact_slot: nil, allow_ally_bypass: false, approach_mode: :direct)
+          planner_for(combatant).build_approach_intent(
+            combatant: combatant,
+            nearest: nearest,
+            obstacles: obstacles,
+            contact_slot: contact_slot,
+            allow_ally_bypass: allow_ally_bypass,
+            approach_mode: approach_mode
+          )
         end
 
         # Kept for tests / callers that still group by target; prefer plan_melee_entries.
@@ -265,96 +153,32 @@ module Sim
           return false unless defender
           return true if engaged?(origin, defender)
 
-          plan = Pathing.plan_approach(
-            origin: origin,
-            goal_point: defender,
-            budget: budget.to_f,
-            obstacles: [ defender ],
-            contact_id: defender[:entity_id],
-            goal_unit: defender,
-            bypass: false
-          )
-          pose = plan[:pose]
-          return false unless pose
-
-          landed = origin.merge(x: pose[:x], y: pose[:y], facing: pose[:facing])
-          Geometry::Battlefield.distance_between_units(landed, defender) <= ENGAGE
+          planner_for(origin).corner_contact_reachable?(origin, defender, budget)
         end
 
-        def build_approach_intent(combatant:, nearest:, obstacles:, contact_slot: nil, allow_ally_bypass: false, approach_mode: :direct)
-          return nil unless nearest
-          return nil if engaged?(combatant, nearest)
-          return nil unless Geometry::Battlefield.in_front_arc?(combatant, nearest, combatant[:facing]) || orbit_mode?(approach_mode)
-
-          budget = combatant[:movement].to_f
-          goal_point = approach_goal_point(combatant, nearest, contact_slot: contact_slot, approach_mode: approach_mode)
-          plan = Pathing.plan_approach(
-            origin: combatant,
-            goal_point: goal_point,
-            budget: budget,
-            obstacles: obstacles,
-            contact_id: nearest[:entity_id],
-            goal_unit: nearest,
-            allow_ally_bypass: allow_ally_bypass || orbit_mode?(approach_mode),
-            approach_mode: approach_mode
-          )
-          destination = plan[:pose]
-          facing_changed = destination && Geometry::Battlefield.shortest_facing_delta(combatant[:facing], destination[:facing]).abs > 0.05
-          traveled = destination ? Geometry::Battlefield.distance_between(combatant, destination) : 0.0
-          meaningful_move = destination && (facing_changed || traveled > 0.05)
-
-          if !meaningful_move
-            return nil unless plan[:blocked_by_ally] && plan[:blocker]
-
-            return {
-              kind: "approach",
-              combatant: combatant,
-              nearest: nearest,
-              plan: plan,
-              budget: budget,
-              destination: nil,
-              wait: true,
-              contact_slot: contact_slot,
-              approach_mode: approach_mode
-            }
-          end
-
-          {
-            kind: "approach",
-            combatant: combatant,
-            nearest: nearest,
-            plan: plan,
-            budget: budget,
-            destination: destination,
-            wait: false,
-            contact_slot: contact_slot,
-            approach_mode: approach_mode
-          }
+        # Compatibility wrappers used by tests / older callers.
+        def choose_natural_side(...)
+          Rules::Ground::Movement.choose_natural_side(...)
         end
 
-        # Direct assaults aim at the enemy. Orbit/wrap modes use flank or rear waypoints.
-        def approach_goal_point(origin, defender, contact_slot:, approach_mode:)
-          slot =
-            case approach_mode
-            when :orbit_flank then "flank"
-            when :wrap_rear then "rear"
-            else contact_slot.to_s
-            end
-          return defender unless orbit_mode?(approach_mode) && %w[flank rear].include?(slot)
-
-          points = Pathing.contact_slot_points(origin, defender, slot)
-          return points.min_by { |point| Geometry::Battlefield.distance_between(origin, point) } if points.any?
-
-          defender
+        def choose_fallback_target(...)
+          Rules::Ground::Movement.choose_fallback_target(...)
         end
 
-        # Orbit/wrap modes bias off the defender face toward the assigned slot waypoint.
-        def slot_approach_point(origin, defender, slot, approach_mode: :direct)
-          return nil unless orbit_mode?(approach_mode)
-          return nil if slot.nil? || slot.to_s == "front"
+        def choose_setup_flank_or_rear(...)
+          Rules::Ground::Movement.choose_setup_flank_or_rear(...)
+        end
 
-          point = approach_goal_point(origin, defender, contact_slot: slot, approach_mode: approach_mode)
-          point == defender ? nil : point
+        def choose_assault_target(...)
+          Rules::Ground::Movement.choose_assault_target(...)
+        end
+
+        def approach_goal_point(...)
+          Rules::Ground::Movement.approach_goal_point(...)
+        end
+
+        def slot_approach_point(...)
+          Rules::Ground::Movement.slot_approach_point(...)
         end
       end
     end

@@ -8,6 +8,7 @@ abilities = [
   { key: "fast", name: "Fast", category: "mobility", description: "Быстрее занимает выгодные позиции." },
   { key: "fear", name: "Fear", category: "trait", description: "Давит мораль и строй противника." },
   { key: "ferocious", name: "Ferocious", category: "trait", description: "Сильнее в затяжной рубке." },
+  { key: "flying", name: "Flying", category: "mobility", description: "Летает в пределах MV; садится вне чужих баз; facing свободный; заход в тыл/фланг." },
   { key: "forestborn", name: "Forestborn", category: "trait", description: "Лесные духи игнорируют часть штрафов местности." },
   { key: "leader", name: "Leader", category: "hero", description: "Командир, способный вести армию." },
   { key: "machine", name: "Machine", category: "siege", description: "Осадная машина с усиленным дальним уроном." },
@@ -35,7 +36,7 @@ end
 
 def default_movement_for(attributes)
   abilities = normalized_abilities_for(attributes)
-  return 5 if attributes.fetch(:mounted) || abilities.include?("fast")
+  return 5 if attributes.fetch(:mounted) || abilities.include?("fast") || abilities.include?("flying")
   return 2 if abilities.include?("machine")
   return 4 if abilities.include?("charge") || abilities.include?("skirmisher")
 
@@ -78,6 +79,7 @@ end
 
 def default_shooting_template_for(attributes)
   abilities = normalized_abilities_for(attributes)
+  return "breath" if attributes.fetch(:weapon_type) == "breath"
   return "blast" if abilities.include?("machine")
   return "volley" if abilities.include?("ranged")
 
@@ -160,11 +162,13 @@ templates = [
   { template_key: "ghoul_pack", kind: "unit", faction_slug: "undead", name: "Упырская стая", cost: 8, models: 12, model_health: 1, width: 4, armor_type: "light", weapon_type: "puncture", melee: 4, ranged: 0, spell: 0, initiative: 3, abilities: [ "skirmisher", "poison" ], skill: 3, mounted: false, attacks: 1 },
   { template_key: "black_knights", kind: "unit", faction_slug: "undead", name: "Черные рыцари", cost: 12, models: 6, model_health: 1, width: 3, armor_type: "heavy", weapon_type: "puncture", melee: 6, ranged: 0, spell: 0, initiative: 3, abilities: [ "charge", "undead", "fast" ], skill: 4, mounted: false, attacks: 1 },
   { template_key: "corpse_cart", kind: "unit", faction_slug: "undead", name: "Труповозка", cost: 11, models: 3, model_health: 3, width: 2, armor_type: "magic", weapon_type: "magic", melee: 2, ranged: 4, spell: 0, initiative: 4, abilities: [ "wizardAura", "undead" ], skill: 3, mounted: false, attacks: 1 },
+  { template_key: "bone_dragon", kind: "unit", faction_slug: "undead", name: "Костяной дракон", cost: 15, models: 1, model_health: 8, width: 2, armor_type: "heavy", weapon_type: "breath", melee: 6, ranged: 4, spell: 0, initiative: 4, abilities: [ "monster", "flying", "fear", "undead", "ranged" ], skill: 5, mounted: false, attacks: 3 },
   { template_key: "glade_guard", kind: "unit", faction_slug: "wildwood", name: "Стража поляны", cost: 9, models: 10, model_health: 1, width: 5, armor_type: "light", weapon_type: "ranged", melee: 2, ranged: 5, spell: 0, initiative: 4, abilities: [ "ranged", "precision" ], skill: 4, mounted: false, attacks: 1 },
   { template_key: "wardancers", kind: "unit", faction_slug: "wildwood", name: "Танцоры войны", cost: 9, models: 8, model_health: 1, width: 4, armor_type: "light", weapon_type: "slash", melee: 5, ranged: 0, spell: 0, initiative: 3, abilities: [ "skirmisher", "dodge" ], skill: 4, mounted: false, attacks: 1 },
   { template_key: "dryad_grove", kind: "unit", faction_slug: "wildwood", name: "Стайка дриад", cost: 10, models: 8, model_health: 2, width: 4, armor_type: "magic", weapon_type: "slash", melee: 4, ranged: 0, spell: 0, initiative: 3, abilities: [ "fear", "forestborn" ], skill: 3, mounted: false, attacks: 1 },
   { template_key: "stag_knights", kind: "unit", faction_slug: "wildwood", name: "Рыцари на оленях", cost: 12, models: 6, model_health: 1, width: 3, armor_type: "medium", weapon_type: "puncture", melee: 6, ranged: 0, spell: 0, initiative: 3, abilities: [ "charge", "fast" ], skill: 4, mounted: false, attacks: 1 },
   { template_key: "treeman", kind: "unit", faction_slug: "wildwood", name: "Древочеловек", cost: 14, models: 3, model_health: 4, width: 2, armor_type: "heavy", weapon_type: "blunt", melee: 6, ranged: 2, spell: 0, initiative: 4, abilities: [ "monster", "fear" ], skill: 5, mounted: false, attacks: 2 },
+  { template_key: "grove_hawk", kind: "unit", faction_slug: "wildwood", name: "Великий ястреб рощи", cost: 12, models: 1, model_health: 5, width: 2, armor_type: "medium", weapon_type: "puncture", melee: 5, ranged: 0, spell: 0, initiative: 5, abilities: [ "monster", "flying", "fast", "forestborn" ], skill: 4, mounted: false, attacks: 2 },
   { template_key: "chaos_warriors", kind: "unit", faction_slug: "chaos", name: "Воины Хаоса", cost: 11, models: 12, model_health: 1, width: 4, armor_type: "heavy", weapon_type: "slash", melee: 6, ranged: 0, spell: 0, initiative: 3, abilities: [ "disciplined", "fear" ], skill: 5, mounted: false, attacks: 1 },
   { template_key: "marauders", kind: "unit", faction_slug: "chaos", name: "Мародеры", cost: 7, models: 14, model_health: 1, width: 4, armor_type: "medium", weapon_type: "slash", melee: 4, ranged: 0, spell: 0, initiative: 3, abilities: [ "ferocious" ], skill: 3, mounted: false, attacks: 1 },
   { template_key: "chaos_knights", kind: "unit", faction_slug: "chaos", name: "Рыцари Хаоса", cost: 13, models: 6, model_health: 1, width: 3, armor_type: "heavy", weapon_type: "puncture", melee: 7, ranged: 0, spell: 0, initiative: 3, abilities: [ "charge", "fast" ], skill: 5, mounted: false, attacks: 1 },
@@ -172,7 +176,7 @@ templates = [
   { template_key: "hellcannon", kind: "unit", faction_slug: "chaos", name: "Адская пушка", cost: 14, models: 2, model_health: 4, width: 2, armor_type: "machine", weapon_type: "demolish", melee: 2, ranged: 8, spell: 0, initiative: 4, abilities: [ "ranged", "machine", "fear" ], skill: 2, mounted: false, attacks: 1 },
   { template_key: "captain_general", kind: "hero", faction_slug: "empire", name: "Генерал Империи", cost: 12, models: 1, model_health: 3, width: 1, armor_type: "heavy", weapon_type: "slash", melee: 4, ranged: 0, spell: 0, initiative: 5, abilities: [ "leader" ], skill: 5, mounted: false, attacks: 2 },
   { template_key: "battle_wizard", kind: "hero", faction_slug: "empire", name: "Боевой маг", cost: 14, models: 1, model_health: 2, width: 1, armor_type: "magic", weapon_type: "magic", melee: 2, ranged: 4, spell: 5, initiative: 5, abilities: [ "wizard", "leader" ], skill: 5, mounted: false, attacks: 2 },
-  { template_key: "griffon_marshal", kind: "hero", faction_slug: "empire", name: "Маршал на грифоне", cost: 14, models: 1, model_health: 4, width: 1, armor_type: "heavy", weapon_type: "puncture", melee: 5, ranged: 1, spell: 0, initiative: 5, abilities: [ "leader", "monster" ], skill: 5, mounted: true, attacks: 3 },
+  { template_key: "griffon_marshal", kind: "hero", faction_slug: "empire", name: "Маршал на грифоне", cost: 14, models: 1, model_health: 4, width: 1, armor_type: "heavy", weapon_type: "puncture", melee: 5, ranged: 1, spell: 0, initiative: 5, abilities: [ "leader", "monster", "flying" ], skill: 5, mounted: true, attacks: 3 },
   { template_key: "warboss", kind: "hero", faction_slug: "greenskins", name: "Варбосс", cost: 12, models: 1, model_health: 4, width: 1, armor_type: "heavy", weapon_type: "slash", melee: 5, ranged: 0, spell: 0, initiative: 5, abilities: [ "leader", "ferocious" ], skill: 5, mounted: false, attacks: 2 },
   { template_key: "shaman", kind: "hero", faction_slug: "greenskins", name: "Шаман", cost: 14, models: 1, model_health: 2, width: 1, armor_type: "magic", weapon_type: "magic", melee: 2, ranged: 4, spell: 5, initiative: 5, abilities: [ "wizard" ], skill: 5, mounted: false, attacks: 2 },
   { template_key: "boar_chief", kind: "hero", faction_slug: "greenskins", name: "Вождь на кабане", cost: 14, models: 1, model_health: 3, width: 1, armor_type: "heavy", weapon_type: "blunt", melee: 5, ranged: 0, spell: 0, initiative: 5, abilities: [ "leader", "charge" ], skill: 5, mounted: true, attacks: 2 },
@@ -184,7 +188,7 @@ templates = [
   { template_key: "stag_prince", kind: "hero", faction_slug: "wildwood", name: "Принц на великом олене", cost: 14, models: 1, model_health: 3, width: 1, armor_type: "medium", weapon_type: "puncture", melee: 5, ranged: 1, spell: 0, initiative: 5, abilities: [ "leader", "charge" ], skill: 5, mounted: true, attacks: 2 },
   { template_key: "chaos_lord", kind: "hero", faction_slug: "chaos", name: "Лорд Хаоса", cost: 12, models: 1, model_health: 4, width: 1, armor_type: "heavy", weapon_type: "slash", melee: 6, ranged: 0, spell: 0, initiative: 5, abilities: [ "leader", "fear" ], skill: 6, mounted: false, attacks: 2 },
   { template_key: "sorcerer", kind: "hero", faction_slug: "chaos", name: "Чародей Хаоса", cost: 14, models: 1, model_health: 2, width: 1, armor_type: "magic", weapon_type: "magic", melee: 2, ranged: 5, spell: 5, initiative: 5, abilities: [ "wizard" ], skill: 5, mounted: false, attacks: 2 },
-  { template_key: "daemon_prince", kind: "hero", faction_slug: "chaos", name: "Демонический принц", cost: 14, models: 1, model_health: 5, width: 1, armor_type: "magic", weapon_type: "magic", melee: 5, ranged: 3, spell: 5, initiative: 5, abilities: [ "leader", "monster", "wizard" ], skill: 6, mounted: true, attacks: 3 }
+  { template_key: "daemon_prince", kind: "hero", faction_slug: "chaos", name: "Демонический принц", cost: 14, models: 1, model_health: 5, width: 1, armor_type: "magic", weapon_type: "magic", melee: 5, ranged: 3, spell: 5, initiative: 5, abilities: [ "leader", "monster", "wizard", "flying" ], skill: 6, mounted: true, attacks: 3 }
 ]
 
 upgrades = [
