@@ -50,4 +50,8 @@ Rails.application.configure do
 
   # Raise error when a before_action's only/except options reference missing actions.
   config.action_controller.raise_on_missing_callback_actions = true
+
+  # Run battle jobs in-process so the suite stays deterministic without workers.
+  config.active_job.queue_adapter = :inline
+  config.x.battle_jobs.execution_mode = :inline
 end
