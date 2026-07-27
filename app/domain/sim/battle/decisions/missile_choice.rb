@@ -57,6 +57,11 @@ module Sim
         end
 
         def expected_damage(actor, target, vector, round_number, attack_type, enemies)
+          shooting_rule = Rules.for(:shooting).find_applicable(actor, attack_type)
+          if shooting_rule&.respond_to?(:expected_damage)
+            return shooting_rule.expected_damage(actor, target, vector, round_number, attack_type, enemies)
+          end
+
           victims = Geometry::Battlefield.attack_victims(actor, target, enemies, attack_type)
           victims.sum do |victim|
             entry = victim[:target]
@@ -76,7 +81,6 @@ module Sim
                 chance * Phases::AttackResolution.damage(actor, entry, "shooting", vector, round_number) * strikes
               end
 
-            # Armor is inside damage(); living models bias toward larger formations / denser targets.
             models = [ entry[:models_remaining].to_i, 1 ].max
             capped = [ strike * victim[:multiplier].to_f, entry[:current_health].to_f ].min
             capped * (1.0 + Math.log(models + 1, 10) * 0.15)

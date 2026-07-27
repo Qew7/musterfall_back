@@ -6,6 +6,12 @@ module Sim
 
         def play(acting_side:, target_side:, round_number:, rng:, **)
           phase = AttackResolution.create_phase("melee", "Фаза боя")
+          Rules.for(:melee).before_play!(
+            phase: phase,
+            acting_side: acting_side,
+            target_side: target_side,
+            round_number: round_number
+          )
           phase[:allow_routing_melee] = false
           AttackResolution.resolve!(
             phase: phase,

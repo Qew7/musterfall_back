@@ -18,6 +18,9 @@ module Sim
           template = attack_type == "magic" ? attacker[:spell_template] : attacker[:shooting_template]
           living = enemies.select { |entry| entry[:current_health].to_i > 0 }
 
+          rule = ::Sim::Battle::Rules.for(:shooting).find_applicable(attacker, attack_type)
+          return rule.attack_victims(attacker, primary_target, living) if rule&.respond_to?(:attack_victims)
+
           case template
           when "volley"
             living
@@ -29,11 +32,6 @@ module Sim
             living
               .select { |entry| distance_between(entry, primary_target) <= CONFIG[:blast_radius] }
               .map { |entry| { target: entry, multiplier: entry[:entity_id] == primary_target[:entity_id] ? 1 : 0.75 } }
-          when "breath"
-            living
-              .select { |entry| in_front_arc?(attacker, entry, attacker[:facing], 70) }
-              .select { |entry| distance_between(attacker, entry) <= distance_between(attacker, primary_target) + 1.5 }
-              .map { |entry| { target: entry, multiplier: entry[:entity_id] == primary_target[:entity_id] ? 1 : 0.85 } }
           else
             [ { target: primary_target, multiplier: 1 } ]
           end
