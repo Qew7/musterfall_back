@@ -136,10 +136,6 @@ module Sim
             nil
           end
 
-          def choose_assault_target(combatant, enemies, claimed)
-            choose_natural_side(combatant, enemies, claimed) || choose_fallback_target(combatant, enemies, claimed)
-          end
-
           def build_approach_intent(combatant:, nearest:, obstacles:, contact_slot: nil, allow_ally_bypass: false, approach_mode: :direct)
             return nil unless nearest
             return nil if Decisions::Movement.engaged?(combatant, nearest)

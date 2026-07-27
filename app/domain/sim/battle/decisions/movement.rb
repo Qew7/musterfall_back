@@ -105,36 +105,6 @@ module Sim
           )
         end
 
-        # Kept for tests / callers that still group by target; prefer plan_melee_entries.
-        def assign_contact_slots!(entries)
-          entries.group_by { |entry| entry[:nearest][:entity_id] }.each_value do |group|
-            ordered = group.sort_by do |entry|
-              [
-                front_alignment(entry),
-                entry[:distance],
-                entry[:combatant][:entity_id].to_s
-              ]
-            end
-            ordered.each_with_index do |entry, index|
-              geo = entry[:vector]
-              entry[:contact_slot] ||=
-                if index.zero?
-                  "front"
-                elsif geo == "rear"
-                  "rear"
-                else
-                  "flank"
-                end
-              entry[:approach_mode] ||= :direct
-            end
-          end
-          entries
-        end
-
-        def front_alignment(entry)
-          front_alignment_to(entry[:combatant], entry[:nearest])
-        end
-
         def front_alignment_to(combatant, enemy)
           Geometry::Battlefield.angle_between(enemy[:facing], enemy, combatant).to_f
         end
@@ -154,31 +124,6 @@ module Sim
           return true if engaged?(origin, defender)
 
           planner_for(origin).corner_contact_reachable?(origin, defender, budget)
-        end
-
-        # Compatibility wrappers used by tests / older callers.
-        def choose_natural_side(...)
-          Rules::Ground::Movement.choose_natural_side(...)
-        end
-
-        def choose_fallback_target(...)
-          Rules::Ground::Movement.choose_fallback_target(...)
-        end
-
-        def choose_setup_flank_or_rear(...)
-          Rules::Ground::Movement.choose_setup_flank_or_rear(...)
-        end
-
-        def choose_assault_target(...)
-          Rules::Ground::Movement.choose_assault_target(...)
-        end
-
-        def approach_goal_point(...)
-          Rules::Ground::Movement.approach_goal_point(...)
-        end
-
-        def slot_approach_point(...)
-          Rules::Ground::Movement.slot_approach_point(...)
         end
       end
     end
