@@ -109,6 +109,7 @@ module Sim
         else
           0
         end
+        old_half_depth = Geometry::Battlefield.unit_dimensions(combatant)[:half_depth]
         metrics = Geometry::Formation.metrics(
           models_remaining: models_remaining,
           frontage: combatant[:frontage],
@@ -121,7 +122,15 @@ module Sim
         combatant[:ranks] = metrics[:ranks]
         combatant[:base_width] = metrics[:footprint_width]
         combatant[:base_depth] = metrics[:footprint_depth]
-        # Casualties trim rear ranks; formation center stays put.
+        # Casualties trim rear ranks: keep the front edge fixed so melee contact
+        # does not open a gap that would allow another charge.
+        new_half_depth = Geometry::Battlefield.unit_dimensions(combatant)[:half_depth]
+        depth_delta = old_half_depth - new_half_depth
+        if depth_delta.abs > 0.0001
+          forward = Geometry::Battlefield.facing_vector(combatant[:facing])
+          combatant[:x] = combatant[:x].to_f + (forward[:x] * depth_delta)
+          combatant[:y] = combatant[:y].to_f + (forward[:y] * depth_delta)
+        end
         combatant
       end
 
