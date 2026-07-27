@@ -7,7 +7,7 @@ class SimBattleMovementWheelTest < ActiveSupport::TestCase
       name: "Копейщики",
       x: 8,
       y: 12,
-      facing: 0,
+      facing: 40,
       base_width: 4,
       base_depth: 1,
       movement: 3,
@@ -17,6 +17,7 @@ class SimBattleMovementWheelTest < ActiveSupport::TestCase
       row: "front",
       lane: "center"
     )
+    # ~50° off current facing — still inside the 120° front arc, but wheel costs all MV.
     enemy = combatant(
       entity_id: "enemy-1",
       name: "Орки",
@@ -36,7 +37,9 @@ class SimBattleMovementWheelTest < ActiveSupport::TestCase
 
     acting_side = { player_id: "p1", combatants: [ actor ] }
     target_side = { player_id: "p2", combatants: [ enemy ] }
-    expected = Sim::Geometry::Battlefield.apply_wheel(actor, 90, actor[:movement])
+    heading = Sim::Geometry::Battlefield.heading_to(actor, enemy)
+    assert Sim::Geometry::Battlefield.in_front_arc?(actor, enemy, actor[:facing])
+    expected = Sim::Geometry::Battlefield.apply_wheel(actor, heading, actor[:movement])
 
     phase = Sim::Battle::Phases::Movement.play(acting_side: acting_side, target_side: target_side)
 
