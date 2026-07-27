@@ -115,7 +115,7 @@ class SimBattleMoraleTest < ActiveSupport::TestCase
     assert_in_delta 270, action[:actor_state_after][:facing], 0.001
   end
 
-  test "already routing unit does not about-face again on continued flee" do
+  test "already routing unit faces along the flee run without a free about-face note" do
     combatant = {
       entity_id: "u1",
       name: "Копейщики",
@@ -152,9 +152,72 @@ class SimBattleMoraleTest < ActiveSupport::TestCase
       sequence: 0
     )
 
+    # Nearest edge is west (180) — already facing that way, so no break about-face.
     assert_in_delta 180, action[:actor_state_after][:facing], 0.001
     refute_includes action[:details].join(" "), "flee_facing="
     refute_includes action[:details].join(" "), "about_faced=true"
+  end
+
+  test "routing flee faces the movement heading and does not overlap neighbors" do
+    combatant = {
+      entity_id: "u1",
+      name: "Копейщики",
+      kind: "unit",
+      morale: 1,
+      abilities: [],
+      x: 12,
+      y: 12,
+      facing: 0,
+      movement: 4,
+      current_health: 8,
+      max_health: 8,
+      model_health: 1,
+      models_remaining: 8,
+      starting_models: 8,
+      is_routing: true,
+      side_index: 0,
+      base_width: 2,
+      base_depth: 2,
+      model_width: 1,
+      model_depth: 1,
+      frontage: 2,
+      max_files: 2,
+      files: 2,
+      ranks: 1
+    }
+    neighbor = {
+      entity_id: "ally-1",
+      name: "Союзник",
+      current_health: 8,
+      x: 6,
+      y: 12,
+      facing: 0,
+      side_index: 0,
+      base_width: 4,
+      base_depth: 4,
+      is_routing: false,
+      abilities: []
+    }
+
+    action = Sim::Battle::Phases::Morale.resolve_action(
+      combatant: combatant,
+      allies: [ combatant, neighbor ],
+      enemies: [ { entity_id: "e1", current_health: 4, x: 20, y: 12, is_routing: false, abilities: [] } ],
+      round_number: 2,
+      phase_type: "start",
+      combat_score_delta: 0,
+      sequence: 0
+    )
+
+    after = action[:actor_state_after]
+    dx = after[:x] - 12
+    dy = after[:y] - 12
+    if Math.hypot(dx, dy) > 0.2
+      run_facing = Sim::Geometry::Battlefield.normalize_facing(Math.atan2(dy, dx) * 180.0 / Math::PI)
+      assert_in_delta run_facing, after[:facing], 5.0
+    end
+    refute Sim::Geometry::Battlefield.rectangles_overlap?(combatant, neighbor)
+    refute_match(/обходит/, action[:summary])
   end
 
   test "rally keeps flee facing and does not freely turn toward the enemy" do
