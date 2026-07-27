@@ -2,12 +2,13 @@ module Sim
   module Battle
     module Pathing
       CONTACT = Geometry::Battlefield::CONFIG[:melee_contact_tolerance]
-      BYPASS_HEADING_OFFSETS = [ 30, -30, 45, -45, 60, -60, 90, -90 ].freeze
+      BYPASS_HEADING_OFFSETS = [ 45, -45, 90, -90 ].freeze
 
       module_function
 
       # Wheel + march toward a goal. Bypass only enemy blockers — allies are a traffic jam, not a detour.
-      def plan_approach(origin:, goal_point:, budget:, obstacles:, contact_id: nil, goal_unit: nil)
+      # Set bypass: false for cheap reposition probes (direct line only).
+      def plan_approach(origin:, goal_point:, budget:, obstacles:, contact_id: nil, goal_unit: nil, bypass: true)
         direct_heading = Geometry::Battlefield.heading_to(origin, goal_point)
         direct = simulate_approach(
           origin: origin,
@@ -19,6 +20,7 @@ module Sim
           contact_id: contact_id
         )
         base = direct.merge(avoided: false, heading: direct_heading, blocked_by_ally: false)
+        return base unless bypass
         return base unless worth_bypassing?(direct, origin)
 
         # Friendly column ahead: hold the direct line (creep / face), never circle around allies.
@@ -141,10 +143,20 @@ module Sim
       end
 
       def first_blocker(projected, obstacles, contact_id: nil, origin: nil)
+        px = projected[:x].to_f
+        py = projected[:y].to_f
+        pr = rough_footprint_radius(projected) + CONTACT
+
         obstacles.find do |entry|
           next false if entry[:entity_id] == projected[:entity_id]
           next false if entry[:current_health].to_i <= 0
           next false if entry[:x].nil? || entry[:y].nil?
+
+          # Cheap center reject before expensive OBB distance.
+          dx = px - entry[:x].to_f
+          dy = py - entry[:y].to_f
+          reach = pr + rough_footprint_radius(entry)
+          next false if ((dx * dx) + (dy * dy)) > (reach * reach)
 
           other = entry.merge(facing: entry[:facing].to_f)
           dist = Geometry::Battlefield.distance_between_units(projected, other)
@@ -154,6 +166,12 @@ module Sim
             dist < CONTACT
           end
         end
+      end
+
+      def rough_footprint_radius(unit)
+        hw = (unit[:base_width] || unit[:width] || 1).to_f * 0.5
+        hd = (unit[:base_depth] || unit[:depth] || 1).to_f * 0.5
+        Math.hypot(hw, hd)
       end
 
       def simulate_approach(origin:, heading:, budget:, goal_point:, goal_unit:, obstacles:, contact_id:)
@@ -225,6 +243,15 @@ module Sim
           engagement = Geometry::Battlefield.charge_destination(wheeled, goal_unit, wheel[:facing])
           distance = Geometry::Battlefield.distance_between(wheeled, engagement)
           return engagement if remaining + 0.05 >= distance
+
+          return Geometry::Battlefield.move_along_facing(wheeled, remaining)
+        end
+
+        # Non-contact (reposition): stop at the goal instead of burning leftover MV past it.
+        # That leftover is needed for a final face-toward-target wheel.
+        if goal_point && Geometry::Battlefield.shortest_facing_delta(wheeled[:facing], heading).abs < 5.0
+          dist = Geometry::Battlefield.distance_between(wheeled, goal_point)
+          return Geometry::Battlefield.move_along_facing(wheeled, [ remaining, dist ].min)
         end
 
         Geometry::Battlefield.move_along_facing(wheeled, remaining)
@@ -260,7 +287,7 @@ module Sim
       def furthest_clear_pose(origin, wheel, destination, obstacles, contact_id:)
         samples = []
         if wheel[:delta].to_f.abs > 0.05
-          steps = [ 8, (wheel[:delta].abs / 10).ceil ].max
+          steps = [ [ 8, (wheel[:delta].abs / 10).ceil ].max, 20 ].min
           steps.times do |index|
             progress = (index + 1).to_f / steps
             pose = Geometry::Battlefield.wheel_pose(origin, wheel[:delta] * progress)
@@ -277,7 +304,7 @@ module Sim
         march_distance = Geometry::Battlefield.distance_between(wheeled, destination)
         facing_delta = Geometry::Battlefield.shortest_facing_delta(wheeled[:facing], destination[:facing]).abs
         if march_distance > 0.05 || facing_delta > 0.05
-          steps = [ 8, (march_distance / 0.25).ceil ].max
+          steps = [ [ 8, (march_distance / 0.25).ceil ].max, 24 ].min
           steps.times do |index|
             t = (index + 1).to_f / steps
             samples << wheeled.merge(

@@ -142,14 +142,14 @@ module Sim
             newly_routing = !combatant[:is_routing]
             combatant[:is_routing] = true
             if newly_routing
-              flee_facing = flee_facing_for(combatant, engaged_enemies, enemies)
+              flee_facing = Decisions::Flee.flee_facing_for(combatant, engaged_enemies, enemies)
               if flee_facing
                 combatant[:facing] = flee_facing
                 about_faced = true
               end
             end
             blockers = (Array(allies) + Array(enemies)).reject { |entry| entry[:entity_id] == combatant[:entity_id] }
-            retreat = retreat_toward_edge(
+            retreat = Decisions::Flee.retreat_toward_edge(
               combatant,
               combatant[:movement],
               obstacles: blockers,
@@ -359,54 +359,28 @@ module Sim
           die_a + die_b
         end
 
-        # Face directly away from the threat that caused the break (not a blind +180 from current facing).
-        def flee_facing_for(combatant, engaged_enemies, enemies)
-          threats = Array(engaged_enemies).select { |enemy| enemy[:current_health].nil? || enemy[:current_health].to_i > 0 }
-          threats = Array(enemies).select { |enemy| enemy[:current_health].to_i > 0 } if threats.empty?
-          return nil if threats.empty?
-
-          heading_away(combatant, threats)
+        def flee_facing_for(...)
+          Decisions::Flee.flee_facing_for(...)
         end
 
-        def heading_away(combatant, enemies)
-          center = enemies.each_with_object(x: 0.0, y: 0.0) do |enemy, memo|
-            memo[:x] += enemy[:x].to_f
-            memo[:y] += enemy[:y].to_f
-          end
-          average = { x: center[:x] / enemies.length, y: center[:y] / enemies.length }
-          Geometry::Battlefield.heading_to(average, combatant)
+        def heading_away(...)
+          Decisions::Flee.heading_away(...)
         end
 
-        def retreat_toward_edge(combatant, distance, obstacles: [], ally_ids: nil)
-          plan = Pathing.plan_retreat(
-            origin: combatant,
-            distance: distance,
-            obstacles: obstacles,
-            ally_ids: ally_ids
-          )
-          destination = plan[:pose] || { x: combatant[:x], y: combatant[:y], facing: combatant[:facing] }
-          {
-            edge: plan[:edge],
-            destination: destination,
-            facing: destination[:facing],
-            escaped: outside?(destination),
-            avoided: plan[:avoided],
-            blocked_by_ally: !!plan[:blocked_by_ally],
-            blocker: plan[:blocker]
-          }
+        def retreat_toward_edge(...)
+          Decisions::Flee.retreat_toward_edge(...)
         end
 
-        def outside?(position)
-          position[:x] < 0 || position[:y] < 0 || position[:x] > Geometry::Battlefield::CONFIG[:width] - 1 || position[:y] > Geometry::Battlefield::CONFIG[:height] - 1
+        def outside?(...)
+          Decisions::Flee.outside?(...)
         end
 
-        def nearest_edge(combatant)
-          Pathing.ordered_edges(combatant).first
+        def nearest_edge(...)
+          Decisions::Flee.nearest_edge(...)
         end
 
-        def nearest_enemy(combatant, enemies)
-          enemies.select { |enemy| enemy[:current_health].to_i > 0 }
-            .min_by { |enemy| [ enemy[:is_routing] ? 0 : 1, Geometry::Battlefield.distance_between(combatant, enemy) ] }
+        def nearest_enemy(...)
+          Decisions::Flee.nearest_enemy(...)
         end
 
         def collect_casualty_triggers(actions, attack_type, combatants)

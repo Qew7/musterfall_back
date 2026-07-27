@@ -5,7 +5,7 @@ class SimBattleMissileChoiceTest < ActiveSupport::TestCase
     actor = missile_actor(ranged: 5, spell: 0, skill: 4, weapon_type: "ranged")
     enemies = [ enemy(armor_type: "light", models_remaining: 10) ]
 
-    choice = Sim::Battle::Phases::Missile.choose_action(actor, enemies, enemies, 1)
+    choice = Sim::Battle::Decisions::MissileChoice.choose_action(actor, enemies, enemies, 1)
 
     assert_equal "shooting", choice[:attack_type]
   end
@@ -14,7 +14,7 @@ class SimBattleMissileChoiceTest < ActiveSupport::TestCase
     actor = missile_actor(ranged: 0, spell: 5, skill: 4, weapon_type: "slash")
     enemies = [ enemy(armor_type: "light", models_remaining: 10) ]
 
-    choice = Sim::Battle::Phases::Missile.choose_action(actor, enemies, enemies, 1)
+    choice = Sim::Battle::Decisions::MissileChoice.choose_action(actor, enemies, enemies, 1)
 
     assert_equal "magic", choice[:attack_type]
   end
@@ -23,7 +23,7 @@ class SimBattleMissileChoiceTest < ActiveSupport::TestCase
     actor = missile_actor(ranged: 1, spell: 6, skill: 2, weapon_type: "ranged", abilities: [])
     enemies = [ enemy(armor_type: "magic", models_remaining: 8) ]
 
-    choice = Sim::Battle::Phases::Missile.choose_action(actor, enemies, enemies, 1)
+    choice = Sim::Battle::Decisions::MissileChoice.choose_action(actor, enemies, enemies, 1)
 
     assert_equal "magic", choice[:attack_type]
   end
@@ -39,7 +39,7 @@ class SimBattleMissileChoiceTest < ActiveSupport::TestCase
     )
     enemies = [ enemy(armor_type: "machine", models_remaining: 2, current_health: 8, max_health: 8) ]
 
-    choice = Sim::Battle::Phases::Missile.choose_action(actor, enemies, enemies, 1)
+    choice = Sim::Battle::Decisions::MissileChoice.choose_action(actor, enemies, enemies, 1)
 
     assert_equal "shooting", choice[:attack_type]
   end
@@ -261,17 +261,17 @@ class SimBattleMissileChoiceTest < ActiveSupport::TestCase
     ).merge(side_index: 1, lane: "left", row: "front")
 
     all = [ shooter, engaged, locker, free ]
-    assert Sim::Battle::Phases::AttackResolution.in_melee_combat?(engaged, all)
-    refute Sim::Battle::Phases::AttackResolution.in_melee_combat?(free, all)
+    assert Sim::Battle::Decisions::Targeting.in_melee_combat?(engaged, all)
+    refute Sim::Battle::Decisions::Targeting.in_melee_combat?(free, all)
 
-    magic = Sim::Battle::Phases::AttackResolution.choose_target(shooter, [ engaged, free ], "magic", all)
-    shooting = Sim::Battle::Phases::AttackResolution.choose_target(shooter, [ engaged, free ], "shooting", all)
+    magic = Sim::Battle::Decisions::Targeting.choose_target(shooter, [ engaged, free ], "magic", all)
+    shooting = Sim::Battle::Decisions::Targeting.choose_target(shooter, [ engaged, free ], "shooting", all)
 
     assert_equal "free", magic[:target][:entity_id]
     assert_equal "free", shooting[:target][:entity_id]
 
-    only_engaged_magic = Sim::Battle::Phases::AttackResolution.choose_target(shooter, [ engaged ], "magic", all)
-    only_engaged_shooting = Sim::Battle::Phases::AttackResolution.choose_target(shooter, [ engaged ], "shooting", all)
+    only_engaged_magic = Sim::Battle::Decisions::Targeting.choose_target(shooter, [ engaged ], "magic", all)
+    only_engaged_shooting = Sim::Battle::Decisions::Targeting.choose_target(shooter, [ engaged ], "shooting", all)
     assert_nil only_engaged_magic
     assert_nil only_engaged_shooting
   end
@@ -298,9 +298,9 @@ class SimBattleMissileChoiceTest < ActiveSupport::TestCase
     }
     all = [ shooter, target, friend_of_target ]
 
-    refute Sim::Battle::Phases::AttackResolution.in_melee_combat?(target, all)
+    refute Sim::Battle::Decisions::Targeting.in_melee_combat?(target, all)
 
-    selection = Sim::Battle::Phases::AttackResolution.choose_target(shooter, [ target ], "shooting", all)
+    selection = Sim::Battle::Decisions::Targeting.choose_target(shooter, [ target ], "shooting", all)
     assert_equal "target", selection[:target][:entity_id]
   end
 
