@@ -1268,6 +1268,7 @@ class SimBattleContactChargeTest < ActiveSupport::TestCase
 
     assert_operator BF.distance_between_units(attacker, defender), :<=, ENGAGE
     assert_operator BF.distance_between_units(ally, defender), :>, ENGAGE
+    assert_operator BF.distance_between_units(attacker, ally), :<=, BF.idle_ally_proximity_limit(attacker)
 
     desired = BF.facing_into_contact_face(attacker, defender)
     short = BF.shortest_facing_delta(attacker[:facing], desired)
@@ -1281,6 +1282,63 @@ class SimBattleContactChargeTest < ActiveSupport::TestCase
     # Old bug: tiny nudge into the ally (~-8°). Now swing the other way.
     assert_operator turned.abs, :>, 20.0
     assert_operator turned * short, :<, 0
+  end
+
+  test "free align ignores distant idle allies for free_side scoring" do
+    # Battle 33 R4: routing halberds at north edge; distant boyz must not force a 330° swing.
+    attacker = combatant(
+      entity_id: "unit-10",
+      name: "Наездники на кабанах",
+      x: 16.56397544379782,
+      y: 1.9303605191445743,
+      facing: 209.21375744971647,
+      base_width: 1,
+      base_depth: 2,
+      files: 1,
+      ranks: 1,
+      side_index: 1
+    )
+    defender = combatant(
+      entity_id: "unit-33",
+      name: "Алебардисты",
+      x: 14.385688814270203,
+      y: 0.7714670386210112,
+      facing: 270.0,
+      base_width: 2,
+      base_depth: 1,
+      files: 2,
+      ranks: 1,
+      side_index: 0,
+      is_routing: true,
+      current_health: 2
+    )
+    distant_ally = combatant(
+      entity_id: "unit-9",
+      name: "Орки-бойзы",
+      x: 24.487755750001995,
+      y: 11.712838098019661,
+      facing: 175.98729133234053,
+      base_width: 4,
+      base_depth: 4,
+      files: 4,
+      ranks: 4,
+      side_index: 1,
+      current_health: 16
+    )
+
+    assert_operator BF.distance_between_units(attacker, defender), :<=, ENGAGE
+    assert_operator BF.distance_between_units(attacker, distant_ally), :>, BF.idle_ally_proximity_limit(attacker)
+    assert_empty BF.idle_ally_obstacles(attacker, defender, [ distant_ally ])
+
+    desired = BF.facing_into_contact_face(attacker, defender)
+    short = BF.shortest_facing_delta(attacker[:facing], desired)
+    aligned = BF.align_fronts_pose(attacker, defender, obstacles: [ distant_ally ])
+    after_err = BF.shortest_facing_delta(aligned[:facing], desired).abs
+    turned = BF.shortest_facing_delta(attacker[:facing], aligned[:facing])
+
+    # Short flush align (~180°), not the old long free_side detour (~316°).
+    assert_operator after_err, :<, 5.0
+    assert_in_delta short, turned, 5.0
   end
 
   private
