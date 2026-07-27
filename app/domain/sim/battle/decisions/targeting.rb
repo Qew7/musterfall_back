@@ -50,8 +50,10 @@ module Sim
         end
 
         def can_target_ranged?(attacker, target, all_combatants)
-          abilities = Array(attacker[:targeting_abilities] || attacker[:abilities])
-          return false if !abilities.include?("skirmisher") && !Geometry::Battlefield.in_front_arc?(attacker, target, attacker[:facing])
+          if Rules.for(:shooting).requires_front_arc_for_ranged?(attacker) &&
+              !Geometry::Battlefield.in_front_arc?(attacker, target, attacker[:facing])
+            return false
+          end
           return false if in_melee_combat?(target, all_combatants)
 
           Geometry::Battlefield.line_of_sight_blockers(attacker, target, all_combatants).empty?

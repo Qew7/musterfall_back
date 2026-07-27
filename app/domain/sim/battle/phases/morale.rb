@@ -133,11 +133,15 @@ module Sim
             else
               summary = "#{combatant[:name]} выдерживает проверку морали."
             end
-          elsif Array(combatant[:abilities]).include?("undead")
-            damage = check[:failure_margin]
-            combatant[:current_health] = [ 0, combatant[:current_health] - damage ].max
-            State.sync_combatant_footprint!(combatant)
-            summary = "#{combatant[:name]} проваливает проверку морали и теряет #{damage} здоровья вместо бегства."
+          elsif (failure = Rules.for(:morale).handle_morale_failure!(combatant, check, {
+            allies: allies,
+            enemies: enemies,
+            round_number: round_number,
+            phase_type: phase_type
+          }))
+            damage = failure[:damage].to_i
+            summary = failure[:summary]
+            to = position_of(combatant)
           else
             newly_routing = !combatant[:is_routing]
             combatant[:is_routing] = true
@@ -272,9 +276,8 @@ module Sim
 
         def resolve_check(combatant:, allies:, enemies:, round_number:, phase_type:, combat_score_delta:, sequence:)
           source = effective_morale(combatant, allies)
-          fear = enemies.any? { |enemy| Array(enemy[:abilities]).include?("fear") } ? 1 : 0
-          discipline = Array(combatant[:abilities]).include?("disciplined") ? 1 : 0
-          threshold = [ 2, source[:value] + discipline - combat_score_delta - fear ].max
+          delta = Rules.for(:morale).morale_threshold_delta(combatant, allies, enemies, combat_score_delta)
+          threshold = [ 2, source[:value] + delta - combat_score_delta ].max
           roll = roll_dice("#{phase_type}:#{round_number}:#{sequence}:#{combatant[:entity_id]}")
           {
             effective_morale: source[:value],
@@ -287,30 +290,10 @@ module Sim
         end
 
         def effective_morale(combatant, allies)
-          return { value: combatant[:morale], label: combatant[:name] } if combatant[:kind] == "hero"
+          override = Rules.for(:morale).effective_morale(combatant, allies)
+          return override if override
 
-          sources = muster_sources(allies)
-            .select { |source| source[:morale] > combatant[:morale] }
-            .select { |source| Geometry::Battlefield.distance_between(combatant, source) <= source[:morale] }
-            .sort_by { |source| [ -source[:morale], Geometry::Battlefield.distance_between(combatant, source) ] }
-          return { value: combatant[:morale], label: combatant[:name] } if sources.empty?
-
-          { value: sources.first[:morale], label: "Muster от #{sources.first[:name]}" }
-        end
-
-        def muster_sources(allies)
-          sources = []
-          allies.each do |combatant|
-            if combatant[:kind] == "hero" && Array(combatant[:abilities]).include?("muster")
-              sources << { entity_id: combatant[:entity_id], name: combatant[:name], morale: combatant[:morale], x: combatant[:x], y: combatant[:y] }
-            end
-            Array(combatant[:attached_heroes]).each do |hero|
-              next unless Array(hero[:abilities]).include?("muster")
-
-              sources << { entity_id: hero[:entity_id], name: hero[:name], morale: hero[:morale], x: combatant[:x], y: combatant[:y] }
-            end
-          end
-          sources
+          { value: combatant[:morale], label: combatant[:name] }
         end
 
         def melee_engagements(acting_side, target_side)

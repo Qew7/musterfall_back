@@ -10,17 +10,51 @@ class SimBattleCombatRulesTest < ActiveSupport::TestCase
 
   test "rules registry indexes fear under melee and breath under shooting" do
     assert_includes Rules.for(:melee).rules, FearMelee
+    assert_includes Rules.for(:melee).rules, Sim::Battle::Rules::Charge::Melee
     assert_includes Rules.for(:shooting).rules, BreathShooting
+    assert_includes Rules.for(:shooting).rules, Sim::Battle::Rules::Volley::Shooting
+    assert_includes Rules.for(:shooting).rules, Sim::Battle::Rules::Blast::Shooting
+    assert_includes Rules.for(:morale).rules, Sim::Battle::Rules::Undead::Morale
+    assert_includes Rules.for(:setup).rules, Sim::Battle::Rules::BannerAura::Setup
+    assert_includes Rules.for(:round).rules, Sim::Battle::Rules::Undead::Round
     assert_equal BreathShooting, Rules.for(:shooting).find_applicable({ shooting_template: "breath" }, "shooting")
+    assert_equal Sim::Battle::Rules::Volley::Shooting, Rules.for(:shooting).find_applicable({ shooting_template: "volley" }, "shooting")
+    assert_equal Sim::Battle::Rules::Blast::Shooting, Rules.for(:shooting).find_applicable({ shooting_template: "blast" }, "shooting")
     assert_nil Rules.for(:shooting).find_applicable({ shooting_template: "single" }, "shooting")
   end
 
   test "rule folders are named by rule with phase files inside" do
     root = Rails.root.join("app/domain/sim/battle/rules")
     assert File.exist?(root.join("fear/melee.rb"))
+    assert File.exist?(root.join("fear/morale.rb"))
     assert File.exist?(root.join("breath/shooting.rb"))
+    assert File.exist?(root.join("volley/shooting.rb"))
+    assert File.exist?(root.join("blast/shooting.rb"))
+    assert File.exist?(root.join("charge/melee.rb"))
     assert File.exist?(root.join("flying/movement.rb"))
     assert File.exist?(root.join("ground/movement.rb"))
+    assert File.exist?(root.join("undead/morale.rb"))
+    assert File.exist?(root.join("undead/round.rb"))
+    assert File.exist?(root.join("banner_aura/setup.rb"))
+  end
+
+  test "skirmisher can shoot outside front arc" do
+    shooter = combatant(
+      entity_id: "skirm",
+      x: 10,
+      y: 12,
+      facing: 0,
+      abilities: [ "skirmisher", "ranged" ],
+      ranged: 4,
+      targeting_abilities: [ "skirmisher", "ranged" ]
+    )
+    target = combatant(entity_id: "behind", x: 10, y: 16, facing: 0, side_index: 1)
+    all = [ shooter, target ]
+
+    assert Sim::Battle::Decisions::Targeting.can_target_ranged?(shooter, target, all)
+
+    ranked = shooter.merge(abilities: [ "ranged" ], targeting_abilities: [ "ranged" ])
+    refute Sim::Battle::Decisions::Targeting.can_target_ranged?(ranked, target, [ ranked, target ])
   end
 
   test "breath teardrop is 8 inches long from attacker front" do
