@@ -148,61 +148,26 @@ module Sim
         points
       end
 
-      # Translate toward a map edge. Do not slide around friendly blockers — stop or pick another edge.
-      def plan_retreat(origin:, distance:, obstacles:, ally_ids: nil)
+      # Run toward an edge (or preferred flee heading). Face the run direction.
+      # Never orbit/slide around blockers — stop short or pick another straight edge.
+      def plan_retreat(origin:, distance:, obstacles:, ally_ids: nil, preferred_heading: nil)
         ally_id_list = Array(ally_ids).compact
         edges = ordered_edges(origin)
-        direct_edge = edges.first
-        direct = simulate_retreat(origin, direct_edge[:heading], distance, obstacles)
-          .merge(edge: direct_edge[:label], avoided: false, heading: direct_edge[:heading], blocked_by_ally: false)
+        candidates = []
 
-        if friendly_blocker?(origin, direct[:blocker], ally_id_list)
-          return retreat_without_friendly_slide(
-            origin: origin,
-            distance: distance,
-            obstacles: obstacles,
-            edges: edges,
-            direct: direct.merge(blocked_by_ally: true),
-            ally_id_list: ally_id_list
+        if preferred_heading
+          preferred = simulate_retreat(origin, preferred_heading, distance, obstacles)
+          candidates << preferred.merge(
+            edge: "away",
+            avoided: false,
+            heading: preferred_heading,
+            blocked_by_ally: friendly_blocker?(origin, preferred[:blocker], ally_id_list)
           )
         end
 
-        return direct unless worth_bypassing?(direct, origin)
-
-        candidates = [ direct ]
         edges.each do |edge|
-          ([ edge[:heading] ] + BYPASS_HEADING_OFFSETS.map { |offset| Geometry::Battlefield.normalize_facing(edge[:heading] + offset) }).uniq.each do |heading|
-            next if edge[:label] == direct_edge[:label] && heading == direct_edge[:heading]
-
-            plan = simulate_retreat(origin, heading, distance, obstacles)
-            next unless plan[:pose]
-            next if friendly_blocker?(origin, plan[:blocker], ally_id_list)
-
-            candidates << plan.merge(edge: edge[:label], avoided: true, heading: heading, blocked_by_ally: false)
-          end
-        end
-
-        if direct[:blocker] && !friendly_blocker?(origin, direct[:blocker], ally_id_list)
-          flank_points(origin, direct[:blocker]).each do |point|
-            heading = Geometry::Battlefield.heading_to(origin, point)
-            plan = simulate_retreat(origin, heading, distance, obstacles)
-            next unless plan[:pose]
-            next if friendly_blocker?(origin, plan[:blocker], ally_id_list)
-
-            candidates << plan.merge(edge: direct_edge[:label], avoided: true, heading: heading, blocked_by_ally: false)
-          end
-        end
-
-        pick_best_retreat(candidates, origin)
-      end
-
-      # Ally blocked the nearest edge: may switch to another edge's straight run, never orbit the friend.
-      def retreat_without_friendly_slide(origin:, distance:, obstacles:, edges:, direct:, ally_id_list:)
-        candidates = [ direct ]
-        edges.drop(1).each do |edge|
           plan = simulate_retreat(origin, edge[:heading], distance, obstacles)
           next unless plan[:pose]
-          next unless meaningful_progress?(origin, plan[:pose])
 
           candidates << plan.merge(
             edge: edge[:label],
@@ -211,7 +176,8 @@ module Sim
             blocked_by_ally: friendly_blocker?(origin, plan[:blocker], ally_id_list)
           )
         end
-        pick_best_retreat(candidates, origin)
+
+        pick_best_retreat(candidates, origin, preferred_heading: preferred_heading)
       end
 
       def friendly_blocker?(origin, blocker, ally_id_list = [])
@@ -341,18 +307,20 @@ module Sim
       end
 
       def simulate_retreat(origin, heading, distance, obstacles)
-        # Translate along the chosen run heading; keep the unit's current facing for the footprint.
-        desired = Geometry::Battlefield.move_along_facing(origin.merge(facing: heading), distance)
-          .merge(facing: origin[:facing])
+        # March along heading and face that way — no crab-walk with a mismatched footprint.
+        run_facing = Geometry::Battlefield.normalize_facing(heading)
+        desired = Geometry::Battlefield.move_along_facing(origin.merge(facing: run_facing), distance)
         steps = [ 8, (Geometry::Battlefield.distance_between(origin, desired) / 0.25).ceil ].max
-        last_clear = { x: origin[:x].to_f, y: origin[:y].to_f, facing: origin[:facing] }
+        # Face the run immediately (free about-face). Start may already be in contact after melee;
+        # only stepped poses are collision-tested so the unit can still peel away.
+        last_clear = origin.merge(x: origin[:x].to_f, y: origin[:y].to_f, facing: run_facing)
         blocker = nil
         steps.times do |index|
           t = (index + 1).to_f / steps
           pose = origin.merge(
             x: origin[:x] + ((desired[:x] - origin[:x]) * t),
             y: origin[:y] + ((desired[:y] - origin[:y]) * t),
-            facing: origin[:facing]
+            facing: run_facing
           )
           hit = first_blocker(pose, obstacles, contact_id: nil, origin: origin)
           if hit
@@ -486,21 +454,30 @@ module Sim
         [ goal_distance, -Geometry::Battlefield.distance_between(origin, pose) ]
       end
 
-      def pick_best_retreat(candidates, origin)
-        viable = candidates.select { |plan| plan[:pose] }
-        return candidates.first if viable.empty?
-
-        best = viable.min_by { |plan| retreat_score(plan[:pose], origin) }
-        direct = candidates.find { |plan| !plan[:avoided] } || candidates.first
-        if direct[:pose] && score_at_least?(retreat_score(best[:pose], origin), retreat_score(direct[:pose], origin))
-          return direct
+      def pick_best_retreat(candidates, origin, preferred_heading: nil)
+        viable = candidates.select { |plan| plan[:pose] && meaningful_progress?(origin, plan[:pose]) }
+        if viable.empty?
+          # Prefer a turn-in-place toward the preferred/nearest run over a random stuck pose.
+          return candidates.find { |plan| plan[:edge] == "away" } || candidates.first
         end
 
-        best
+        viable.min_by { |plan| retreat_score(plan, origin, preferred_heading: preferred_heading) }
       end
 
-      def retreat_score(pose, origin)
-        [ min_edge_distance(pose), -Geometry::Battlefield.distance_between(origin, pose) ]
+      def retreat_score(plan, origin, preferred_heading: nil)
+        pose = plan[:pose]
+        heading_penalty = if preferred_heading
+          Geometry::Battlefield.shortest_facing_delta(plan[:heading].to_f, preferred_heading).abs
+        else
+          0.0
+        end
+        ally_penalty = plan[:blocked_by_ally] ? 1 : 0
+        [
+          ally_penalty,
+          heading_penalty,
+          min_edge_distance(pose),
+          -Geometry::Battlefield.distance_between(origin, pose)
+        ]
       end
 
       def score_at_least?(left, right)

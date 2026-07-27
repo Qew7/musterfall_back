@@ -141,22 +141,23 @@ module Sim
           else
             newly_routing = !combatant[:is_routing]
             combatant[:is_routing] = true
-            if newly_routing
-              flee_facing = Decisions::Flee.flee_facing_for(combatant, engaged_enemies, enemies)
-              if flee_facing
-                combatant[:facing] = flee_facing
-                about_faced = true
-              end
+            facing_before_flee = combatant[:facing]
+            preferred_heading = if newly_routing
+              Decisions::Flee.flee_facing_for(combatant, engaged_enemies, enemies)
             end
             blockers = (Array(allies) + Array(enemies)).reject { |entry| entry[:entity_id] == combatant[:entity_id] }
             retreat = Decisions::Flee.retreat_toward_edge(
               combatant,
               combatant[:movement],
               obstacles: blockers,
-              ally_ids: Array(allies).map { |entry| entry[:entity_id] }
+              ally_ids: Array(allies).map { |entry| entry[:entity_id] },
+              preferred_heading: preferred_heading
             )
             combatant[:x] = retreat[:destination][:x]
             combatant[:y] = retreat[:destination][:y]
+            combatant[:facing] = retreat[:destination][:facing]
+            about_faced = newly_routing &&
+              Geometry::Battlefield.shortest_facing_delta(facing_before_flee, combatant[:facing]).abs > 0.05
             retreat_edge = retreat[:edge]
             escaped = retreat[:escaped]
             if escaped
