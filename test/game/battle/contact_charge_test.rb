@@ -351,11 +351,29 @@ class SimBattleContactChargeTest < ActiveSupport::TestCase
     assert_operator point[:x], :>, defender[:x]
   end
 
-  test "slot_approach_point stays nil when assigned flank but still geometrically frontal" do
+  test "slot_approach_point returns a flank waypoint for orbit_flank" do
+    origin = combatant(entity_id: "a", x: 10, y: 12, facing: 0, base_width: 1, base_depth: 1)
+    defender = combatant(entity_id: "d", x: 16, y: 12, facing: 180, base_width: 4, base_depth: 3, side_index: 1)
+    point = DecisionsMovement.slot_approach_point(origin, defender, "flank", approach_mode: :orbit_flank)
+
+    assert point
+    assert_operator (point[:y] - defender[:y]).abs, :>, 0.5
+  end
+
+  test "slot_approach_point stays nil when assigned flank but still geometrically frontal under direct mode" do
     origin = combatant(entity_id: "a", x: 10, y: 12, facing: 0, base_width: 1, base_depth: 1)
     defender = combatant(entity_id: "d", x: 14, y: 12, facing: 180, base_width: 4, base_depth: 3, side_index: 1)
     assert_equal "front", BF.classify_attack_vector(origin, defender)
     assert_nil DecisionsMovement.slot_approach_point(origin, defender, "flank")
+  end
+
+  test "approach_goal_point for orbit_flank leaves the defender center" do
+    origin = combatant(entity_id: "a", x: 10, y: 12, facing: 0, base_width: 1, base_depth: 1)
+    defender = combatant(entity_id: "d", x: 16, y: 12, facing: 180, base_width: 4, base_depth: 3, side_index: 1)
+    goal = DecisionsMovement.approach_goal_point(origin, defender, contact_slot: "flank", approach_mode: :orbit_flank)
+
+    refute_equal defender, goal
+    assert_operator BF.distance_between(goal, defender), :>, 1.0
   end
 
   # ---------------------------------------------------------------------------
@@ -769,7 +787,7 @@ class SimBattleContactChargeTest < ActiveSupport::TestCase
   # 7. Front-arc assaults, claimed sides, corner contact + free align
   # ---------------------------------------------------------------------------
 
-  test "enemy outside the front arc is not assaulted" do
+  test "enemy outside the front arc is ignored by nearest_enemy but may set up flank within MV*2" do
     attacker = combatant(
       entity_id: "a1",
       name: "Нападающий",
@@ -796,16 +814,18 @@ class SimBattleContactChargeTest < ActiveSupport::TestCase
 
     refute BF.in_front_arc?(attacker, enemy, attacker[:facing])
     assert_nil DecisionsMovement.nearest_enemy(attacker, [ enemy ])
-    assert_empty DecisionsMovement.plan_melee_entries([ attacker ], [ enemy ])
 
-    before = attacker.slice(:x, :y, :facing)
+    entries = DecisionsMovement.plan_melee_entries([ attacker ], [ enemy ])
+    assert_equal 1, entries.size
+    assert_equal "flank", entries.first[:contact_slot]
+    assert_equal :orbit_flank, entries.first[:approach_mode]
+
+    facing_before = attacker[:facing]
     MovementPhase.play(
       acting_side: { player_id: "p1", combatants: [ attacker ] },
       target_side: { player_id: "p2", combatants: [ enemy ] }
     )
-    assert_in_delta before[:x], attacker[:x], 0.05
-    assert_in_delta before[:y], attacker[:y], 0.05
-    assert_in_delta before[:facing], attacker[:facing], 0.05
+    refute_in_delta facing_before, attacker[:facing], 0.5
   end
 
   test "second claimer on a taken front retargets another in-arc enemy" do
@@ -868,7 +888,7 @@ class SimBattleContactChargeTest < ActiveSupport::TestCase
     assert_equal :direct, by_id["u2"][:approach_mode]
   end
 
-  test "when front is taken and no other enemy exists claimer wraps free rear" do
+  test "when front is taken and no other enemy exists claimer orbits free flank" do
     enemy = combatant(
       entity_id: "e1",
       name: "Одинокая цель",
@@ -908,11 +928,40 @@ class SimBattleContactChargeTest < ActiveSupport::TestCase
 
     assert_equal "front", by_id["u1"][:contact_slot]
     assert_equal :direct, by_id["u1"][:approach_mode]
-    assert_equal "rear", by_id["u2"][:contact_slot]
-    assert_equal :wrap_rear, by_id["u2"][:approach_mode]
+    assert_equal "flank", by_id["u2"][:contact_slot]
+    assert_equal :orbit_flank, by_id["u2"][:approach_mode]
   end
 
-  test "when front and rear are taken and no other target the extra unit does not assault" do
+  test "when front and flank are taken claimer wraps free rear" do
+    enemy = combatant(
+      entity_id: "e1",
+      name: "Цель",
+      x: 18,
+      y: 12,
+      facing: 180,
+      base_width: 2,
+      base_depth: 2,
+      melee: 4,
+      side_index: 1
+    )
+    front = combatant(entity_id: "f1", name: "Фронт", x: 12, y: 12, facing: 0, base_width: 2, base_depth: 2, movement: 3, melee: 5)
+    flank = combatant(entity_id: "k1", name: "Фланг", x: 18, y: 6, facing: 90, base_width: 2, base_depth: 2, movement: 3, melee: 5)
+    extra = combatant(entity_id: "x1", name: "Третий", x: 11, y: 12.5, facing: 0, base_width: 2, base_depth: 2, movement: 3, melee: 5)
+
+    assert_equal "front", BF.classify_attack_vector(front, enemy)
+    assert_equal "flank", BF.classify_attack_vector(flank, enemy)
+    assert BF.in_front_arc?(extra, enemy, extra[:facing])
+
+    entries = DecisionsMovement.plan_melee_entries([ front, flank, extra ], [ enemy ])
+    by_id = entries.index_by { |entry| entry[:combatant][:entity_id] }
+
+    assert_equal "front", by_id["f1"][:contact_slot]
+    assert_equal "flank", by_id["k1"][:contact_slot]
+    assert_equal "rear", by_id["x1"][:contact_slot]
+    assert_equal :wrap_rear, by_id["x1"][:approach_mode]
+  end
+
+  test "when front and rear are taken the extra unit orbits free flank" do
     enemy = combatant(
       entity_id: "e1",
       name: "Цель",
@@ -933,11 +982,158 @@ class SimBattleContactChargeTest < ActiveSupport::TestCase
     assert BF.in_front_arc?(extra, enemy, extra[:facing])
 
     entries = DecisionsMovement.plan_melee_entries([ front, rear, extra ], [ enemy ])
+    by_id = entries.index_by { |entry| entry[:combatant][:entity_id] }
+
+    assert_equal "front", by_id["f1"][:contact_slot]
+    assert_equal "rear", by_id["r1"][:contact_slot]
+    assert_equal "flank", by_id["x1"][:contact_slot]
+    assert_equal :orbit_flank, by_id["x1"][:approach_mode]
+  end
+
+  test "when all three sides are taken the extra unit does not assault" do
+    enemy = combatant(
+      entity_id: "e1",
+      name: "Цель",
+      x: 18,
+      y: 12,
+      facing: 180,
+      base_width: 2,
+      base_depth: 2,
+      melee: 4,
+      side_index: 1
+    )
+    front = combatant(entity_id: "f1", name: "Фронт", x: 12, y: 12, facing: 0, base_width: 2, base_depth: 2, movement: 3, melee: 5)
+    flank = combatant(entity_id: "k1", name: "Фланг", x: 18, y: 6, facing: 90, base_width: 2, base_depth: 2, movement: 3, melee: 5)
+    rear = combatant(entity_id: "r1", name: "Тыл", x: 24, y: 12, facing: 180, base_width: 2, base_depth: 2, movement: 3, melee: 5)
+    extra = combatant(entity_id: "x1", name: "Лишний", x: 11, y: 12.5, facing: 0, base_width: 2, base_depth: 2, movement: 3, melee: 5)
+
+    entries = DecisionsMovement.plan_melee_entries([ front, flank, rear, extra ], [ enemy ])
     ids = entries.map { |entry| entry[:combatant][:entity_id] }
 
     assert_includes ids, "f1"
+    assert_includes ids, "k1"
     assert_includes ids, "r1"
     refute_includes ids, "x1"
+  end
+
+  test "out-of-arc melee within MV*2 of open flank sets up orbit for next turn" do
+    enemy = combatant(
+      entity_id: "e1",
+      name: "Цель",
+      x: 18,
+      y: 12,
+      facing: 180,
+      base_width: 2,
+      base_depth: 2,
+      melee: 4,
+      side_index: 1
+    )
+    # South of the enemy, facing further south — flank is open but not in front arc.
+    attacker = combatant(
+      entity_id: "a1",
+      name: "Обходчик",
+      x: 18,
+      y: 7,
+      facing: 270,
+      base_width: 2,
+      base_depth: 2,
+      movement: 4,
+      melee: 5
+    )
+
+    assert_equal "flank", BF.classify_attack_vector(attacker, enemy)
+    refute BF.in_front_arc?(attacker, enemy, attacker[:facing])
+    assert_operator BF.distance_between_units(attacker, enemy), :<=, attacker[:movement] * 2
+
+    entries = DecisionsMovement.plan_melee_entries([ attacker ], [ enemy ])
+    assert_equal 1, entries.size
+    assert_equal "flank", entries.first[:contact_slot]
+    assert_equal :orbit_flank, entries.first[:approach_mode]
+
+    facing_before = attacker[:facing]
+    phase = MovementPhase.play(
+      acting_side: { player_id: "p1", combatants: [ attacker ] },
+      target_side: { player_id: "p2", combatants: [ enemy ] }
+    )
+    action = phase[:actions].find { |row| row[:actor_id] == "a1" }
+    assert action
+    refute_in_delta facing_before, attacker[:facing], 0.5
+    # After the setup wheel/approach, the flank waypoint (or enemy) should be closer to the front arc.
+    assert_operator BF.angle_between(attacker[:facing], attacker, enemy), :<, BF.angle_between(facing_before, { x: 18, y: 7 }, enemy)
+  end
+
+  test "out-of-arc melee beyond MV*2 does not claim distant open flank" do
+    enemy = combatant(
+      entity_id: "e1",
+      name: "Цель",
+      x: 22,
+      y: 12,
+      facing: 180,
+      base_width: 2,
+      base_depth: 2,
+      melee: 4,
+      side_index: 1
+    )
+    attacker = combatant(
+      entity_id: "a1",
+      name: "Далеко",
+      x: 8,
+      y: 4,
+      facing: 270,
+      base_width: 2,
+      base_depth: 2,
+      movement: 3,
+      melee: 5
+    )
+
+    refute BF.in_front_arc?(attacker, enemy, attacker[:facing])
+    assert_operator BF.distance_between_units(attacker, enemy), :>, attacker[:movement] * 2
+
+    entries = DecisionsMovement.plan_melee_entries([ attacker ], [ enemy ])
+    assert_empty entries
+  end
+
+  test "engaged melee does not set up on a nearby open flank" do
+    enemy = combatant(
+      entity_id: "e1",
+      name: "В контакте",
+      x: 12.4,
+      y: 12,
+      facing: 180,
+      base_width: 2,
+      base_depth: 2,
+      melee: 4,
+      side_index: 1
+    )
+    other = combatant(
+      entity_id: "e2",
+      name: "Открытый фланг",
+      x: 12.5,
+      y: 7,
+      facing: 180,
+      base_width: 2,
+      base_depth: 2,
+      melee: 4,
+      side_index: 1
+    )
+    attacker = combatant(
+      entity_id: "a1",
+      name: "Занят",
+      x: 10,
+      y: 12,
+      facing: 0,
+      base_width: 2,
+      base_depth: 2,
+      movement: 4,
+      melee: 5
+    )
+
+    assert DecisionsMovement.engaged?(attacker, enemy)
+    refute BF.in_front_arc?(attacker, other, attacker[:facing])
+
+    entries = DecisionsMovement.plan_melee_entries([ attacker ], [ enemy, other ])
+    # Engaged with e1 → no approach; must not steal e2's flank for a setup move.
+    refute entries.any? { |entry| entry[:nearest][:entity_id] == "e2" }
   end
 
   test "in-arc wide infantry charges directly without burning MV on a flank waypoint" do

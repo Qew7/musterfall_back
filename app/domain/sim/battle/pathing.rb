@@ -14,7 +14,7 @@ module Sim
       # Enemy blockers: always eligible for bypass. Ally blockers: only when allow_ally_bypass
       # (flank/rear geometry or a small footprint) — otherwise hold the column, no orbit.
       # Set bypass: false for cheap reposition probes (direct line only).
-      def plan_approach(origin:, goal_point:, budget:, obstacles:, contact_id: nil, goal_unit: nil, bypass: true, allow_ally_bypass: false)
+      def plan_approach(origin:, goal_point:, budget:, obstacles:, contact_id: nil, goal_unit: nil, bypass: true, allow_ally_bypass: false, approach_mode: :direct)
         direct_heading = Geometry::Battlefield.heading_to(origin, goal_point)
         direct = simulate_approach(
           origin: origin,
@@ -87,7 +87,7 @@ module Sim
           end
         end
 
-        best = pick_best_approach(candidates, origin, goal_point, goal_unit)
+        best = pick_best_approach(candidates, origin, goal_point, goal_unit, approach_mode: approach_mode)
         return best.merge(blocked_by_ally: true) if ally_blocked && !best[:avoided]
 
         best
@@ -431,21 +431,38 @@ module Sim
         ]
       end
 
-      def pick_best_approach(candidates, origin, goal_point, goal_unit)
+      def pick_best_approach(candidates, origin, goal_point, goal_unit, approach_mode: :direct)
         viable = candidates.select { |plan| meaningful_progress?(origin, plan[:pose]) }
         return (candidates.find { |plan| !plan[:avoided] } || candidates.first).merge(avoided: false) if viable.empty?
 
-        best = viable.min_by { |plan| approach_score(plan[:pose], origin, goal_point, goal_unit) }
+        best = viable.min_by { |plan| approach_score(plan[:pose], origin, goal_point, goal_unit, approach_mode: approach_mode) }
         direct = candidates.find { |plan| !plan[:avoided] } || candidates.first
-        if meaningful_progress?(origin, direct[:pose]) &&
-            score_at_least?(approach_score(best[:pose], origin, goal_point, goal_unit), approach_score(direct[:pose], origin, goal_point, goal_unit))
+        # Prefer the straight path when not worse — but only for direct assaults.
+        # Orbit/wrap score toward the slot waypoint and facing angle; do not snap back to center.
+        if approach_mode == :direct &&
+            meaningful_progress?(origin, direct[:pose]) &&
+            score_at_least?(
+              approach_score(best[:pose], origin, goal_point, goal_unit, approach_mode: approach_mode),
+              approach_score(direct[:pose], origin, goal_point, goal_unit, approach_mode: approach_mode)
+            )
           return direct
         end
 
         best
       end
 
-      def approach_score(pose, origin, goal_point, goal_unit)
+      def approach_score(pose, origin, goal_point, goal_unit, approach_mode: :direct)
+        if approach_mode == :orbit_flank || approach_mode == :wrap_rear
+          goal_distance = Geometry::Battlefield.distance_between(pose, goal_point)
+          # Prefer poses farther around the defender face (flank/rear cone).
+          angle_term = if goal_unit
+            -Geometry::Battlefield.angle_between(goal_unit[:facing], goal_unit, pose).to_f
+          else
+            0.0
+          end
+          return [ goal_distance, angle_term, -Geometry::Battlefield.distance_between(origin, pose) ]
+        end
+
         goal_distance = if goal_unit
           Geometry::Battlefield.distance_between_units(pose, goal_unit)
         else
