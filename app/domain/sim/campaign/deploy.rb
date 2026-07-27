@@ -38,13 +38,10 @@ module Sim
           y: @args[:y],
           facing: @args[:facing] || entity.dig(:components, :formation, :facing)
         )
-        formation = entity[:components][:formation]
-        formation[:x] = position[:x]
-        formation[:y] = position[:y]
-        formation[:facing] = position[:facing]
-        slots = Geometry::Battlefield.sync_formation_slots_from_deployment(position)
-        formation[:lane] = slots[:lane]
-        formation[:row] = slots[:row]
+        clash = placement_clash(entity, position, player[:roster])
+        return Result.failure(clash) if clash
+
+        apply_position!(entity, position)
         Result.ok(@campaign)
       end
 
@@ -52,8 +49,14 @@ module Sim
         entity = player[:roster].find { |entry| entry[:id] == @args[:entity_id] }
         return Result.failure("entity not found", code: :not_found) unless entity
 
+        formation = entity[:components][:formation]
         delta = @args[:direction].to_s == "left" ? -45 : 45
-        entity[:components][:formation][:facing] = Geometry::Battlefield.rotate_facing(entity[:components][:formation][:facing], delta)
+        facing = Geometry::Battlefield.rotate_facing(formation[:facing], delta)
+        position = { x: formation[:x], y: formation[:y], facing: facing }
+        clash = placement_clash(entity, position, player[:roster])
+        return Result.failure(clash) if clash
+
+        formation[:facing] = facing
         Result.ok(@campaign)
       end
 
@@ -63,7 +66,7 @@ module Sim
 
         formation = entity[:components][:formation]
         if formation[:row] == "reserve"
-          apply_formation_slot!(entity, "rear", formation[:lane])
+          return Result.failure("no clear deployment slot") unless place_in_slot!(entity, "rear", formation[:lane], player[:roster])
         else
           apply_formation_slot!(entity, "reserve", formation[:lane])
         end
@@ -77,11 +80,18 @@ module Sim
 
           row = Constants::BATTLE_ROWS[[ 2, index / 3 ].min]
           lane = Constants::LANE_ORDER[index % Constants::LANE_ORDER.length]
-          apply_formation_slot!(entity, row, lane)
-          position = Geometry::Battlefield.default_deployment(row, lane)
-          entity[:components][:formation][:facing] = position[:facing]
+          place_in_slot!(entity, row, lane, player[:roster])
         end
         Result.ok(@campaign)
+      end
+
+      def place_in_slot!(entity, row, lane, roster)
+        clear = Geometry::Deployment.find_clear_position(entity, row, lane, roster, ignore_id: entity[:id])
+        return false unless clear
+
+        entity[:components][:formation][:facing] = clear[:facing] if clear[:facing]
+        apply_position!(entity, clear)
+        true
       end
 
       def apply_formation_slot!(entity, row, lane)
@@ -91,6 +101,31 @@ module Sim
         formation[:lane] = lane
         formation[:x] = position[:x]
         formation[:y] = position[:y]
+      end
+
+      def apply_position!(entity, position)
+        formation = entity[:components][:formation]
+        formation[:x] = position[:x]
+        formation[:y] = position[:y]
+        formation[:facing] = position[:facing] if position[:facing]
+        slots = Geometry::Battlefield.sync_formation_slots_from_deployment(formation)
+        formation[:lane] = slots[:lane]
+        formation[:row] = slots[:row]
+      end
+
+      def placement_clash(entity, position, roster)
+        # Reserve is a packing strip; only enforce separation inside battle rows.
+        slots = Geometry::Battlefield.sync_formation_slots_from_deployment(position)
+        return nil if slots[:row] == "reserve"
+
+        conflicts = Geometry::Deployment.conflicting_entities(
+          Geometry::Deployment.footprint_from_entity(entity, x: position[:x], y: position[:y], facing: position[:facing]),
+          roster,
+          ignore_id: entity[:id]
+        )
+        return nil if conflicts.empty?
+
+        "отряд слишком близко к #{conflicts.map { |entry| entry[:name] }.join(', ')}"
       end
     end
   end

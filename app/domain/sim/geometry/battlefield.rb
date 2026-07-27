@@ -53,21 +53,32 @@ module Sim
         delta
       end
 
-      # Wheel pivots on a front corner: outer edge travels an arc of radius = footprint width.
+      # WHFB wheel: pivot on one front corner; MV cost = arc travelled by the outer front corner
+      # (radius = footprint width). Remaining MV may be used to march after the wheel.
       def wheel_cost(unit, from_facing, to_facing)
         delta = shortest_facing_delta(from_facing, to_facing).abs
         return 0.0 if delta < 0.0001
 
-        width = unit_dimensions(unit)[:half_width] * 2.0
+        width = wheel_frontage(unit)
         return 0.0 if width <= 0
 
         (delta * Math::PI / 180.0) * width
+      end
+
+      def wheel_frontage(unit)
+        unit_dimensions(unit)[:half_width] * 2.0
       end
 
       # Front-right for positive (right) wheel, front-left for negative (left) wheel.
       def wheel_pivot(unit, delta)
         corners = unit_corners(unit)
         delta.negative? ? corners[0] : corners[1]
+      end
+
+      # Outer front corner opposite the pivot — the model whose path sets the wheel distance.
+      def wheel_outer_corner(unit, delta)
+        corners = unit_corners(unit)
+        delta.negative? ? corners[1] : corners[0]
       end
 
       # Rotate unit center around the chosen front corner by delta degrees.
@@ -104,10 +115,10 @@ module Sim
         }
         return idle if delta.abs < 0.0001
 
-        width = unit_dimensions(unit)[:half_width] * 2.0
+        width = wheel_frontage(unit)
         return idle.merge(completed: false) if width <= 0
 
-        full_cost = (delta.abs * Math::PI / 180.0) * width
+        full_cost = wheel_cost(unit, from_facing, desired)
         limited_delta = if full_cost <= budget
           delta
         elsif budget <= 0
@@ -119,7 +130,7 @@ module Sim
         return idle if limited_delta.abs < 0.0001
 
         pose = wheel_pose(unit, limited_delta)
-        cost = (limited_delta.abs * Math::PI / 180.0) * width
+        cost = wheel_cost(unit, from_facing, pose[:facing])
         {
           x: pose[:x],
           y: pose[:y],

@@ -104,7 +104,6 @@ module Sim
       end
 
       def sync_combatant_footprint!(combatant)
-        front = combatant[:base_depth].to_f > 0 ? Geometry::Battlefield.front_center(combatant) : nil
         models_remaining = if combatant[:current_health].to_i > 0
           [ 1, (combatant[:current_health].to_f / combatant[:model_health]).ceil ].max
         else
@@ -122,13 +121,7 @@ module Sim
         combatant[:ranks] = metrics[:ranks]
         combatant[:base_width] = metrics[:footprint_width]
         combatant[:base_depth] = metrics[:footprint_depth]
-
-        if front && combatant[:base_depth].to_f > 0
-          radians = combatant[:facing] * (Math::PI / 180)
-          half_depth = combatant[:base_depth] / 2.0
-          combatant[:x] = front[:x] - (Math.cos(radians) * half_depth)
-          combatant[:y] = front[:y] - (Math.sin(radians) * half_depth)
-        end
+        # Casualties trim rear ranks; formation center stays put.
         combatant
       end
 

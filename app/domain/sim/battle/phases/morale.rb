@@ -118,15 +118,15 @@ module Sim
           check = resolve_check(combatant: combatant, allies: allies, enemies: enemies, round_number: round_number, phase_type: phase_type, combat_score_delta: combat_score_delta, sequence: sequence)
           damage = 0
           to = nil
+          retreat = {}
           retreat_edge = nil
           escaped = false
           about_faced = false
 
           if check[:passed]
             if combatant[:is_routing]
+              # Keep flee facing — free about-face is only when breaking, not on rally.
               combatant[:is_routing] = false
-              nearest = nearest_enemy(combatant, enemies)
-              combatant[:facing] = Geometry::Battlefield.heading_to(combatant, nearest) if nearest
               State.sync_combatant_footprint!(combatant)
               to = position_of(combatant)
               summary = "#{combatant[:name]} собирается с духом и перестаёт бежать."
@@ -149,7 +149,12 @@ module Sim
               end
             end
             blockers = (Array(allies) + Array(enemies)).reject { |entry| entry[:entity_id] == combatant[:entity_id] }
-            retreat = retreat_toward_edge(combatant, combatant[:movement], obstacles: blockers)
+            retreat = retreat_toward_edge(
+              combatant,
+              combatant[:movement],
+              obstacles: blockers,
+              ally_ids: Array(allies).map { |entry| entry[:entity_id] }
+            )
             combatant[:x] = retreat[:destination][:x]
             combatant[:y] = retreat[:destination][:y]
             retreat_edge = retreat[:edge]
@@ -160,14 +165,22 @@ module Sim
             end
             State.sync_combatant_footprint!(combatant)
             to = position_of(combatant)
-            summary = if escaped
-              "#{combatant[:name]} в панике покидает поле боя и считается уничтоженным."
-            elsif phase_type == "start"
-              "#{combatant[:name]} не может восстановить строй и продолжает бегство."
-            elsif about_faced
-              "#{combatant[:name]} ломает строй, разворачивается от угрозы и обращается в бегство."
+            avoid_note = if retreat[:blocked_by_ally] && retreat[:blocker]
+              " (путь закрыт союзником #{retreat[:blocker][:name]})"
+            elsif retreat[:avoided]
+              blocker_name = retreat.dig(:blocker, :name)
+              blocker_name ? " (обходит #{blocker_name})" : " (обходит препятствие)"
             else
-              "#{combatant[:name]} ломает строй и обращается в бегство."
+              ""
+            end
+            summary = if escaped
+              "#{combatant[:name]} в панике покидает поле боя."
+            elsif phase_type == "start"
+              "#{combatant[:name]} продолжает бегство#{avoid_note}."
+            elsif about_faced
+              "#{combatant[:name]} ломает строй и бежит от угрозы#{avoid_note}."
+            else
+              "#{combatant[:name]} ломает строй и обращается в бегство#{avoid_note}."
             end
           end
 
@@ -184,16 +197,22 @@ module Sim
             actor_state_before: before,
             actor_state_after: after,
             summary: summary,
-            details: [
-              "Бросок морали: #{check[:roll]} против порога #{check[:threshold]}.",
-              "Использована мораль: #{check[:effective_morale]} (#{check[:source]}).",
-              "Штраф за очки боя: #{combat_score_delta}.",
-              "Фаза: #{phase_type}, отряд: #{combatant[:name]}.",
-              about_faced ? "Бесплатный разворот от угрозы при обращении в бегство (facing #{format('%.0f', combatant[:facing])}°)." : nil,
-              retreat_edge ? "Отступление к краю поля: #{retreat_edge}." : "Отступление не потребовалось.",
-              escaped ? "Отряд покинул поле боя и удалён из сражения." : "Отряд остаётся в пределах поля боя.",
-              damage.positive? ? "Потеря здоровья из-за провала: #{damage}." : "Запас провала: #{check[:failure_margin]}."
-            ].compact,
+            details: build_morale_details(
+              combatant: combatant,
+              before: before,
+              after: after,
+              check: check,
+              combat_score_delta: combat_score_delta,
+              phase_type: phase_type,
+              about_faced: about_faced,
+              retreat: retreat,
+              retreat_edge: retreat_edge,
+              escaped: escaped,
+              damage: damage,
+              from: from,
+              to: to,
+              trigger: trigger
+            ),
             morale_check: {
               source_phase: phase_type,
               trigger: trigger&.dig(:reason) || (phase_type == "melee" ? "combat_score" : phase_type == "start" ? "rally" : "phase_casualties"),
@@ -217,6 +236,37 @@ module Sim
             },
             snapshot: nil
           }
+        end
+
+        def build_morale_details(combatant:, before:, after:, check:, combat_score_delta:, phase_type:, about_faced:, retreat:, retreat_edge:, escaped:, damage:, from:, to:, trigger:)
+          lines = [
+            "actor=#{combatant[:entity_id]} #{combatant[:name]} phase=#{phase_type}",
+            "morale roll=#{check[:roll]} threshold=#{check[:threshold]} passed=#{check[:passed]} failure_margin=#{check[:failure_margin]}",
+            "effective_morale=#{check[:effective_morale]} source=#{check[:source]} combat_score_delta=#{combat_score_delta}",
+            "routing #{before[:is_routing]} → #{after[:is_routing]}; about_faced=#{about_faced}; free_about_face_only_on_break=true"
+          ]
+          if about_faced
+            lines << "flee_facing=#{format("%.1f", combatant[:facing].to_f)}° (бесплатный разворот только при старте бегства)"
+          end
+          if from && to
+            lines << "from=(#{format("%.1f", from[:x].to_f)}, #{format("%.1f", from[:y].to_f)}) f#{format("%.1f", from[:facing].to_f)}°"
+            lines << "to=(#{format("%.1f", to[:x].to_f)}, #{format("%.1f", to[:y].to_f)}) f#{format("%.1f", to[:facing].to_f)}°"
+          elsif from
+            lines << "pose=(#{format("%.1f", from[:x].to_f)}, #{format("%.1f", from[:y].to_f)}) f#{format("%.1f", from[:facing].to_f)}°"
+          end
+          if retreat.is_a?(Hash) && retreat[:destination]
+            lines << "retreat edge=#{retreat_edge || "-"} avoided=#{retreat[:avoided]} blocked_by_ally=#{retreat[:blocked_by_ally]} escaped=#{escaped}"
+            dest = retreat[:destination]
+            lines << "retreat pose=(#{format("%.1f", dest[:x].to_f)}, #{format("%.1f", dest[:y].to_f)}) f#{format("%.1f", dest[:facing].to_f)}°"
+            if retreat[:blocker]
+              lines << "retreat blocker=#{retreat[:blocker][:name]}(#{retreat[:blocker][:entity_id]})"
+            end
+          end
+          lines << "undead_damage=#{damage}" if damage.positive?
+          if trigger
+            lines << "trigger=#{trigger[:reason]} phase_damage=#{trigger[:phase_damage]} lost_models=#{trigger[:lost_models]}"
+          end
+          lines
         end
 
         def resolve_check(combatant:, allies:, enemies:, round_number:, phase_type:, combat_score_delta:, sequence:)
@@ -327,41 +377,23 @@ module Sim
           Geometry::Battlefield.heading_to(average, combatant)
         end
 
-        def retreat_toward_edge(combatant, distance, obstacles: [])
-          edge = nearest_edge(combatant)
-          heading = Geometry::Battlefield.heading_to(combatant, edge[:point])
-          desired = Geometry::Battlefield.move_along_facing(combatant.merge(facing: heading), distance)
-          destination = furthest_clear_retreat(combatant, desired, obstacles)
-          { edge: edge[:label], destination: destination, escaped: outside?(destination) }
-        end
-
-        def furthest_clear_retreat(origin, desired, obstacles)
-          steps = [ 8, (Geometry::Battlefield.distance_between(origin, desired) / 0.25).ceil ].max
-          last_clear = { x: origin[:x], y: origin[:y], facing: origin[:facing] }
-          steps.times do |index|
-            t = (index + 1).to_f / steps
-            pose = origin.merge(
-              x: origin[:x] + ((desired[:x] - origin[:x]) * t),
-              y: origin[:y] + ((desired[:y] - origin[:y]) * t),
-              facing: desired[:facing] || origin[:facing]
-            )
-            break if retreat_blocked?(pose, origin, obstacles)
-
-            last_clear = pose
-          end
-          last_clear
-        end
-
-        def retreat_blocked?(pose, origin, obstacles)
-          contact = Geometry::Battlefield::CONFIG[:melee_contact_tolerance]
-          obstacles.any? do |entry|
-            next false if entry[:entity_id] == origin[:entity_id]
-            next false if entry[:current_health].to_i <= 0
-            next false if entry[:x].nil? || entry[:y].nil?
-
-            other = entry.merge(facing: entry[:facing].to_f)
-            Geometry::Battlefield.distance_between_units(pose, other) < contact
-          end
+        def retreat_toward_edge(combatant, distance, obstacles: [], ally_ids: nil)
+          plan = Pathing.plan_retreat(
+            origin: combatant,
+            distance: distance,
+            obstacles: obstacles,
+            ally_ids: ally_ids
+          )
+          destination = plan[:pose] || { x: combatant[:x], y: combatant[:y], facing: combatant[:facing] }
+          {
+            edge: plan[:edge],
+            destination: destination,
+            facing: destination[:facing],
+            escaped: outside?(destination),
+            avoided: plan[:avoided],
+            blocked_by_ally: !!plan[:blocked_by_ally],
+            blocker: plan[:blocker]
+          }
         end
 
         def outside?(position)
@@ -369,12 +401,7 @@ module Sim
         end
 
         def nearest_edge(combatant)
-          [
-            { label: "west", distance: combatant[:x], point: { x: 0, y: combatant[:y] } },
-            { label: "east", distance: Geometry::Battlefield::CONFIG[:width] - 1 - combatant[:x], point: { x: Geometry::Battlefield::CONFIG[:width] - 1, y: combatant[:y] } },
-            { label: "north", distance: combatant[:y], point: { x: combatant[:x], y: 0 } },
-            { label: "south", distance: Geometry::Battlefield::CONFIG[:height] - 1 - combatant[:y], point: { x: combatant[:x], y: Geometry::Battlefield::CONFIG[:height] - 1 } }
-          ].min_by { |edge| edge[:distance] }
+          Pathing.ordered_edges(combatant).first
         end
 
         def nearest_enemy(combatant, enemies)
