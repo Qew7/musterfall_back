@@ -218,8 +218,9 @@ module Sim
           span = front_contact_span(pose, defender)
           facing_err = shortest_facing_delta(pose[:facing], desired_facing).abs
           free_side = align_side_blocked_by_idle_allies?(pose, defender, idle_allies) ? 0 : 1
-          # Prefer the free half around idle friends, then face flush, then more models in contact.
-          [ free_side, -facing_err, span ]
+          # Face flush first; free half only breaks ties (Battle 60: idle hero must not beat a short flush
+          # with a long-arc sideways pose). Span last for models in contact.
+          [ -facing_err, free_side, span ]
         end
 
         def align_side_blocked_by_idle_allies?(pose, defender, idle_allies)
