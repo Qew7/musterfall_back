@@ -371,6 +371,42 @@ module Sim
         pose
       end
 
+      # Free post-contact wheel: press the attacker's front into the defender face. No lateral slide.
+      def facing_into_contact_face(attacker, defender)
+        side = classify_attack_vector(attacker, defender)
+        case side
+        when "front"
+          normalize_facing(defender[:facing] + 180)
+        when "rear"
+          normalize_facing(defender[:facing])
+        else
+          local = point_in_local_unit_space(attacker, defender)
+          local[:lateral] >= 0 ? normalize_facing(defender[:facing] - 90) : normalize_facing(defender[:facing] + 90)
+        end
+      end
+
+      def align_fronts_pose(attacker, defender)
+        desired_facing = facing_into_contact_face(attacker, defender)
+        return attacker.merge(facing: normalize_facing(attacker[:facing])) if shortest_facing_delta(attacker[:facing], desired_facing).abs < 0.05
+
+        engage = CONFIG[:melee_contact_tolerance] + CONFIG[:contact_snap]
+        best = attacker.merge(x: attacker[:x].to_f, y: attacker[:y].to_f, facing: normalize_facing(attacker[:facing]))
+        # Sample the free wheel; keep the furthest rotation that stays in contact without OBB overlap.
+        steps = [ 8, (shortest_facing_delta(attacker[:facing], desired_facing).abs / 10).ceil ].max
+        steps = [ steps, 24 ].min
+        full_delta = shortest_facing_delta(attacker[:facing], desired_facing)
+        steps.times do |index|
+          progress = (index + 1).to_f / steps
+          pose = wheel_pose(attacker, full_delta * progress)
+          candidate = attacker.merge(x: pose[:x], y: pose[:y], facing: pose[:facing])
+          next if rectangles_overlap?(candidate, defender)
+          next if distance_between_units(candidate, defender) > engage
+
+          best = candidate
+        end
+        best
+      end
+
       def line_of_sight_blockers(attacker, defender, blockers)
         line_start = front_center(attacker)
         line_end = closest_point_on_unit(line_start, defender)

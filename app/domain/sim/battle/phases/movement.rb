@@ -134,7 +134,8 @@ module Sim
               nearest: entry[:nearest],
               obstacles: obstacles,
               contact_slot: entry[:contact_slot],
-              allow_ally_bypass: allow_ally_bypass
+              allow_ally_bypass: allow_ally_bypass,
+              approach_mode: entry[:approach_mode] || :direct
             )
             next unless intent
 
@@ -142,7 +143,8 @@ module Sim
               from: position_of(entry[:combatant]),
               before: State.snapshot_combatant(entry[:combatant]),
               origin_pose: entry[:combatant].dup,
-              contact_slot: entry[:contact_slot]
+              contact_slot: entry[:contact_slot],
+              approach_mode: entry[:approach_mode] || :direct
             )
           end
 
@@ -157,8 +159,30 @@ module Sim
             intents,
             obstacles + stayers.map { |entry| freeze_obstacle(entry) }
           )
+          apply_free_aligns!(intents, obstacles + stayers.map { |entry| freeze_obstacle(entry) })
           apply_intents!(intents)
           commit_intents!(phase, acting_side, target_side, intents)
+        end
+
+        # After paid approach reaches ENGAGE, freely wheel to press fronts (no slide, no MV cost).
+        def apply_free_aligns!(intents, hard_obstacles)
+          intents.each do |intent|
+            next if intent[:wait] || intent[:destination].nil?
+
+            nearest = intent[:nearest]
+            next unless nearest
+
+            pose = destination_pose(intent)
+            next unless Decisions::Movement.engaged?(pose, nearest)
+
+            aligned = Geometry::Battlefield.align_fronts_pose(pose, nearest)
+            next unless meaningful_destination?(pose, aligned)
+            next if destination_blocked?(aligned, [], hard_obstacles, contact_id: nearest[:entity_id])
+
+            intent[:paid_destination] = intent[:destination].dup
+            intent[:destination] = { x: aligned[:x], y: aligned[:y], facing: aligned[:facing] }
+            intent[:free_align] = true
+          end
         end
 
         def apply_intents!(intents)
@@ -302,13 +326,15 @@ module Sim
 
             destination = intent[:destination]
             after = State.snapshot_combatant(combatant)
+            # MV accounting uses the paid landing; free align after contact costs no movement.
+            paid = intent[:paid_destination] || destination
             planned_wheel = plan[:wheel]
-            applied_wheel = wheel_for_applied_move(origin_pose, destination, planned_wheel)
+            applied_wheel = wheel_for_applied_move(origin_pose, paid, planned_wheel)
             march_spent = Geometry::Battlefield.distance_between(
               applied_wheel ? { x: applied_wheel[:x], y: applied_wheel[:y] } : origin_pose,
-              destination
+              paid
             )
-            desired = plan[:desired] || destination
+            desired = plan[:desired] || paid
             summary =
               if intent[:kind] == "reposition"
                 reposition_player_summary(combatant, nearest, plan)
@@ -325,6 +351,10 @@ module Sim
               kind_override: intent[:kind] == "reposition" ? "reposition" : nil
             )
             maneuver = maneuver.merge(contact_slot: intent[:contact_slot]) if intent[:contact_slot]
+            maneuver = maneuver.merge(free_align: true) if intent[:free_align]
+            if intent[:approach_mode]
+              maneuver = maneuver.merge(approach_mode: intent[:approach_mode].to_s)
+            end
             push_move!(
               phase,
               acting_side,
@@ -513,6 +543,12 @@ module Sim
             lines << "maneuver.kind=#{maneuver[:kind]} avoided=#{maneuver[:avoided]} pathing_avoided=#{maneuver[:pathing_avoided]} blocked_by_ally=#{maneuver[:blocked_by_ally]} truncated=#{maneuver[:truncated_by_collision]}"
             if maneuver[:contact_slot]
               lines << "contact_slot=#{maneuver[:contact_slot]}"
+            end
+            if maneuver[:free_align]
+              lines << "free_align=true"
+            end
+            if maneuver[:approach_mode]
+              lines << "approach_mode=#{maneuver[:approach_mode]}"
             end
             if maneuver[:target_id]
               lines << "target=#{maneuver[:target_name]}(#{maneuver[:target_id]}) heading=#{format("%.1f", maneuver[:heading].to_f)}° desired=(#{format_point(maneuver.dig(:desired, :x))}, #{format_point(maneuver.dig(:desired, :y))}) f#{format("%.0f", maneuver.dig(:desired, :facing).to_f)}°"
