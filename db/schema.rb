@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_07_27_000100) do
+ActiveRecord::Schema[8.1].define(version: 2026_07_27_000200) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -221,6 +221,27 @@ ActiveRecord::Schema[8.1].define(version: 2026_07_27_000100) do
     t.index ["upgrade_key"], name: "index_hero_upgrades_on_upgrade_key", unique: true
   end
 
+  create_table "round_matchups", force: :cascade do |t|
+    t.string "attacker_player_key", null: false
+    t.string "attacker_player_name", null: false
+    t.jsonb "attacker_snapshot", default: {}, null: false
+    t.integer "campaign_round", null: false
+    t.datetime "created_at", null: false
+    t.string "defender_player_key", null: false
+    t.string "defender_player_name", null: false
+    t.jsonb "defender_snapshot", default: {}, null: false
+    t.text "error_message"
+    t.bigint "game_id", null: false
+    t.integer "position", null: false
+    t.jsonb "result_payload", default: {}
+    t.bigint "seed", null: false
+    t.string "status", default: "pending", null: false
+    t.datetime "updated_at", null: false
+    t.index ["game_id", "campaign_round", "position"], name: "index_round_matchups_on_game_round_position", unique: true
+    t.index ["game_id", "campaign_round", "status"], name: "index_round_matchups_on_game_round_status"
+    t.index ["game_id"], name: "index_round_matchups_on_game_id"
+  end
+
   create_table "round_snapshots", force: :cascade do |t|
     t.datetime "created_at", null: false
     t.bigint "game_id", null: false
@@ -243,5 +264,6 @@ ActiveRecord::Schema[8.1].define(version: 2026_07_27_000100) do
   add_foreign_key "game_entity_attachments", "game_entities", column: "hero_entity_id"
   add_foreign_key "game_entity_attachments", "game_entities", column: "unit_entity_id"
   add_foreign_key "game_players", "games"
+  add_foreign_key "round_matchups", "games"
   add_foreign_key "round_snapshots", "games"
 end

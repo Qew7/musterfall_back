@@ -53,6 +53,12 @@ Rails.application.configure do
   # Highlight code that enqueued background job in logs.
   config.active_job.verbose_enqueue_logs = true
 
+  # Battle jobs: inline by default (no workers needed). Set BATTLE_JOBS_MODE=async
+  # and SOLID_QUEUE_IN_PUMA=1 to exercise Solid Queue parallelism locally.
+  config.active_job.queue_adapter = :solid_queue
+  config.solid_queue.connects_to = { database: { writing: :queue } }
+  config.x.battle_jobs.execution_mode = ENV.fetch("BATTLE_JOBS_MODE", "inline").to_sym
+
   # Highlight code that triggered redirect in logs.
   config.action_dispatch.verbose_redirect_logs = true
 

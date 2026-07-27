@@ -1,2 +1,13 @@
-#!/usr/bin/env ruby
-exec "./bin/rails", "server", *ARGV
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Default: inline battle jobs inside the request (fast DX).
+# For Solid Queue parallelism locally:
+#   BATTLE_JOBS_MODE=async SOLID_QUEUE_IN_PUMA=1 bin/dev
+
+export BATTLE_JOBS_MODE="${BATTLE_JOBS_MODE:-inline}"
+if [[ "${BATTLE_JOBS_MODE}" == "async" ]]; then
+  export SOLID_QUEUE_IN_PUMA="${SOLID_QUEUE_IN_PUMA:-1}"
+fi
+
+exec ./bin/rails server "$@"
