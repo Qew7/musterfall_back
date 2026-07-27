@@ -48,14 +48,25 @@ module Sim
           [ 0.0, [ left[:max], right[:max] ].min - [ left[:min], right[:min] ].max ].max
         end
 
+        # Friends farther than our tray's long side cannot intersect a free-align wheel,
+        # so they must not bias free_side scoring (Battle 33: distant boyz forced a 330° swing).
+        def idle_ally_proximity_limit(attacker)
+          dims = unit_dimensions(attacker)
+          [ dims[:half_width] * 2.0, dims[:half_depth] * 2.0 ].max
+        end
+
         def idle_ally_obstacles(attacker, defender, obstacles)
+          reach = idle_ally_proximity_limit(attacker)
           Array(obstacles).select do |obs|
             next false if obs[:entity_id] == attacker[:entity_id] || obs[:entity_id] == defender[:entity_id]
             next false if obs[:current_health].to_i <= 0
             next false if !attacker[:side_index].nil? && !obs[:side_index].nil? && obs[:side_index] != attacker[:side_index]
-
             # Friend not locked in contact with this defender — still a physical block for align.
-            distance_between_units(obs, defender) > (CONFIG[:melee_contact_tolerance] + CONFIG[:contact_snap])
+            next false if distance_between_units(obs, defender) <= (CONFIG[:melee_contact_tolerance] + CONFIG[:contact_snap])
+            # Only allies close enough to clip our wheel matter for free_side / short-arc checks.
+            next false if distance_between_units(attacker, obs) > reach
+
+            true
           end
         end
 
