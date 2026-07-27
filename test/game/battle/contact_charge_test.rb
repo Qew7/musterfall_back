@@ -8,6 +8,7 @@ class SimBattleContactChargeTest < ActiveSupport::TestCase
   ENGAGE = Sim::Battle::Pathing::ENGAGE
   MovementPhase = Sim::Battle::Phases::Movement
   DecisionsMovement = Sim::Battle::Decisions::Movement
+  GroundMovement = Sim::Battle::Rules::Ground::Movement
   Targeting = Sim::Battle::Decisions::Targeting
   Pathing = Sim::Battle::Pathing
 
@@ -339,13 +340,13 @@ class SimBattleContactChargeTest < ActiveSupport::TestCase
     defender = combatant(entity_id: "d", x: 14, y: 12, facing: 180, base_width: 4, base_depth: 3, side_index: 1)
     assert_equal "flank", BF.classify_attack_vector(origin, defender)
     assert BF.in_front_arc?(origin, defender, origin[:facing])
-    assert_nil DecisionsMovement.slot_approach_point(origin, defender, "flank")
+    assert_nil GroundMovement.slot_approach_point(origin, defender, "flank")
   end
 
   test "slot_approach_point returns a rear waypoint only for wrap_rear" do
     origin = combatant(entity_id: "a", x: 10, y: 12, facing: 0, base_width: 1, base_depth: 1)
     defender = combatant(entity_id: "d", x: 16, y: 12, facing: 180, base_width: 4, base_depth: 3, side_index: 1)
-    point = DecisionsMovement.slot_approach_point(origin, defender, "rear", approach_mode: :wrap_rear)
+    point = GroundMovement.slot_approach_point(origin, defender, "rear", approach_mode: :wrap_rear)
 
     assert point
     assert_operator point[:x], :>, defender[:x]
@@ -354,7 +355,7 @@ class SimBattleContactChargeTest < ActiveSupport::TestCase
   test "slot_approach_point returns a flank waypoint for orbit_flank" do
     origin = combatant(entity_id: "a", x: 10, y: 12, facing: 0, base_width: 1, base_depth: 1)
     defender = combatant(entity_id: "d", x: 16, y: 12, facing: 180, base_width: 4, base_depth: 3, side_index: 1)
-    point = DecisionsMovement.slot_approach_point(origin, defender, "flank", approach_mode: :orbit_flank)
+    point = GroundMovement.slot_approach_point(origin, defender, "flank", approach_mode: :orbit_flank)
 
     assert point
     assert_operator (point[:y] - defender[:y]).abs, :>, 0.5
@@ -364,13 +365,13 @@ class SimBattleContactChargeTest < ActiveSupport::TestCase
     origin = combatant(entity_id: "a", x: 10, y: 12, facing: 0, base_width: 1, base_depth: 1)
     defender = combatant(entity_id: "d", x: 14, y: 12, facing: 180, base_width: 4, base_depth: 3, side_index: 1)
     assert_equal "front", BF.classify_attack_vector(origin, defender)
-    assert_nil DecisionsMovement.slot_approach_point(origin, defender, "flank")
+    assert_nil GroundMovement.slot_approach_point(origin, defender, "flank")
   end
 
   test "approach_goal_point for orbit_flank leaves the defender center" do
     origin = combatant(entity_id: "a", x: 10, y: 12, facing: 0, base_width: 1, base_depth: 1)
     defender = combatant(entity_id: "d", x: 16, y: 12, facing: 180, base_width: 4, base_depth: 3, side_index: 1)
-    goal = DecisionsMovement.approach_goal_point(origin, defender, contact_slot: "flank", approach_mode: :orbit_flank)
+    goal = GroundMovement.approach_goal_point(origin, defender, contact_slot: "flank", approach_mode: :orbit_flank)
 
     refute_equal defender, goal
     assert_operator BF.distance_between(goal, defender), :>, 1.0
@@ -1170,7 +1171,7 @@ class SimBattleContactChargeTest < ActiveSupport::TestCase
     entries = DecisionsMovement.plan_melee_entries([ attacker ], [ enemy ])
     assert_equal 1, entries.size
     assert_equal :direct, entries.first[:approach_mode]
-    assert_nil DecisionsMovement.slot_approach_point(attacker, enemy, "flank")
+    assert_nil GroundMovement.slot_approach_point(attacker, enemy, "flank")
 
     before = BF.distance_between_units(attacker, enemy)
     phase = MovementPhase.play(
