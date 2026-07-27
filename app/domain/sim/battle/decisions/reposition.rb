@@ -329,7 +329,7 @@ module Sim
               next false if Targeting.in_melee_combat?(enemy, board)
               next true if can_cast
 
-              next false if !Array(posed[:targeting_abilities] || posed[:abilities]).include?("skirmisher") &&
+              next false if Rules.for(:shooting).requires_front_arc_for_ranged?(posed) &&
                 !Geometry::Battlefield.in_front_arc?(posed, enemy, posed[:facing])
 
               Geometry::Battlefield.line_of_sight_blockers(posed, enemy, board).empty?

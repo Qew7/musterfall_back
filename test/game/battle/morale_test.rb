@@ -377,4 +377,69 @@ class SimBattleMoraleTest < ActiveSupport::TestCase
     refute_match(/обходит/, action[:summary])
     assert_includes action[:details].join(" "), "avoided=false"
   end
+
+  test "disciplined raises morale threshold" do
+    combatant = { entity_id: "u1", name: "Spearmen", kind: "unit", morale: 6, abilities: [ "disciplined" ], x: 5, y: 5 }
+    plain = { entity_id: "u2", name: "Rabble", kind: "unit", morale: 6, abilities: [], x: 5, y: 5 }
+    check = Sim::Battle::Phases::Morale.resolve_check(
+      combatant: combatant, allies: [ combatant ], enemies: [], round_number: 1, phase_type: "melee", combat_score_delta: 0, sequence: 0
+    )
+    plain_check = Sim::Battle::Phases::Morale.resolve_check(
+      combatant: plain, allies: [ plain ], enemies: [], round_number: 1, phase_type: "melee", combat_score_delta: 0, sequence: 0
+    )
+
+    assert_equal plain_check[:threshold] + 1, check[:threshold]
+  end
+
+  test "undead lose health instead of fleeing on morale failure" do
+    combatant = {
+      entity_id: "skel",
+      name: "Скелеты",
+      kind: "unit",
+      morale: 1,
+      abilities: [ "undead" ],
+      x: 10,
+      y: 12,
+      facing: 0,
+      movement: 3,
+      current_health: 8,
+      max_health: 8,
+      model_health: 1,
+      models_remaining: 8,
+      starting_models: 8,
+      is_routing: false,
+      base_width: 2,
+      base_depth: 1,
+      model_width: 1,
+      model_depth: 1,
+      frontage: 2,
+      max_files: 2,
+      files: 2,
+      ranks: 1
+    }
+
+    action = Sim::Battle::Phases::Morale.resolve_action(
+      combatant: combatant,
+      allies: [ combatant ],
+      enemies: [ { abilities: [ "fear" ], x: 12, y: 12, current_health: 4 } ],
+      round_number: 1,
+      phase_type: "melee",
+      combat_score_delta: 20,
+      sequence: 0
+    )
+
+    refute combatant[:is_routing]
+    assert_operator action[:damage], :>, 0
+    assert_operator combatant[:current_health], :<, 8
+    assert_match(/здоровья вместо бегства/, action[:summary])
+  end
+
+  test "muster lets nearby unit use hero morale" do
+    unit = { entity_id: "u1", name: "Spearmen", kind: "unit", morale: 5, abilities: [], x: 5, y: 5 }
+    hero = { entity_id: "h1", name: "General", kind: "hero", morale: 9, abilities: [ "muster" ], x: 6, y: 5 }
+    source = Sim::Battle::Phases::Morale.effective_morale(unit, [ unit, hero ])
+
+    assert_equal 9, source[:value]
+    assert_match(/Muster/, source[:label])
+  end
 end

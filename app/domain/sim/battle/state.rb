@@ -29,16 +29,7 @@ module Sim
       end
 
       def apply_faction_passives!(side)
-        events = []
-        return events unless side[:faction_id] == "undead"
-
-        wounded = side[:combatants].find { |entry| entry[:current_health].to_i > 0 && entry[:current_health] < entry[:max_health] }
-        return events unless wounded
-
-        wounded[:current_health] = [ wounded[:max_health], wounded[:current_health] + 1 ].min
-        sync_combatant_footprint!(wounded)
-        events << "#{side[:player_name]}: #{wounded[:name]} восстанавливает 1 здоровье."
-        events
+        Rules.for(:round).apply_passives!(side)
       end
 
       def snapshot_side(player, side, catalog)
@@ -185,11 +176,13 @@ module Sim
         end
 
         ability_set = abilities.uniq
-        if ability_set.include?("bannerAura")
-          melee += 1
-          melee_contributors[0][:power] += 1
-        end
-        ability_set << "steadfast" if ability_set.include?("steadfastAura")
+        host_ctx = {
+          ability_set: ability_set,
+          melee: melee,
+          melee_contributors: melee_contributors
+        }
+        Rules.for(:setup).apply_attach!(host_ctx)
+        melee = host_ctx[:melee]
 
         projected = Geometry::Battlefield.battle_position(
           {

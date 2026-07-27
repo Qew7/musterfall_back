@@ -65,10 +65,11 @@ module Sim
 
           host = acting_side[:combatants].find { |entry| entry[:entity_id] == actor[:host_id] } || actor
           shooting_rule = Rules.for(:shooting).find_applicable(profile, attack_type)
-          strikes = shooting_rule ? 1 : [ profile[:missile_attacks].to_i, 1 ].max
+          custom_resolve = shooting_rule&.respond_to?(:resolve_missile_strike!)
+          strikes = custom_resolve ? 1 : [ profile[:missile_attacks].to_i, 1 ].max
 
           strikes.times do
-            if shooting_rule
+            if custom_resolve
               shooting_rule.resolve_missile_strike!(
                 phase: phase,
                 actor: actor,
@@ -217,25 +218,23 @@ module Sim
           base = base_power(attacker, attack_type)
           return 0 if base <= 0
 
-          abilities = Array(attacker[:abilities])
           weapon_type = attack_type == "magic" ? SpellCasting.weapon_type(attacker) : attacker[:weapon_type]
           armor_factor = Constants::WEAPON_VS_ARMOR.dig(defender[:armor_type], weapon_type) || 1
-          facing_factor = if Array(defender[:abilities]).include?("skirmisher")
-            1
-          elsif vector == "rear"
-            1.55
-          elsif vector == "flank"
-            1.25
-          else
-            1
-          end
+          rules = Rules.for(Rules.damage_phase_for(attack_type))
+          facing_factor = rules.facing_damage_factor(defender, vector)
+          facing_factor = default_facing_damage_factor(vector) if facing_factor.nil?
           phase_factor = attack_type == "shooting" ? 0.9 : 1
-          charge_factor = abilities.include?("charge") && round_number == 1 && attack_type == "melee" ? 1.3 : 1
-          steady_factor = Array(defender[:abilities]).include?("steadfast") && vector == "front" ? 0.85 : 1
-          ferocious_factor = abilities.include?("ferocious") && attack_type == "melee" ? 1.1 : 1
-          machine_factor = abilities.include?("machine") && attack_type == "shooting" ? 1.25 : 1
-          raw = base * armor_factor * facing_factor * phase_factor * charge_factor * steady_factor * ferocious_factor * machine_factor
+          ability_factor = rules.damage_factor(attacker, defender, attack_type, vector, round_number)
+          raw = base * armor_factor * facing_factor * phase_factor * ability_factor
           [ 1, (raw / 2.2).round ].max
+        end
+
+        def default_facing_damage_factor(vector)
+          case vector.to_s
+          when "rear" then 1.55
+          when "flank" then 1.25
+          else 1.0
+          end
         end
 
         def hit_chance(attacker, defender, attack_type)
@@ -408,29 +407,17 @@ module Sim
         end
 
         def template_descriptor(attacker, target, victims, attack_type)
-          kind = attack_type == "magic" ? SpellCasting.template_kind(attacker) : attacker[:shooting_template]
           rule = Rules.for(:shooting).find_applicable(attacker, attack_type)
           return rule.template_descriptor(attacker, target, victims) if rule&.respond_to?(:template_descriptor)
 
-          affected = victims.map { |entry| entry[:target][:entity_id] }
-          case kind
-          when "blast", "volley"
-            {
-              shape: "circle",
-              radius: kind == "blast" ? Geometry::Battlefield::CONFIG[:blast_radius] : Geometry::Battlefield::CONFIG[:volley_radius],
-              center: { x: target[:x], y: target[:y] },
-              kind: kind,
-              affected_ids: affected
-            }
-          else
-            {
-              shape: "line",
-              start: { x: attacker[:x], y: attacker[:y] },
-              end: { x: target[:x], y: target[:y] },
-              kind: kind,
-              affected_ids: affected
-            }
-          end
+          kind = attack_type == "magic" ? SpellCasting.template_kind(attacker) : attacker[:shooting_template]
+          {
+            shape: "line",
+            start: { x: attacker[:x], y: attacker[:y] },
+            end: { x: target[:x], y: target[:y] },
+            kind: kind,
+            affected_ids: victims.map { |entry| entry[:target][:entity_id] }
+          }
         end
 
         def summarize(action, phase_type)

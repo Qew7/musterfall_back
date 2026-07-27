@@ -15,26 +15,12 @@ module Sim
         end
 
         def attack_victims(attacker, primary_target, enemies, attack_type)
-          template = attack_type == "magic" ? attacker[:spell_template] : attacker[:shooting_template]
           living = enemies.select { |entry| entry[:current_health].to_i > 0 }
 
           rule = ::Sim::Battle::Rules.for(:shooting).find_applicable(attacker, attack_type)
           return rule.attack_victims(attacker, primary_target, living) if rule&.respond_to?(:attack_victims)
 
-          case template
-          when "volley"
-            living
-              .select { |entry| distance_between(entry, primary_target) <= CONFIG[:volley_radius] }
-              .sort_by { |entry| distance_between(entry, primary_target) }
-              .first(2)
-              .each_with_index.map { |entry, index| { target: entry, multiplier: index.zero? ? 1 : 0.65 } }
-          when "blast"
-            living
-              .select { |entry| distance_between(entry, primary_target) <= CONFIG[:blast_radius] }
-              .map { |entry| { target: entry, multiplier: entry[:entity_id] == primary_target[:entity_id] ? 1 : 0.75 } }
-          else
-            [ { target: primary_target, multiplier: 1 } ]
-          end
+          [ { target: primary_target, multiplier: 1 } ]
         end
 
         def line_intersects_unit?(start_point, end_point, unit)
