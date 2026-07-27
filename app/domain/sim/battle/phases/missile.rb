@@ -166,9 +166,8 @@ module Sim
 
         def valid_target?(actor, target, attack_type, all_combatants)
           return false if target[:current_health].to_i <= 0
-          return true if attack_type == "magic"
 
-          AttackResolution.can_target_ranged?(actor, target, all_combatants)
+          AttackResolution.can_target_missile?(actor, target, attack_type, all_combatants)
         end
       end
     end

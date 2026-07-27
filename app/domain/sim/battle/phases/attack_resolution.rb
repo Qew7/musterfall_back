@@ -63,7 +63,7 @@ module Sim
           strikes = [ profile[:missile_attacks].to_i, 1 ].max
           strikes.times do
             unless hit?(profile, target, attack_type, rng)
-              add_event(phase, "#{format_actor(actor[:actor_role], actor[:actor_name])} промахивается по #{target[:name]}")
+              add_event(phase, "#{format_actor(actor[:actor_role], actor[:actor_name])} промахивается по #{target[:name]}.")
               next
             end
 
@@ -75,7 +75,8 @@ module Sim
 
             distribute_contributor_experience!(actor[:contributor] || profile, strike_damage)
 
-            add_event(phase, "#{format_actor(actor[:actor_role], actor[:actor_name])} наносит #{strike_damage} урона по #{target[:name]} (#{vector})")
+            player_line = missile_player_summary(actor, target, vector, strike_damage, attack_type)
+            add_event(phase, player_line)
             action = {
               type: attack_type,
               actor_id: actor[:actor_id],
@@ -96,7 +97,7 @@ module Sim
               charge: nil,
               snapshot: State.snapshot_battlefield([ acting_side, target_side ])
             }
-            action[:summary] = summarize(action, phase[:type])
+            action[:summary] = player_line
             action[:details] = details(action)
             phase[:actions] << action
           end
@@ -114,7 +115,7 @@ module Sim
             attacks = entry.dig(:profile, :attacks) || attacker[:attacks] || 1
             attacks.times do
               unless hit?(entry[:profile], target, "melee", rng)
-                add_event(phase, "#{format_actor(entry[:actor_role], entry[:actor_name])} промахивается по #{target[:name]}")
+                add_event(phase, "#{format_actor(entry[:actor_role], entry[:actor_name])} промахивается по #{target[:name]}.")
                 next
               end
 
@@ -126,7 +127,8 @@ module Sim
 
               distribute_contributor_experience!(entry[:profile], entry[:damage])
 
-              add_event(phase, "#{format_actor(entry[:actor_role], entry[:actor_name])} наносит #{entry[:damage]} урона по #{target[:name]} (#{vector})")
+              player_line = "#{format_actor(entry[:actor_role], entry[:actor_name])} бьёт #{target[:name]} (#{describe_vector(vector)}): #{entry[:damage]} урона."
+              add_event(phase, player_line)
               action = {
                 type: "melee",
                 actor_id: entry[:actor_id],
@@ -147,7 +149,7 @@ module Sim
                 charge: melee_charge(attacker, target, "melee", vector),
                 snapshot: State.snapshot_battlefield([ acting_side, target_side ])
               }
-              action[:summary] = summarize(action, phase[:type])
+              action[:summary] = player_line
               action[:details] = details(action)
               phase[:actions] << action
             end
@@ -225,11 +227,8 @@ module Sim
             return { target: engaged.first[:target], vector: engaged.first[:vector] }
           end
 
-          available = if attack_type == "shooting"
-            living.select { |target| can_target_ranged?(attacker, target, all_combatants) }
-          else
-            living
-          end
+          # Shooting and magic both refuse units locked in enemy melee.
+          available = living.select { |target| can_target_missile?(attacker, target, attack_type, all_combatants) }
           return nil if available.empty?
 
           prioritized = prioritize_routing(available)
@@ -247,20 +246,40 @@ module Sim
           { target: prioritized.first, vector: "front" }
         end
 
+        def can_target_missile?(attacker, target, attack_type, all_combatants)
+          return false if in_melee_combat?(target, all_combatants)
+          return true if attack_type == "magic"
+
+          can_target_ranged?(attacker, target, all_combatants)
+        end
+
         def can_target_ranged?(attacker, target, all_combatants)
           abilities = Array(attacker[:targeting_abilities] || attacker[:abilities])
           return false if !abilities.include?("skirmisher") && !Geometry::Battlefield.in_front_arc?(attacker, target, attacker[:facing])
-          return false if melee_contact?(target, all_combatants)
+          return false if in_melee_combat?(target, all_combatants)
 
           Geometry::Battlefield.line_of_sight_blockers(attacker, target, all_combatants).empty?
         end
 
-        def melee_contact?(unit, all_combatants)
+        # Locked in combat = footprint contact with a living enemy (allies do not count).
+        def in_melee_combat?(unit, all_combatants)
           all_combatants.any? do |entry|
-            entry[:entity_id] != unit[:entity_id] &&
-              entry[:current_health].to_i > 0 &&
-              Geometry::Battlefield.distance_between_units(unit, entry) <= CONTACT
+            next false if entry[:entity_id] == unit[:entity_id]
+            next false if entry[:current_health].to_i <= 0
+            next false if same_side?(unit, entry)
+
+            Geometry::Battlefield.distance_between_units(unit, entry) <= CONTACT
           end
+        end
+
+        def same_side?(left, right)
+          return false if left[:side_index].nil? || right[:side_index].nil?
+
+          left[:side_index] == right[:side_index]
+        end
+
+        def melee_contact?(unit, all_combatants)
+          in_melee_combat?(unit, all_combatants)
         end
 
         def melee_entries(attacker, defender, vector, round_number)
@@ -411,21 +430,51 @@ module Sim
         def summarize(action, phase_type)
           actor = format_actor(action[:actor_role], action[:actor_name])
           case phase_type
-          when "melee" then "#{actor} атакует #{action[:target_name]} в #{describe_vector(action[:vector])} и наносит #{action[:damage]} урона."
-          when "shooting" then "#{actor} стреляет по #{action[:target_name]} и наносит #{action[:damage]} урона."
-          else "#{actor} применяет магию по #{action[:target_name]} и наносит #{action[:damage]} урона."
+          when "shooting"
+            "#{actor} стреляет в #{action[:target_name]} (#{describe_vector(action[:vector])}): #{action[:damage]} урона."
+          when "magic"
+            "#{actor} бьёт магией #{action[:target_name]} (#{describe_vector(action[:vector])}): #{action[:damage]} урона."
+          else
+            "#{actor} бьёт #{action[:target_name]} (#{describe_vector(action[:vector])}): #{action[:damage]} урона."
           end
         end
 
+        def missile_player_summary(actor, target, vector, damage, attack_type)
+          summarize(
+            {
+              actor_role: actor[:actor_role],
+              actor_name: actor[:actor_name],
+              target_name: target[:name],
+              vector: vector,
+              damage: damage
+            },
+            attack_type
+          )
+        end
+
         def details(action)
-          [
-            "Атакующий до удара: #{format_state(action[:actor_state])}",
-            "Цель до удара: #{format_state(action[:target_state_before])}",
-            "Урон: #{action[:damage]}, направление: #{describe_vector(action[:vector])}, затронуто целей: #{Array(action[:affected_ids]).length}",
-            "Цель после удара: #{format_state(action[:target_state_after])}"
-          ].tap do |list|
-            list << "Помехи по линии атаки: #{Array(action[:blockers]).join(', ')}" if Array(action[:blockers]).any?
+          before = action[:target_state_before]
+          after = action[:target_state_after]
+          actor = action[:actor_state]
+          lines = [
+            "actor=#{action[:actor_id]} #{action[:actor_name]} role=#{action[:actor_role]} type=#{action[:type]}",
+            "target=#{action[:target_id]} #{action[:target_name]} vector=#{action[:vector]} damage=#{action[:damage]}",
+            "target HP #{before && before[:current_health]}/#{before && before[:max_health]} → #{after && after[:current_health]}/#{after && after[:max_health]}, models #{before && before[:models_remaining]} → #{after && after[:models_remaining]}"
+          ]
+          if actor
+            lines << "attacker pose/state: #{format_state(actor)}"
           end
+          lines << "affected_ids=#{Array(action[:affected_ids]).join(",")}"
+          lines << "blockers=#{Array(action[:blockers]).join(",")}" if Array(action[:blockers]).any?
+          if action[:template]
+            lines << "template=#{action[:template][:kind] || action[:template][:shape]} shape=#{action[:template][:shape]}"
+          end
+          if action[:charge]
+            charge = action[:charge]
+            lines << "charge start=(#{charge.dig(:start, :x)}, #{charge.dig(:start, :y)}) dest=(#{charge.dig(:destination, :x)}, #{charge.dig(:destination, :y)})"
+          end
+          lines << "requires_los=#{action[:requires_line_of_sight]}"
+          lines
         end
 
         def format_state(state)

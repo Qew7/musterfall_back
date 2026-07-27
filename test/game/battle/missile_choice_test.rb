@@ -227,6 +227,83 @@ class SimBattleMissileChoiceTest < ActiveSupport::TestCase
     assert_equal true, Sim::Battle::SpellCasting.enabled_for?({ spell: 2 })
   end
 
+  test "magic and shooting refuse units locked in enemy melee" do
+    shooter = missile_actor(ranged: 5, spell: 5, skill: 4, weapon_type: "ranged", abilities: [ "wizard" ])
+      .merge(side_index: 0, x: 0, y: 0, facing: 0, base_width: 1, base_depth: 1)
+    engaged = enemy(
+      armor_type: "light",
+      models_remaining: 8,
+      entity_id: "engaged",
+      x: 8,
+      y: 0
+    ).merge(side_index: 1, base_width: 2, base_depth: 2)
+    locker = {
+      entity_id: "locker",
+      name: "Сцепившиеся",
+      kind: "unit",
+      side_index: 0,
+      current_health: 8,
+      max_health: 8,
+      x: 8.3,
+      y: 0,
+      facing: 0,
+      base_width: 2,
+      base_depth: 2,
+      is_routing: false,
+      abilities: []
+    }
+    free = enemy(
+      armor_type: "light",
+      models_remaining: 8,
+      entity_id: "free",
+      x: 6,
+      y: 4
+    ).merge(side_index: 1, lane: "left", row: "front")
+
+    all = [ shooter, engaged, locker, free ]
+    assert Sim::Battle::Phases::AttackResolution.in_melee_combat?(engaged, all)
+    refute Sim::Battle::Phases::AttackResolution.in_melee_combat?(free, all)
+
+    magic = Sim::Battle::Phases::AttackResolution.choose_target(shooter, [ engaged, free ], "magic", all)
+    shooting = Sim::Battle::Phases::AttackResolution.choose_target(shooter, [ engaged, free ], "shooting", all)
+
+    assert_equal "free", magic[:target][:entity_id]
+    assert_equal "free", shooting[:target][:entity_id]
+
+    only_engaged_magic = Sim::Battle::Phases::AttackResolution.choose_target(shooter, [ engaged ], "magic", all)
+    only_engaged_shooting = Sim::Battle::Phases::AttackResolution.choose_target(shooter, [ engaged ], "shooting", all)
+    assert_nil only_engaged_magic
+    assert_nil only_engaged_shooting
+  end
+
+  test "friendly contact does not count as melee lock for missile targeting" do
+    shooter = missile_actor(ranged: 5, spell: 0, skill: 4, weapon_type: "ranged")
+      .merge(side_index: 0, x: 0, y: 0, facing: 0)
+    target = enemy(armor_type: "light", models_remaining: 8, entity_id: "target", x: 8, y: 0)
+      .merge(side_index: 1, base_width: 2, base_depth: 2)
+    friend_of_target = {
+      entity_id: "friend",
+      name: "Союзник цели",
+      kind: "unit",
+      side_index: 1,
+      current_health: 8,
+      max_health: 8,
+      x: 8.3,
+      y: 0,
+      facing: 180,
+      base_width: 2,
+      base_depth: 2,
+      is_routing: false,
+      abilities: []
+    }
+    all = [ shooter, target, friend_of_target ]
+
+    refute Sim::Battle::Phases::AttackResolution.in_melee_combat?(target, all)
+
+    selection = Sim::Battle::Phases::AttackResolution.choose_target(shooter, [ target ], "shooting", all)
+    assert_equal "target", selection[:target][:entity_id]
+  end
+
   test "melee attacks do not multiply magic strikes unless missile_attacks set" do
     host = {
       entity_id: "hero-1",

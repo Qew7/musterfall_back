@@ -37,6 +37,38 @@ class SimGeometryBattlefieldTest < ActiveSupport::TestCase
     assert_in_delta 0.0, Sim::Geometry::Battlefield.wheel_cost(unit, 0, 0), 0.001
   end
 
+  test "wheel cost matches distance travelled by the outer front corner" do
+    unit = { x: 10, y: 10, facing: 0, base_width: 4, base_depth: 2 }
+    delta = 45.0
+    pivot = Sim::Geometry::Battlefield.wheel_pivot(unit, delta)
+    outer = Sim::Geometry::Battlefield.wheel_outer_corner(unit, delta)
+    radius = Sim::Geometry::Battlefield.distance_between(pivot, outer)
+    arc = (delta.abs * Math::PI / 180.0) * radius
+    cost = Sim::Geometry::Battlefield.wheel_cost(unit, 0, delta)
+
+    assert_in_delta 4.0, radius, 0.001
+    assert_in_delta arc, cost, 0.001
+  end
+
+  test "apply wheel then remaining MV can march along the new facing" do
+    # Spearmen width 4: a ~28.6° wheel costs 2", leaving 2" to march straight.
+    unit = { x: 10, y: 12, facing: 0, base_width: 4, base_depth: 1, movement: 4 }
+    wheel_budget = 2.0
+    wheeled = Sim::Geometry::Battlefield.apply_wheel(unit, 90, wheel_budget)
+    assert_in_delta 0.0, wheeled[:remaining], 0.05
+    refute wheeled[:completed]
+    assert_in_delta wheel_budget, wheeled[:cost], 0.05
+
+    marched = Sim::Geometry::Battlefield.move_along_facing(
+      unit.merge(x: wheeled[:x], y: wheeled[:y], facing: wheeled[:facing]),
+      2.0
+    )
+    assert_in_delta 2.0, Sim::Geometry::Battlefield.distance_between(
+      { x: wheeled[:x], y: wheeled[:y] },
+      marched
+    ), 0.05
+  end
+
   test "apply wheel spends movement and can only partially turn" do
     unit = { x: 10, y: 10, facing: 0, base_width: 4, base_depth: 1 }
     full = Sim::Geometry::Battlefield.apply_wheel(unit, 90, 10)

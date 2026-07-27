@@ -68,7 +68,7 @@ class SimBattleMoraleTest < ActiveSupport::TestCase
     assert_includes action[:summary], "от угрозы"
     assert_in_delta 180, action[:actor_state_after][:facing], 0.001
     refute_in_delta 225, action[:actor_state_after][:facing], 0.5
-    assert_includes action[:details].join(" "), "Бесплатный разворот от угрозы"
+    assert_includes action[:details].join(" "), "бесплатный разворот"
   end
 
   test "missile break faces away from shooters even with odd current facing" do
@@ -153,6 +153,165 @@ class SimBattleMoraleTest < ActiveSupport::TestCase
     )
 
     assert_in_delta 180, action[:actor_state_after][:facing], 0.001
-    refute_includes action[:details].join(" "), "Бесплатный разворот"
+    refute_includes action[:details].join(" "), "flee_facing="
+    refute_includes action[:details].join(" "), "about_faced=true"
+  end
+
+  test "rally keeps flee facing and does not freely turn toward the enemy" do
+    combatant = {
+      entity_id: "u1",
+      name: "Аутрайдеры",
+      kind: "unit",
+      morale: 12,
+      abilities: [],
+      x: 33.5,
+      y: 14.5,
+      facing: 2,
+      movement: 5,
+      current_health: 4,
+      max_health: 6,
+      model_health: 1,
+      models_remaining: 4,
+      starting_models: 6,
+      is_routing: true,
+      base_width: 3,
+      base_depth: 4,
+      model_width: 1,
+      model_depth: 1,
+      frontage: 3,
+      max_files: 5,
+      files: 3,
+      ranks: 2
+    }
+    enemy = { entity_id: "e1", current_health: 8, x: 12, y: 12, facing: 0, is_routing: false, abilities: [] }
+
+    action = Sim::Battle::Phases::Morale.resolve_action(
+      combatant: combatant,
+      allies: [ combatant ],
+      enemies: [ enemy ],
+      round_number: 2,
+      phase_type: "start",
+      combat_score_delta: 0,
+      sequence: 0
+    )
+
+    assert action[:morale_check][:passed]
+    refute combatant[:is_routing]
+    assert_includes action[:summary], "собирается с духом"
+    assert_in_delta 2.0, combatant[:facing], 0.001
+    refute_in_delta Sim::Geometry::Battlefield.heading_to(combatant, enemy), combatant[:facing], 5
+  end
+
+  test "routing unit does not orbit an allied blocker" do
+    combatant = {
+      entity_id: "u1",
+      name: "Копейщики",
+      kind: "unit",
+      morale: 1,
+      abilities: [],
+      x: 10,
+      y: 12,
+      facing: 180,
+      movement: 4,
+      current_health: 8,
+      max_health: 8,
+      model_health: 1,
+      models_remaining: 8,
+      starting_models: 8,
+      is_routing: true,
+      side_index: 0,
+      base_width: 2,
+      base_depth: 4,
+      model_width: 1,
+      model_depth: 1,
+      frontage: 2,
+      max_files: 2,
+      files: 2,
+      ranks: 4
+    }
+    blocker = {
+      entity_id: "ally-1",
+      name: "Союзники",
+      current_health: 8,
+      x: 4,
+      y: 12,
+      facing: 0,
+      side_index: 0,
+      base_width: 4,
+      base_depth: 4,
+      is_routing: false,
+      abilities: []
+    }
+
+    action = Sim::Battle::Phases::Morale.resolve_action(
+      combatant: combatant,
+      allies: [ combatant, blocker ],
+      enemies: [ { entity_id: "e1", current_health: 4, x: 22, y: 12, facing: 180, is_routing: false, abilities: [] } ],
+      round_number: 2,
+      phase_type: "start",
+      combat_score_delta: 0,
+      sequence: 0
+    )
+
+    refute Sim::Geometry::Battlefield.rectangles_overlap?(combatant, blocker)
+    refute_match(/обходит/, action[:summary])
+    assert_includes action[:details].join(" "), "avoided=false"
+  end
+
+  test "fleeing unit does not slide around another unit with the same name" do
+    fleeing = {
+      entity_id: "unit-5",
+      name: "Гоблины-лучники",
+      kind: "unit",
+      morale: 1,
+      abilities: [],
+      x: 30.5,
+      y: 11.0,
+      facing: 180,
+      movement: 4,
+      current_health: 4,
+      max_health: 8,
+      model_health: 1,
+      models_remaining: 4,
+      starting_models: 8,
+      is_routing: false,
+      side_index: 1,
+      base_width: 4,
+      base_depth: 2,
+      model_width: 1,
+      model_depth: 1,
+      frontage: 4,
+      max_files: 5,
+      files: 4,
+      ranks: 1
+    }
+    friend = {
+      entity_id: "unit-8",
+      name: "Гоблины-лучники",
+      current_health: 8,
+      x: 35.0,
+      y: 11.0,
+      facing: 180,
+      side_index: 1,
+      base_width: 4,
+      base_depth: 3,
+      is_routing: false,
+      abilities: []
+    }
+
+    action = Sim::Battle::Phases::Morale.resolve_action(
+      combatant: fleeing,
+      allies: [ fleeing, friend ],
+      enemies: [ { entity_id: "e1", current_health: 4, x: 12, y: 11, facing: 0, is_routing: false, abilities: [] } ],
+      round_number: 2,
+      phase_type: "magic",
+      combat_score_delta: 0,
+      sequence: 0,
+      engaged_enemies: []
+    )
+
+    assert fleeing[:is_routing] || fleeing[:current_health].to_i <= 0
+    refute_match(/обходит/, action[:summary])
+    assert_includes action[:details].join(" "), "avoided=false"
   end
 end
