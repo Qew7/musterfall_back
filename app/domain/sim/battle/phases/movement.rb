@@ -53,6 +53,12 @@ module Sim
             )
           end
 
+          # Simultaneous approach: plan every mover against a frozen board where other
+          # co-movers are not obstacles (order must not change outcomes), then apply all.
+          mover_ids = mobile.map { |entry| entry[:entity_id] }.to_set
+          obstacles = movement_obstacles(acting_side, target_side, mover_ids)
+          intents = []
+
           mobile.each do |combatant|
             nearest = nearest_enemy(combatant, target_side[:combatants])
             next unless nearest
@@ -75,10 +81,55 @@ module Sim
             if !meaningful_move
               next unless plan[:blocked_by_ally] && plan[:blocker]
 
-              from = position_of(combatant)
-              before = State.snapshot_combatant(combatant)
+              intents << {
+                combatant: combatant,
+                nearest: nearest,
+                plan: plan,
+                budget: budget,
+                from: position_of(combatant),
+                before: State.snapshot_combatant(combatant),
+                origin_pose: combatant.dup,
+                destination: nil,
+                wait: true
+              }
+              next
+            end
+
+            intents << {
+              combatant: combatant,
+              nearest: nearest,
+              plan: plan,
+              budget: budget,
+              from: position_of(combatant),
+              before: State.snapshot_combatant(combatant),
+              origin_pose: combatant.dup,
+              destination: destination,
+              wait: false
+            }
+          end
+
+          intents.each do |intent|
+            combatant = intent[:combatant]
+            next if intent[:wait]
+
+            destination = intent[:destination]
+            combatant[:x] = destination[:x]
+            combatant[:y] = destination[:y]
+            combatant[:facing] = destination[:facing]
+          end
+
+          intents.each do |intent|
+            combatant = intent[:combatant]
+            nearest = intent[:nearest]
+            plan = intent[:plan]
+            budget = intent[:budget]
+            from = intent[:from]
+            before = intent[:before]
+            origin_pose = intent[:origin_pose]
+            moved += 1
+
+            if intent[:wait]
               after = before
-              moved += 1
               push_move!(
                 phase,
                 acting_side,
@@ -90,20 +141,13 @@ module Sim
                 "#{combatant[:name]} ждёт прохода у #{plan[:blocker][:name]}.",
                 wheel: nil,
                 maneuver: approach_maneuver(plan, nearest, budget, wheel: nil, march_spent: 0.0, desired: combatant),
-                origin_pose: combatant
+                origin_pose: origin_pose
               )
               next
             end
 
-            from = position_of(combatant)
-            before = State.snapshot_combatant(combatant)
-            origin_pose = combatant.dup
-            combatant[:x] = destination[:x]
-            combatant[:y] = destination[:y]
-            combatant[:facing] = destination[:facing]
-            moved += 1
+            destination = intent[:destination]
             after = State.snapshot_combatant(combatant)
-
             planned_wheel = plan[:wheel]
             applied_wheel = wheel_for_applied_move(origin_pose, destination, planned_wheel)
             march_spent = Geometry::Battlefield.distance_between(
@@ -130,6 +174,24 @@ module Sim
           AttackResolution.add_event(phase, "Строй удерживает позиции.") if moved.zero?
           phase[:snapshot] = State.snapshot_battlefield([ acting_side, target_side ])
           phase
+        end
+
+        # Enemies and non-moving allies only — co-movers are resolved together, not sequenced.
+        def movement_obstacles(acting_side, target_side, mover_ids)
+          allies = Pathing.active_units(acting_side[:combatants]).reject { |entry| mover_ids.include?(entry[:entity_id]) }
+          enemies = Pathing.active_units(target_side[:combatants])
+          (allies + enemies).map { |entry| freeze_obstacle(entry) }
+        end
+
+        def freeze_obstacle(entry)
+          entry.merge(
+            x: entry[:x].to_f,
+            y: entry[:y].to_f,
+            facing: entry[:facing].to_f,
+            base_width: entry[:base_width].to_f,
+            base_depth: entry[:base_depth].to_f,
+            current_health: entry[:current_health].to_i
+          )
         end
 
         def nearest_enemy(combatant, enemies)

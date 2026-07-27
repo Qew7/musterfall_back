@@ -358,12 +358,12 @@ class SimBattleMovementWheelTest < ActiveSupport::TestCase
     }
   end
 
-  test "approach does not circle around a friendly blocker" do
+  test "co-moving allies do not force each other to wait or orbit" do
     actor = combatant(
       entity_id: "chaos-knights",
       name: "Рыцари Хаоса",
       x: 4,
-      y: 8,
+      y: 12,
       facing: 0,
       base_width: 3,
       base_depth: 4,
@@ -386,6 +386,76 @@ class SimBattleMovementWheelTest < ActiveSupport::TestCase
       movement: 3,
       melee: 4,
       ranged: 0,
+      spell: 0,
+      row: "front",
+      lane: "center",
+      side_index: 0
+    )
+    enemy = combatant(
+      entity_id: "trolls",
+      name: "Каменные тролли",
+      x: 28,
+      y: 12,
+      facing: 180,
+      base_width: 3,
+      base_depth: 3,
+      movement: 3,
+      melee: 5,
+      ranged: 0,
+      spell: 0,
+      row: "front",
+      lane: "center",
+      side_index: 1
+    )
+
+    actor_start = actor[:x]
+    ally_start = ally[:x]
+    phase = Sim::Battle::Phases::Movement.play(
+      acting_side: { player_id: "p1", combatants: [ actor, ally ] },
+      target_side: { player_id: "bot", combatants: [ enemy ] }
+    )
+
+    assert phase[:actions].any? { |action| action[:actor_id] == "chaos-knights" }
+    assert phase[:actions].any? { |action| action[:actor_id] == "marauders" }
+    refute phase[:actions].any? { |action|
+      action.dig(:maneuver, :avoided) ||
+        action[:summary].include?("обходит") ||
+        action[:summary].include?("ждёт прохода") ||
+        action.dig(:maneuver, :blocked_by_ally)
+    }
+    assert_operator actor[:x], :>, actor_start + 1.0
+    assert_operator ally[:x], :>, ally_start + 0.5
+  end
+
+  test "stationary allied blocker still stops approach without orbiting" do
+    actor = combatant(
+      entity_id: "chaos-knights",
+      name: "Рыцари Хаоса",
+      x: 4,
+      y: 8,
+      facing: 0,
+      base_width: 3,
+      base_depth: 4,
+      movement: 5,
+      melee: 5,
+      ranged: 0,
+      spell: 0,
+      row: "support",
+      lane: "center",
+      side_index: 0
+    )
+    # Ranged ally is not in the mobile set, so it remains a simultaneous-phase obstacle.
+    ally = combatant(
+      entity_id: "archers",
+      name: "Лучники",
+      x: 10,
+      y: 12,
+      facing: 0,
+      base_width: 4,
+      base_depth: 4,
+      movement: 3,
+      melee: 1,
+      ranged: 5,
       spell: 0,
       row: "front",
       lane: "center",
@@ -426,6 +496,75 @@ class SimBattleMovementWheelTest < ActiveSupport::TestCase
     }
     assert_operator (actor[:y] - start_y).abs, :<, 1.5
     refute Sim::Geometry::Battlefield.rectangles_overlap?(actor, ally)
+  end
+
+  test "simultaneous movement is order-independent for co-movers" do
+    build = lambda do |order|
+      front = combatant(
+        entity_id: "front",
+        name: "Фронт",
+        x: 12,
+        y: 12,
+        facing: 0,
+        base_width: 2,
+        base_depth: 2,
+        movement: 4,
+        melee: 4,
+        ranged: 0,
+        spell: 0,
+        row: "front",
+        lane: "center",
+        side_index: 0
+      )
+      rear = combatant(
+        entity_id: "rear",
+        name: "Тыл",
+        x: 6,
+        y: 12,
+        facing: 0,
+        base_width: 2,
+        base_depth: 2,
+        movement: 4,
+        melee: 4,
+        ranged: 0,
+        spell: 0,
+        row: "support",
+        lane: "center",
+        side_index: 0
+      )
+      enemy = combatant(
+        entity_id: "enemy",
+        name: "Враг",
+        x: 30,
+        y: 12,
+        facing: 180,
+        base_width: 2,
+        base_depth: 2,
+        movement: 4,
+        melee: 4,
+        ranged: 0,
+        spell: 0,
+        row: "front",
+        lane: "center",
+        side_index: 1
+      )
+      combatants = order == :rear_first ? [ rear, front ] : [ front, rear ]
+      Sim::Battle::Phases::Movement.play(
+        acting_side: { player_id: "p1", combatants: combatants },
+        target_side: { player_id: "bot", combatants: [ enemy ] }
+      )
+      {
+        front_x: combatants.find { |entry| entry[:entity_id] == "front" }[:x],
+        rear_x: combatants.find { |entry| entry[:entity_id] == "rear" }[:x]
+      }
+    end
+
+    first = build.call(:front_first)
+    second = build.call(:rear_first)
+    assert_in_delta first[:front_x], second[:front_x], 0.001
+    assert_in_delta first[:rear_x], second[:rear_x], 0.001
+    assert_operator first[:rear_x], :>, 6.5
+    assert_operator first[:front_x], :>, 12.5
   end
 
   test "plan_approach skips bypass when the blocker is an ally" do
