@@ -175,9 +175,19 @@ module Sim
             pose = destination_pose(intent)
             next unless Decisions::Movement.engaged?(pose, nearest)
 
-            aligned = Geometry::Battlefield.align_fronts_pose(pose, nearest)
+            # Include same-wave allies (excluded from hard_obstacles as co-movers) so idle friends
+            # still steer free-align away from their half.
+            ally_blockers = intents.filter_map do |other|
+              next if other[:combatant][:entity_id] == intent[:combatant][:entity_id]
+
+              unit = other[:wait] || other[:destination].nil? ? other[:combatant] : destination_pose(other)
+              freeze_obstacle(unit)
+            end
+            align_obstacles = hard_obstacles + ally_blockers
+
+            aligned = Geometry::Battlefield.align_fronts_pose(pose, nearest, obstacles: align_obstacles)
             next unless meaningful_destination?(pose, aligned)
-            next if destination_blocked?(aligned, [], hard_obstacles, contact_id: nearest[:entity_id])
+            next if destination_blocked?(aligned, [], align_obstacles, contact_id: nearest[:entity_id])
 
             intent[:paid_destination] = intent[:destination].dup
             intent[:destination] = { x: aligned[:x], y: aligned[:y], facing: aligned[:facing] }

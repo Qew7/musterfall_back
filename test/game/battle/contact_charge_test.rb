@@ -1073,6 +1073,216 @@ class SimBattleContactChargeTest < ActiveSupport::TestCase
     assert_operator engaged, :<=, attacker[:files]
   end
 
+  test "contact_pivot_point hinges on the enemy corner when it touches our front" do
+    attacker = combatant(
+      entity_id: "ghouls",
+      x: 19.375619542743166,
+      y: 17.908125159716665,
+      facing: 137.27159254886192,
+      base_width: 4,
+      base_depth: 3
+    )
+    defender = combatant(
+      entity_id: "knights",
+      x: 16.60974683974449,
+      y: 21.229943353475544,
+      facing: 161.1168639579779,
+      base_width: 3,
+      base_depth: 4,
+      side_index: 1
+    )
+
+    assert_operator BF.distance_between_units(attacker, defender), :<=, ENGAGE
+    pivot = BF.contact_pivot_point(attacker, defender)
+    assert pivot
+
+    # Closest feature is defender rear-right corner on attacker front.
+    def_corners = BF.unit_corners(defender)
+    rear_right = def_corners[2] # front_left, front_right, rear_right, rear_left
+    assert_in_delta rear_right[:x], pivot[:x], 0.05
+    assert_in_delta rear_right[:y], pivot[:y], 0.05
+  end
+
+  test "free align around enemy corner finishes facing into the contacted face" do
+    # Battle 23 paid landing: ghouls' front vs knights' rear corner.
+    attacker = combatant(
+      entity_id: "ghouls",
+      x: 19.375619542743166,
+      y: 17.908125159716665,
+      facing: 137.27159254886192,
+      base_width: 4,
+      base_depth: 3,
+      files: 4,
+      ranks: 3
+    )
+    defender = combatant(
+      entity_id: "knights",
+      x: 16.60974683974449,
+      y: 21.229943353475544,
+      facing: 161.1168639579779,
+      base_width: 3,
+      base_depth: 4,
+      files: 3,
+      ranks: 4,
+      side_index: 1
+    )
+
+    desired = BF.facing_into_contact_face(attacker, defender)
+    before_err = BF.shortest_facing_delta(attacker[:facing], desired).abs
+    assert_operator before_err, :>, 10
+
+    aligned = BF.align_fronts_pose(attacker, defender)
+    after_err = BF.shortest_facing_delta(aligned[:facing], desired).abs
+
+    refute BF.rectangles_overlap?(aligned, defender)
+    assert_operator BF.distance_between_units(aligned, defender), :<=, ENGAGE
+    assert_operator after_err, :<, 5.0
+    assert_operator after_err, :<, before_err
+  end
+
+  test "free align around enemy corner works for wide infantry on a flank corner" do
+    # Battle 28 paid landing: skeletons' front vs orc front-right corner.
+    attacker = combatant(
+      entity_id: "skeletons",
+      x: 15.186967578348623,
+      y: 6.466367818559672,
+      facing: 29.274246621326142,
+      base_width: 5,
+      base_depth: 4,
+      files: 5,
+      ranks: 4
+    )
+    defender = combatant(
+      entity_id: "orks",
+      x: 17.759101778491914,
+      y: 10.479726120756125,
+      facing: 176.6599179970599,
+      base_width: 4,
+      base_depth: 2,
+      files: 4,
+      ranks: 2,
+      side_index: 1
+    )
+
+    desired = BF.facing_into_contact_face(attacker, defender)
+    before_err = BF.shortest_facing_delta(attacker[:facing], desired).abs
+    assert_operator before_err, :>, 40
+
+    aligned = BF.align_fronts_pose(attacker, defender)
+    after_err = BF.shortest_facing_delta(aligned[:facing], desired).abs
+
+    refute BF.rectangles_overlap?(aligned, defender)
+    assert_operator BF.distance_between_units(aligned, defender), :<=, ENGAGE
+    assert_operator after_err, :<, 8.0
+    assert_operator after_err, :<, before_err * 0.35
+  end
+
+  test "free align prefers the rotation toward an unoccupied defender side" do
+    attacker = combatant(
+      entity_id: "a1",
+      x: 12.0,
+      y: 12.0,
+      facing: 20.0,
+      base_width: 4,
+      base_depth: 2,
+      files: 4,
+      ranks: 2,
+      movement: 1
+    )
+    defender = combatant(
+      entity_id: "e1",
+      x: 16.0,
+      y: 12.5,
+      facing: 180.0,
+      base_width: 3,
+      base_depth: 2,
+      files: 3,
+      ranks: 2,
+      side_index: 1
+    )
+    # Ally already glued on the defender's +lateral half — align should favor the free half.
+    ally = combatant(
+      entity_id: "ally",
+      x: 16.0,
+      y: 15.2,
+      facing: 270.0,
+      base_width: 2,
+      base_depth: 2,
+      side_index: 0,
+      current_health: 4
+    )
+
+    # Force engage geometry if needed by snapping attacker into contact band.
+    unless BF.distance_between_units(attacker, defender) <= ENGAGE
+      dest = BF.charge_destination(attacker, defender)
+      attacker[:x] = dest[:x]
+      attacker[:y] = dest[:y]
+      attacker[:facing] = dest[:facing]
+    end
+    assert_operator BF.distance_between_units(attacker, defender), :<=, ENGAGE + 0.2
+
+    aligned = BF.align_fronts_pose(attacker, defender, obstacles: [ ally ])
+    local = BF.point_in_local_unit_space(aligned, defender)
+    ally_local = BF.point_in_local_unit_space(ally, defender)
+    # Prefer opposite lateral half from the ally when both rotates are otherwise viable.
+    refute_equal local[:lateral] >= 0, ally_local[:lateral] >= 0 if BF.front_contact_span(aligned, defender) > 0.5
+  end
+
+  test "free align turns the other way when short wheel hits an idle friend" do
+    # Battle 32 R4: boars free-align into enemy boars; idle orks sit on the short arc.
+    attacker = combatant(
+      entity_id: "boars",
+      name: "Наездники на кабанах",
+      x: 13.376153553243148,
+      y: 5.420222533206636,
+      facing: 6.819621777195266,
+      base_width: 3,
+      base_depth: 4,
+      files: 3,
+      ranks: 4,
+      side_index: 0
+    )
+    defender = combatant(
+      entity_id: "enemy_boars",
+      name: "Наездники на кабанах",
+      x: 18.067680039221827,
+      y: 4.8691417219680595,
+      facing: 123.73674960188418,
+      base_width: 3,
+      base_depth: 4,
+      files: 3,
+      ranks: 4,
+      side_index: 1
+    )
+    ally = combatant(
+      entity_id: "orks",
+      name: "Орки-бойзы",
+      x: 15.493154665390248,
+      y: 8.641356531078802,
+      facing: 270.0,
+      base_width: 4,
+      base_depth: 2,
+      side_index: 0,
+      current_health: 10
+    )
+
+    assert_operator BF.distance_between_units(attacker, defender), :<=, ENGAGE
+    assert_operator BF.distance_between_units(ally, defender), :>, ENGAGE
+
+    desired = BF.facing_into_contact_face(attacker, defender)
+    short = BF.shortest_facing_delta(attacker[:facing], desired)
+    pivot = BF.contact_pivot_point(attacker, defender)
+    assert BF.align_direction_blocked_by_idle_ally?(
+      attacker, pivot, short, defender, BF.idle_ally_obstacles(attacker, defender, [ ally ])
+    )
+
+    aligned = BF.align_fronts_pose(attacker, defender, obstacles: [ ally ])
+    turned = BF.shortest_facing_delta(attacker[:facing], aligned[:facing])
+    # Old bug: tiny nudge into the ally (~-8°). Now swing the other way.
+    assert_operator turned.abs, :>, 20.0
+    assert_operator turned * short, :<, 0
+  end
+
   private
 
   def combatant(**overrides)
