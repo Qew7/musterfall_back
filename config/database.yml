@@ -24,10 +24,18 @@ development:
   primary:
     <<: *default
     database: musterfall_development
+    <% if ENV["DATABASE_URL"].present? %>
+    url: <%= ENV["DATABASE_URL"] %>
+    <% end %>
   # Solid Queue shares the development DB (no second Postgres instance required).
+  # QUEUE_DATABASE_URL falls back to DATABASE_URL so docker multi-db prepare works.
   queue:
     <<: *default
     database: musterfall_development
+    <% queue_url = ENV["QUEUE_DATABASE_URL"].presence || ENV["DATABASE_URL"] %>
+    <% if queue_url.present? %>
+    url: <%= queue_url %>
+    <% end %>
     migrations_paths: db/queue_migrate
     schema_dump: queue_schema.rb
 

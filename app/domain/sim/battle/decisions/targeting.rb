@@ -4,6 +4,8 @@ module Sim
       # Target selection policy for melee and missile attacks.
       module Targeting
         CONTACT = Geometry::Battlefield::CONFIG[:melee_contact_tolerance]
+        CONTACT_SNAP = Geometry::Battlefield::CONFIG[:contact_snap]
+        ENGAGE = CONTACT + CONTACT_SNAP
 
         module_function
 
@@ -14,7 +16,7 @@ module Sim
           if attack_type == "melee"
             engaged = living
               .map { |target| { target: target, distance: Geometry::Battlefield.distance_between_units(attacker, target), vector: Geometry::Battlefield.classify_attack_vector(attacker, target) } }
-              .select { |entry| entry[:distance] <= CONTACT }
+              .select { |entry| entry[:distance] <= ENGAGE }
               .sort_by { |entry| [ entry[:distance], vector_priority(entry[:vector]) ] }
             return nil if engaged.empty?
 
@@ -69,7 +71,7 @@ module Sim
             # CONTACT + generous diagonal pad; skip OBB when clearly far.
             next false if ((dx * dx) + (dy * dy)) > 36.0
 
-            Geometry::Battlefield.distance_between_units(unit, entry) <= CONTACT
+            Geometry::Battlefield.distance_between_units(unit, entry) <= ENGAGE
           end
         end
 

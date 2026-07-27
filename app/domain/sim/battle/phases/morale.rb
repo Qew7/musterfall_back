@@ -329,7 +329,7 @@ module Sim
               cluster << current
               living.each do |candidate|
                 next if visited[candidate[:entity_id]] || candidate[:side_key] == current[:side_key]
-                next unless Geometry::Battlefield.distance_between_units(current, candidate) <= Geometry::Battlefield::CONFIG[:melee_contact_tolerance]
+                next unless Geometry::Battlefield.distance_between_units(current, candidate) <= Geometry::Battlefield::CONFIG[:melee_contact_tolerance] + Geometry::Battlefield::CONFIG[:contact_snap]
 
                 queue << candidate
               end

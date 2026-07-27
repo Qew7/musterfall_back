@@ -9,6 +9,8 @@ module Sim
         wheel_step_degrees: 45,
         contact_padding: 0.35,
         melee_contact_tolerance: 0.4,
+        # Almost-touching band: closes the dead zone between "too close to march" and "not yet melee".
+        contact_snap: 0.05,
         blast_radius: 1.6,
         volley_radius: 1.4
       }.freeze

@@ -2,13 +2,19 @@ module Sim
   module Battle
     module Pathing
       CONTACT = Geometry::Battlefield::CONFIG[:melee_contact_tolerance]
+      CONTACT_SNAP = Geometry::Battlefield::CONFIG[:contact_snap]
+      ENGAGE = CONTACT + CONTACT_SNAP
       BYPASS_HEADING_OFFSETS = [ 45, -45, 90, -90 ].freeze
+      # Heroes / lone models may slip around a friend when already on a flank/rear line.
+      SMALL_FOOTPRINT_AREA = 2.0
 
       module_function
 
-      # Wheel + march toward a goal. Bypass only enemy blockers — allies are a traffic jam, not a detour.
+      # Wheel + march toward a goal.
+      # Enemy blockers: always eligible for bypass. Ally blockers: only when allow_ally_bypass
+      # (flank/rear geometry or a small footprint) — otherwise hold the column, no orbit.
       # Set bypass: false for cheap reposition probes (direct line only).
-      def plan_approach(origin:, goal_point:, budget:, obstacles:, contact_id: nil, goal_unit: nil, bypass: true)
+      def plan_approach(origin:, goal_point:, budget:, obstacles:, contact_id: nil, goal_unit: nil, bypass: true, allow_ally_bypass: false)
         direct_heading = Geometry::Battlefield.heading_to(origin, goal_point)
         direct = simulate_approach(
           origin: origin,
@@ -23,8 +29,8 @@ module Sim
         return base unless bypass
         return base unless worth_bypassing?(direct, origin)
 
-        # Friendly column ahead: hold the direct line (creep / face), never circle around allies.
-        if ally_blocker?(origin, direct[:blocker])
+        ally_blocked = ally_blocker?(origin, direct[:blocker])
+        if ally_blocked && !ally_bypass_allowed?(origin, goal_unit, allow_ally_bypass)
           return base.merge(blocked_by_ally: true)
         end
 
@@ -40,6 +46,7 @@ module Sim
             contact_id: contact_id
           )
           next unless plan[:pose]
+          next if ally_blocked && ally_blocker?(origin, plan[:blocker]) && !meaningful_progress?(origin, plan[:pose])
 
           candidates << plan.merge(avoided: true, heading: heading, blocked_by_ally: false)
         end
@@ -62,7 +69,83 @@ module Sim
           end
         end
 
-        pick_best_approach(candidates, origin, goal_point, goal_unit)
+        if ally_blocked && goal_unit
+          contact_slot_points(origin, goal_unit, Geometry::Battlefield.classify_attack_vector(origin, goal_unit)).each do |point|
+            heading = Geometry::Battlefield.heading_to(origin, point)
+            plan = simulate_approach(
+              origin: origin,
+              heading: heading,
+              budget: budget,
+              goal_point: point,
+              goal_unit: goal_unit,
+              obstacles: obstacles,
+              contact_id: contact_id
+            )
+            next unless plan[:pose]
+
+            candidates << plan.merge(avoided: true, heading: heading, blocked_by_ally: false)
+          end
+        end
+
+        best = pick_best_approach(candidates, origin, goal_point, goal_unit)
+        return best.merge(blocked_by_ally: true) if ally_blocked && !best[:avoided]
+
+        best
+      end
+
+      def ally_bypass_allowed?(origin, goal_unit, allow_ally_bypass)
+        return true if allow_ally_bypass
+        return false unless goal_unit
+
+        vector = Geometry::Battlefield.classify_attack_vector(origin, goal_unit)
+        return true if vector == "flank" || vector == "rear"
+
+        small_footprint?(origin)
+      end
+
+      def small_footprint?(unit)
+        width = (unit[:base_width] || unit[:width] || 1).to_f
+        depth = (unit[:base_depth] || unit[:depth] || 1).to_f
+        (width * depth) <= SMALL_FOOTPRINT_AREA
+      end
+
+      # Waypoints off a defender's flank/rear face for slot-aware charges.
+      def contact_slot_points(origin, defender, slot)
+        slot_name = slot.to_s
+        return [] if slot_name.empty? || slot_name == "front"
+
+        dims = Geometry::Battlefield.unit_dimensions(defender)
+        own = Geometry::Battlefield.unit_dimensions(origin)
+        clearance = dims[:half_width] + own[:half_width] + CONTACT + 0.35
+        forward = Geometry::Battlefield.facing_vector(defender[:facing])
+        right = Geometry::Battlefield.right_vector(defender[:facing])
+
+        points =
+          case slot_name
+          when "rear"
+            depth = dims[:half_depth] + own[:half_depth] + CONTACT + 0.35
+            [
+              Geometry::Battlefield.clamp_battlefield_position(
+                x: defender[:x] - (forward[:x] * depth),
+                y: defender[:y] - (forward[:y] * depth),
+                facing: 0
+              )
+            ]
+          else # flank
+            [
+              Geometry::Battlefield.clamp_battlefield_position(
+                x: defender[:x] + (right[:x] * clearance),
+                y: defender[:y] + (right[:y] * clearance),
+                facing: 0
+              ),
+              Geometry::Battlefield.clamp_battlefield_position(
+                x: defender[:x] - (right[:x] * clearance),
+                y: defender[:y] - (right[:y] * clearance),
+                facing: 0
+              )
+            ]
+          end
+        points
       end
 
       # Translate toward a map edge. Do not slide around friendly blockers — stop or pick another edge.
