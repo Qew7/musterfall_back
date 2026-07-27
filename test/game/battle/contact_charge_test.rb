@@ -1537,6 +1537,68 @@ class SimBattleContactChargeTest < ActiveSupport::TestCase
     assert_in_delta short, turned, 5.0
   end
 
+  test "free align prefers short flush over long free_side when idle hero is nearby" do
+    # Battle 60 R5: grave guards free-align into skeletons; nearby lich must not force ~83° sideways.
+    attacker = combatant(
+      entity_id: "unit-15",
+      name: "Стража могил",
+      x: 22.324,
+      y: 13.513,
+      facing: 142.72495616837273,
+      base_width: 4,
+      base_depth: 1,
+      files: 4,
+      ranks: 1,
+      side_index: 1,
+      current_health: 4
+    )
+    defender = combatant(
+      entity_id: "unit-9",
+      name: "Скелетный блок",
+      x: 19.204533498751363,
+      y: 12.46938440708418,
+      facing: 348.02376269108777,
+      base_width: 5,
+      base_depth: 3,
+      files: 5,
+      ranks: 3,
+      side_index: 0,
+      current_health: 14
+    )
+    idle_hero = combatant(
+      entity_id: "hero-3",
+      name: "Король-лич",
+      x: 26.853,
+      y: 15.390,
+      facing: 199.19,
+      base_width: 1,
+      base_depth: 1,
+      files: 1,
+      ranks: 1,
+      side_index: 1,
+      current_health: 1
+    )
+
+    assert_operator BF.distance_between_units(attacker, defender), :<=, ENGAGE
+    assert BF.idle_ally_obstacles(attacker, defender, [ idle_hero ]).any?
+
+    desired = BF.facing_into_contact_face(attacker, defender)
+    short = BF.shortest_facing_delta(attacker[:facing], desired)
+    pivot = BF.contact_pivot_point(attacker, defender)
+    refute BF.align_direction_blocked_by_idle_ally?(
+      attacker, pivot, short, defender, BF.idle_ally_obstacles(attacker, defender, [ idle_hero ])
+    )
+
+    aligned = BF.align_fronts_pose(attacker, defender, obstacles: [ idle_hero ])
+    after_err = BF.shortest_facing_delta(aligned[:facing], desired).abs
+    turned = BF.shortest_facing_delta(attacker[:facing], aligned[:facing])
+
+    # Old bug: long free_side arc stopped near 83° (facing err ~84°). Prefer short flush (~168°).
+    assert_operator after_err, :<, 5.0
+    assert_in_delta short, turned, 5.0
+    assert_operator BF.front_contact_span(aligned, defender), :>=, BF.front_contact_span(attacker, defender)
+  end
+
   private
 
   def combatant(**overrides)
