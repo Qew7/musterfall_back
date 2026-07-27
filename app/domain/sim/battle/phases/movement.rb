@@ -2,31 +2,25 @@ module Sim
   module Battle
     module Phases
       module Movement
-        ADVANCING = { "rear" => "support", "support" => "front" }.freeze
+        ADVANCING = Decisions::Movement::ADVANCING
         CONTACT = Pathing::CONTACT
 
         module_function
 
-        def play(acting_side:, target_side:, **)
+        def play(acting_side:, target_side:, round_number: 1, **)
           phase = AttackResolution.create_phase("movement", "Фаза движения")
-          mobile = acting_side[:combatants]
-            .select { |entry| entry[:current_health].to_i > 0 }
-            .reject { |entry| entry[:is_routing] }
-            .select { |entry| entry[:melee].to_i > entry[:ranged].to_i + entry[:spell].to_i }
+          mobile = Decisions::Movement.melee_movers(acting_side[:combatants])
+          physical_movers = mobile.select { |entry| entry[:movement].to_f > 0.05 }
+          seekers = Decisions::Reposition.seekers(
+            acting_side: acting_side,
+            target_side: target_side,
+            round_number: round_number
+          ).select { |entry| entry[:movement].to_f > 0.05 }
 
-          obstacles = Pathing.active_units(acting_side[:combatants]) + Pathing.active_units(target_side[:combatants])
           moved = 0
           mobile.each do |combatant|
-            target_row = ADVANCING[combatant[:row]]
+            target_row = Decisions::Movement.row_advance_target(combatant, acting_side[:combatants])
             next unless target_row
-
-            occupied = acting_side[:combatants].any? do |entry|
-              entry[:current_health].to_i > 0 &&
-                entry[:entity_id] != combatant[:entity_id] &&
-                entry[:lane] == combatant[:lane] &&
-                entry[:row] == target_row
-            end
-            next if occupied
 
             # Row is a formation label only — keep battlefield pose so units never teleport backward.
             from = position_of(combatant)
@@ -53,83 +47,200 @@ module Sim
             )
           end
 
-          # Simultaneous approach: plan every mover against a frozen board where other
-          # co-movers are not obstacles (order must not change outcomes), then apply all.
-          mover_ids = mobile.map { |entry| entry[:entity_id] }.to_set
-          obstacles = movement_obstacles(acting_side, target_side, mover_ids)
-          intents = []
+          # 1) Melee approaches resolve first (simultaneous among themselves, conflict-safe).
+          # 2) Reposition runs on the post-melee board so seekers never claim a melee unit's landing spot.
+          melee_ids = physical_movers.map { |entry| entry[:entity_id] }.to_set
+          melee_obstacles = movement_obstacles(acting_side, target_side, melee_ids)
+          melee_intents = []
 
-          mobile.each do |combatant|
-            nearest = nearest_enemy(combatant, target_side[:combatants])
-            next unless nearest
-            next if Geometry::Battlefield.distance_between_units(combatant, nearest) <= CONTACT
-
-            budget = combatant[:movement].to_f
-            plan = Pathing.plan_approach(
-              origin: combatant,
-              goal_point: nearest,
-              budget: budget,
-              obstacles: obstacles,
-              contact_id: nearest[:entity_id],
-              goal_unit: nearest
-            )
-            destination = plan[:pose]
-            facing_changed = destination && Geometry::Battlefield.shortest_facing_delta(combatant[:facing], destination[:facing]).abs > 0.05
-            traveled = destination ? Geometry::Battlefield.distance_between(combatant, destination) : 0.0
-            meaningful_move = destination && (facing_changed || traveled > 0.05)
-
-            if !meaningful_move
-              next unless plan[:blocked_by_ally] && plan[:blocker]
-
-              intents << {
-                combatant: combatant,
-                nearest: nearest,
-                plan: plan,
-                budget: budget,
-                from: position_of(combatant),
-                before: State.snapshot_combatant(combatant),
-                origin_pose: combatant.dup,
-                destination: nil,
-                wait: true
-              }
-              next
-            end
-
-            intents << {
+          physical_movers.each do |combatant|
+            nearest = Decisions::Movement.nearest_enemy(combatant, target_side[:combatants])
+            intent = Decisions::Movement.build_approach_intent(
               combatant: combatant,
               nearest: nearest,
-              plan: plan,
-              budget: budget,
+              obstacles: melee_obstacles
+            )
+            next unless intent
+
+            melee_intents << intent.merge(
               from: position_of(combatant),
               before: State.snapshot_combatant(combatant),
-              origin_pose: combatant.dup,
-              destination: destination,
-              wait: false
-            }
+              origin_pose: combatant.dup
+            )
           end
 
+          # Co-movers that never move still occupy their start — treat as hard blockers
+          # so others cannot land inside them (idle heroes, wait intents, etc.).
+          stayers = physical_movers.select do |entry|
+            intent = melee_intents.find { |row| row[:combatant][:entity_id] == entry[:entity_id] }
+            intent.nil? || intent[:wait] || intent[:destination].nil?
+          end
+          resolve_destination_conflicts!(
+            melee_intents,
+            melee_obstacles + stayers.map { |entry| freeze_obstacle(entry) }
+          )
+          apply_intents!(melee_intents)
+          moved += commit_intents!(phase, acting_side, target_side, melee_intents)
+
+          seeker_units = seekers.reject { |entry| melee_ids.include?(entry[:entity_id]) }
+          seeker_ids = seeker_units.map { |entry| entry[:entity_id] }.to_set
+          # After melee moved, every non-seeker is a hard obstacle (including allies who just advanced).
+          reposition_obstacles = movement_obstacles(acting_side, target_side, seeker_ids)
+          reposition_intents = []
+
+          seeker_units.sort_by { |entry| -entry[:initiative].to_i }.each do |combatant|
+            intent = Decisions::Reposition.build_intent(
+              combatant: combatant,
+              acting_side: acting_side,
+              target_side: target_side,
+              obstacles: reposition_obstacles,
+              round_number: round_number
+            )
+            next unless intent
+
+            packed = intent.merge(
+              from: position_of(combatant),
+              before: State.snapshot_combatant(combatant),
+              origin_pose: combatant.dup
+            )
+            resolve_destination_conflicts!([packed], reposition_obstacles)
+            apply_intents!([packed])
+            unless packed[:wait]
+              # Subsequent seekers treat this landing as occupied.
+              reposition_obstacles = reposition_obstacles.reject { |entry| entry[:entity_id] == combatant[:entity_id] }
+              if packed[:destination]
+                reposition_obstacles << combatant.merge(
+                  x: packed[:destination][:x],
+                  y: packed[:destination][:y],
+                  facing: packed[:destination][:facing]
+                )
+              end
+            end
+            reposition_intents << packed
+          end
+
+          moved += commit_intents!(phase, acting_side, target_side, reposition_intents)
+
+          AttackResolution.add_event(phase, "Строй удерживает позиции.") if moved.zero?
+          phase[:snapshot] = State.snapshot_battlefield([ acting_side, target_side ])
+          phase
+        end
+
+        def apply_intents!(intents)
           intents.each do |intent|
-            combatant = intent[:combatant]
             next if intent[:wait]
 
             destination = intent[:destination]
+            combatant = intent[:combatant]
             combatant[:x] = destination[:x]
             combatant[:y] = destination[:y]
             combatant[:facing] = destination[:facing]
           end
+        end
 
+        # Simultaneous melee: each mover vacates its start only while evaluating its landing.
+        # Starts of units that wait (or never intended to move) stay occupied, so nobody
+        # lands inside a stationary ally.
+        def resolve_destination_conflicts!(intents, static_obstacles)
+          occupied = static_obstacles.map { |entry| freeze_obstacle(entry) }
+          intents.each do |intent|
+            occupied << freeze_obstacle(intent[:combatant])
+          end
+
+          ranked = intents.reject { |intent| intent[:wait] || intent[:destination].nil? }
+          ranked.sort_by! do |intent|
+            pose = destination_pose(intent)
+            nearest = intent[:nearest]
+            dist = if nearest
+              Geometry::Battlefield.distance_between_units(pose, nearest)
+            else
+              0.0
+            end
+            [ dist, -intent[:combatant][:initiative].to_i, intent[:combatant][:entity_id].to_s ]
+          end
+
+          ranked.each do |intent|
+            combatant = intent[:combatant]
+            occupied.reject! { |entry| entry[:entity_id] == combatant[:entity_id] }
+
+            pose = destination_pose(intent)
+            if destination_blocked?(pose, [], occupied)
+              pose = shorten_destination(combatant, pose, [], occupied)
+            end
+
+            if pose.nil? || !meaningful_destination?(combatant, pose)
+              intent[:wait] = true
+              intent[:destination] = nil
+              intent[:plan] = (intent[:plan] || {}).merge(
+                blocked_by_ally: true,
+                blocker: intent.dig(:plan, :blocker) || { name: "союзник", entity_id: nil }
+              )
+              occupied << freeze_obstacle(combatant)
+            else
+              intent[:destination] = { x: pose[:x], y: pose[:y], facing: pose[:facing] }
+              occupied << pose
+            end
+          end
+        end
+
+        def destination_pose(intent)
+          intent[:combatant].merge(
+            x: intent[:destination][:x],
+            y: intent[:destination][:y],
+            facing: intent[:destination][:facing]
+          )
+        end
+
+        def destination_blocked?(pose, static_obstacles, accepted)
+          static_obstacles.any? { |obs| footprints_conflict?(pose, obs) } ||
+            accepted.any? { |other| footprints_conflict?(pose, other) }
+        end
+
+        def meaningful_destination?(origin, pose)
+          Geometry::Battlefield.distance_between(origin, pose) > 0.05 ||
+            Geometry::Battlefield.shortest_facing_delta(origin[:facing], pose[:facing]).abs > 0.05
+        end
+
+        # Pull the destination back toward the origin until clear of accepted/static poses.
+        def shorten_destination(origin, desired, static_obstacles, accepted)
+          best = nil
+          12.times do |index|
+            t = 1.0 - ((index + 1) / 12.0)
+            pose = origin.merge(
+              x: origin[:x].to_f + ((desired[:x].to_f - origin[:x].to_f) * t),
+              y: origin[:y].to_f + ((desired[:y].to_f - origin[:y].to_f) * t),
+              facing: desired[:facing]
+            )
+            next if destination_blocked?(pose, static_obstacles, accepted)
+
+            best = pose
+            break
+          end
+          best
+        end
+
+        def footprints_conflict?(left, right)
+          return false if left[:entity_id] == right[:entity_id]
+          return false if right[:current_health].to_i <= 0
+
+          Geometry::Battlefield.distance_between_units(left, right) < CONTACT
+        end
+
+        def commit_intents!(phase, acting_side, target_side, intents)
+          moved = 0
           intents.each do |intent|
             combatant = intent[:combatant]
             nearest = intent[:nearest]
-            plan = intent[:plan]
+            plan = intent[:plan] || {}
             budget = intent[:budget]
             from = intent[:from]
             before = intent[:before]
             origin_pose = intent[:origin_pose]
             moved += 1
 
-            if intent[:wait]
+            if intent[:wait] || intent[:destination].nil?
               after = before
+              blocker_name = plan.dig(:blocker, :name) || "союзника"
               push_move!(
                 phase,
                 acting_side,
@@ -138,9 +249,9 @@ module Sim
                 before,
                 after,
                 from,
-                "#{combatant[:name]} ждёт прохода у #{plan[:blocker][:name]}.",
+                "#{combatant[:name]} ждёт прохода у #{blocker_name}.",
                 wheel: nil,
-                maneuver: approach_maneuver(plan, nearest, budget, wheel: nil, march_spent: 0.0, desired: combatant),
+                maneuver: approach_maneuver(plan, nearest, budget, wheel: nil, march_spent: 0.0, desired: combatant, kind_override: "blocked_by_ally"),
                 origin_pose: origin_pose
               )
               next
@@ -155,7 +266,21 @@ module Sim
               destination
             )
             desired = plan[:desired] || destination
-            maneuver = approach_maneuver(plan, nearest, budget, wheel: applied_wheel, march_spent: march_spent, desired: desired)
+            summary =
+              if intent[:kind] == "reposition"
+                reposition_player_summary(combatant, nearest, plan)
+              else
+                approach_player_summary(combatant, nearest, plan)
+              end
+            maneuver = approach_maneuver(
+              plan,
+              nearest,
+              budget,
+              wheel: applied_wheel,
+              march_spent: march_spent,
+              desired: desired,
+              kind_override: intent[:kind] == "reposition" ? "reposition" : nil
+            )
             push_move!(
               phase,
               acting_side,
@@ -164,16 +289,13 @@ module Sim
               before,
               after,
               from,
-              approach_player_summary(combatant, nearest, plan),
+              summary,
               wheel: applied_wheel,
               maneuver: maneuver,
               origin_pose: origin_pose
             )
           end
-
-          AttackResolution.add_event(phase, "Строй удерживает позиции.") if moved.zero?
-          phase[:snapshot] = State.snapshot_battlefield([ acting_side, target_side ])
-          phase
+          moved
         end
 
         # Enemies and non-moving allies only — co-movers are resolved together, not sequenced.
@@ -194,17 +316,23 @@ module Sim
           )
         end
 
-        def nearest_enemy(combatant, enemies)
-          candidates = Pathing.active_units(enemies)
-          return nil if candidates.empty?
-
-          candidates.min_by { |entry| [ entry[:is_routing] ? 0 : 1, Geometry::Battlefield.distance_between_units(combatant, entry) ] }
+        def nearest_enemy(...)
+          Decisions::Movement.nearest_enemy(...)
         end
 
         # Player-facing: short and truthful. Wheel MV / pathing flags belong in details.
         def approach_player_summary(combatant, nearest, plan)
           note = approach_player_note(plan, nearest)
           "#{combatant[:name]} сближается с #{nearest[:name]}#{note}."
+        end
+
+        def reposition_player_summary(combatant, nearest, plan)
+          note = approach_player_note(plan, nearest)
+          if nearest
+            "#{combatant[:name]} занимает позицию против #{nearest[:name]}#{note}."
+          else
+            "#{combatant[:name]} меняет позицию#{note}."
+          end
         end
 
         def approach_player_note(plan, nearest)
@@ -231,9 +359,9 @@ module Sim
           plan[:blocker][:entity_id] == nearest[:entity_id]
         end
 
-        def approach_maneuver(plan, nearest, budget, wheel:, march_spent:, desired:)
+        def approach_maneuver(plan, nearest, budget, wheel:, march_spent:, desired:, kind_override: nil)
           contact_blocker = blocker_is_target?(plan, nearest)
-          kind = if plan[:blocked_by_ally]
+          kind = kind_override || if plan[:blocked_by_ally]
             "blocked_by_ally"
           elsif plan[:avoided] && !contact_blocker
             "bypass"
@@ -245,8 +373,8 @@ module Sim
 
           {
             kind: kind,
-            target_id: nearest[:entity_id],
-            target_name: nearest[:name],
+            target_id: nearest && nearest[:entity_id],
+            target_name: nearest && nearest[:name],
             heading: plan[:heading],
             desired_facing: plan[:heading],
             mv_budget: budget,

@@ -28,7 +28,7 @@ module Sim
           end
 
           attackers.each do |attacker|
-            selection = choose_target(attacker, target_side[:combatants], attack_type, all_combatants)
+            selection = Decisions::Targeting.choose_target(attacker, target_side[:combatants], attack_type, all_combatants)
             next unless selection
 
             target = selection[:target]
@@ -213,73 +213,28 @@ module Sim
           end
         end
 
-        def choose_target(attacker, enemies, attack_type, all_combatants)
-          living = enemies.select { |entry| entry[:current_health].to_i > 0 }
-          return nil if living.empty?
-
-          if attack_type == "melee"
-            engaged = living
-              .map { |target| { target: target, distance: Geometry::Battlefield.distance_between_units(attacker, target), vector: Geometry::Battlefield.classify_attack_vector(attacker, target) } }
-              .select { |entry| entry[:distance] <= CONTACT }
-              .sort_by { |entry| [ entry[:distance], vector_priority(entry[:vector]) ] }
-            return nil if engaged.empty?
-
-            return { target: engaged.first[:target], vector: engaged.first[:vector] }
-          end
-
-          # Shooting and magic both refuse units locked in enemy melee.
-          available = living.select { |target| can_target_missile?(attacker, target, attack_type, all_combatants) }
-          return nil if available.empty?
-
-          prioritized = prioritize_routing(available)
-          same_lane = Constants::BATTLE_ROWS.flat_map { |row| prioritized.select { |entry| entry[:lane] == attacker[:lane] && entry[:row] == row } }
-          if same_lane.any?
-            target = same_lane.first
-            return { target: target, vector: target[:row] == "front" ? "front" : "rear" }
-          end
-
-          adjacent = Constants::LANE_ORDER.reject { |lane| lane == attacker[:lane] }.flat_map do |lane|
-            Constants::BATTLE_ROWS.flat_map { |row| prioritized.select { |entry| entry[:lane] == lane && entry[:row] == row } }
-          end
-          return { target: adjacent.first, vector: "flank" } if adjacent.any?
-
-          { target: prioritized.first, vector: "front" }
+        def choose_target(...)
+          Decisions::Targeting.choose_target(...)
         end
 
-        def can_target_missile?(attacker, target, attack_type, all_combatants)
-          return false if in_melee_combat?(target, all_combatants)
-          return true if attack_type == "magic"
-
-          can_target_ranged?(attacker, target, all_combatants)
+        def can_target_missile?(...)
+          Decisions::Targeting.can_target_missile?(...)
         end
 
-        def can_target_ranged?(attacker, target, all_combatants)
-          abilities = Array(attacker[:targeting_abilities] || attacker[:abilities])
-          return false if !abilities.include?("skirmisher") && !Geometry::Battlefield.in_front_arc?(attacker, target, attacker[:facing])
-          return false if in_melee_combat?(target, all_combatants)
-
-          Geometry::Battlefield.line_of_sight_blockers(attacker, target, all_combatants).empty?
+        def can_target_ranged?(...)
+          Decisions::Targeting.can_target_ranged?(...)
         end
 
-        # Locked in combat = footprint contact with a living enemy (allies do not count).
-        def in_melee_combat?(unit, all_combatants)
-          all_combatants.any? do |entry|
-            next false if entry[:entity_id] == unit[:entity_id]
-            next false if entry[:current_health].to_i <= 0
-            next false if same_side?(unit, entry)
-
-            Geometry::Battlefield.distance_between_units(unit, entry) <= CONTACT
-          end
+        def in_melee_combat?(...)
+          Decisions::Targeting.in_melee_combat?(...)
         end
 
-        def same_side?(left, right)
-          return false if left[:side_index].nil? || right[:side_index].nil?
-
-          left[:side_index] == right[:side_index]
+        def same_side?(...)
+          Decisions::Targeting.same_side?(...)
         end
 
-        def melee_contact?(unit, all_combatants)
-          in_melee_combat?(unit, all_combatants)
+        def melee_contact?(...)
+          Decisions::Targeting.melee_contact?(...)
         end
 
         def melee_entries(attacker, defender, vector, round_number)
@@ -375,12 +330,12 @@ module Sim
           contributor[:experience_gain] += [ 1, damage ].max
         end
 
-        def vector_priority(vector)
-          { "rear" => 0, "flank" => 1 }.fetch(vector, 2)
+        def vector_priority(...)
+          Decisions::Targeting.vector_priority(...)
         end
 
-        def prioritize_routing(targets)
-          targets.sort_by { |entry| entry[:is_routing] ? 0 : 1 }
+        def prioritize_routing(...)
+          Decisions::Targeting.prioritize_routing(...)
         end
 
         def melee_charge(attacker, target, attack_type, vector)
