@@ -22,7 +22,8 @@ module Games
     end
 
     def inline?
-      mode = Rails.configuration.x.battle_jobs.execution_mode.to_sym
+      raw = Rails.configuration.x.battle_jobs&.execution_mode
+      mode = raw.respond_to?(:to_sym) ? raw.to_sym : :inline
       return true if mode == :inline
 
       adapter = ActiveJob::Base.queue_adapter
