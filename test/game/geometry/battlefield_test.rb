@@ -98,4 +98,21 @@ class SimGeometryBattlefieldTest < ActiveSupport::TestCase
     assert_in_delta 0.0, left[:y], 0.001
     assert_in_delta 270.0, left[:facing], 0.001
   end
+
+  test "intermediate wheel poses keep the pivot front corner fixed" do
+    unit = { x: 20.0, y: 12.0, facing: 0.0, base_width: 4.0, base_depth: 2.0 }
+    [ -60.0, 45.0, 90.0 ].each do |delta|
+      pivot = Sim::Geometry::Battlefield.wheel_pivot(unit, delta)
+      8.times do |index|
+        progress = (index + 1) / 8.0
+        pose = Sim::Geometry::Battlefield.wheel_pose(unit, delta * progress)
+        corners = Sim::Geometry::Battlefield.unit_corners(
+          pose.merge(base_width: unit[:base_width], base_depth: unit[:base_depth])
+        )
+        pivoted_corner = delta.negative? ? corners[0] : corners[1]
+        assert_in_delta pivot[:x], pivoted_corner[:x], 0.001, "delta=#{delta} t=#{progress}"
+        assert_in_delta pivot[:y], pivoted_corner[:y], 0.001, "delta=#{delta} t=#{progress}"
+      end
+    end
+  end
 end
