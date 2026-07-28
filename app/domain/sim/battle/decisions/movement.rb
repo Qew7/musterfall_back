@@ -27,7 +27,7 @@ module Sim
         end
 
         def melee_movers(combatants)
-          Roles.active(combatants).select { |entry| Roles.melee_primary?(entry) }
+          Roles.active(combatants).select { |entry| Roles.melee_primary?(entry) || flying?(entry) }
         end
 
         # Only enemies inside the attacker's front arc are valid assault targets.
