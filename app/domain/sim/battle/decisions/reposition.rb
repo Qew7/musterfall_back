@@ -23,7 +23,7 @@ module Sim
           end
         end
 
-        def build_intent(combatant:, acting_side:, target_side:, obstacles:, round_number:)
+        def build_intent(combatant:, acting_side:, target_side:, obstacles:, round_number:, terrain: [])
           allies = acting_side[:combatants]
           enemies = target_side[:combatants]
           all = allies + enemies
@@ -32,7 +32,7 @@ module Sim
 
           mode = primary_mode(combatant, enemies, all, round_number)
 
-          candidate_goals(combatant, allies, enemies, all, round_number, mode).each do |goal|
+          candidate_goals(combatant, allies, enemies, all, round_number, mode, terrain: terrain).each do |goal|
             plan = Pathing.plan_approach(
               origin: combatant,
               goal_point: goal,
@@ -40,7 +40,9 @@ module Sim
               obstacles: obstacles,
               contact_id: nil,
               goal_unit: nil,
-              bypass: false
+              bypass: false,
+              terrain: terrain,
+              flying: Decisions::Movement.flying?(combatant)
             )
             pose = plan[:pose]
             next unless pose && meaningful?(combatant, pose)
@@ -69,12 +71,12 @@ module Sim
           :hold
         end
 
-        def candidate_goals(combatant, _allies, enemies, all, round_number, mode)
+        def candidate_goals(combatant, _allies, enemies, all, round_number, mode, terrain: [])
           goals =
             case mode
             when :escape_charge then escape_charge_goals(combatant, enemies)
             when :leave_shot then leave_shot_goals(combatant, enemies)
-            when :open_los then open_los_goals(combatant, enemies, all)
+            when :open_los then open_los_goals(combatant, enemies, all, terrain: terrain)
             else []
             end
           goals.compact.first(MAX_PATH_ATTEMPTS)
@@ -123,7 +125,7 @@ module Sim
           end
         end
 
-        def open_los_goals(combatant, enemies, all)
+        def open_los_goals(combatant, enemies, all, terrain: [])
           target = best_potential_target(combatant, enemies, all)
           return [] unless target
 

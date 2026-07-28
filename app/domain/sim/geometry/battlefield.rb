@@ -23,6 +23,7 @@ module Sim
       extend Align
       extend Targeting
       extend Templates
+      extend Terrain
     end
   end
 end

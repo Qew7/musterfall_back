@@ -4,8 +4,14 @@ module Sim
       module_function
 
       # Phase order: start morale → movement → magic/shooting (planned after move) → melee.
-      def play(round_number:, acting_side:, target_side:, rng:)
-        context = { round_number: round_number, acting_side: acting_side, target_side: target_side, rng: rng }
+      def play(round_number:, acting_side:, target_side:, rng:, terrain: [])
+        context = {
+          round_number: round_number,
+          acting_side: acting_side,
+          target_side: target_side,
+          rng: rng,
+          terrain: terrain
+        }
         start_phase = Phases::Morale.play_start(**context)
         movement_phase = Phases::Movement.play(**context)
         missile_plan = Phases::Missile.plan(**context)

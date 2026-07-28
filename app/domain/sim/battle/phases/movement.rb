@@ -10,7 +10,7 @@ module Sim
 
         module_function
 
-        def play(acting_side:, target_side:, round_number: 1, **)
+        def play(acting_side:, target_side:, round_number: 1, terrain: [], **)
           phase = AttackResolution.create_phase("movement", "Фаза движения")
           mobile = Decisions::Movement.melee_movers(acting_side[:combatants])
           physical_movers = mobile.select { |entry| entry[:movement].to_f > 0.05 }
@@ -53,7 +53,7 @@ module Sim
           # Two-pass melee: front/contact claimers resolve first (per target, so units
           # charging different enemies act as obstacles for each other), then flank/rear
           # on the updated board (path around settled allies instead of through them).
-          entries = Decisions::Movement.plan_melee_entries(physical_movers, target_side[:combatants])
+          entries = Decisions::Movement.plan_melee_entries(physical_movers, target_side[:combatants], terrain: terrain)
           contact_entries = entries.select { |entry| Decisions::Movement.contact_wave?(entry) }
           flank_entries = entries - contact_entries
 
@@ -65,7 +65,8 @@ module Sim
               acting_side: acting_side,
               target_side: target_side,
               entries: group,
-              allow_ally_bypass: false
+              allow_ally_bypass: false,
+              terrain: terrain
             )
           end
           moved += run_melee_wave!(
@@ -73,14 +74,15 @@ module Sim
             acting_side: acting_side,
             target_side: target_side,
             entries: flank_entries,
-            allow_ally_bypass: true
+            allow_ally_bypass: true,
+            terrain: terrain
           )
 
           melee_ids = physical_movers.map { |entry| entry[:entity_id] }.to_set
           seeker_units = seekers.reject { |entry| melee_ids.include?(entry[:entity_id]) }
           seeker_ids = seeker_units.map { |entry| entry[:entity_id] }.to_set
           # After melee moved, every non-seeker is a hard obstacle (including allies who just advanced).
-          reposition_obstacles = movement_obstacles(acting_side, target_side, seeker_ids)
+          reposition_obstacles = movement_obstacles(acting_side, target_side, seeker_ids, terrain)
           reposition_intents = []
 
           seeker_units.sort_by { |entry| -entry[:initiative].to_i }.each do |combatant|
@@ -89,7 +91,8 @@ module Sim
               acting_side: acting_side,
               target_side: target_side,
               obstacles: reposition_obstacles,
-              round_number: round_number
+              round_number: round_number,
+              terrain: terrain
             )
             next unless intent
 
@@ -121,11 +124,11 @@ module Sim
           phase
         end
 
-        def run_melee_wave!(phase:, acting_side:, target_side:, entries:, allow_ally_bypass:)
+        def run_melee_wave!(phase:, acting_side:, target_side:, entries:, allow_ally_bypass:, terrain: [])
           return 0 if entries.empty?
 
           mover_ids = entries.map { |entry| entry[:combatant][:entity_id] }.to_set
-          obstacles = movement_obstacles(acting_side, target_side, mover_ids)
+          obstacles = movement_obstacles(acting_side, target_side, mover_ids, terrain)
           intents = []
 
           entries.each do |entry|
@@ -135,7 +138,9 @@ module Sim
               obstacles: obstacles,
               contact_slot: entry[:contact_slot],
               allow_ally_bypass: allow_ally_bypass,
-              approach_mode: entry[:approach_mode] || :direct
+              approach_mode: entry[:approach_mode] || :direct,
+              terrain: terrain,
+              chargeable: entry.fetch(:chargeable, true)
             )
             next unless intent
 
@@ -392,10 +397,11 @@ module Sim
         end
 
         # Enemies and non-moving allies only — co-movers are resolved together, not sequenced.
-        def movement_obstacles(acting_side, target_side, mover_ids)
+        # Impassable terrain is merged into the same obstacle list for Pathing bypass.
+        def movement_obstacles(acting_side, target_side, mover_ids, terrain = [])
           allies = Pathing.active_units(acting_side[:combatants]).reject { |entry| mover_ids.include?(entry[:entity_id]) }
           enemies = Pathing.active_units(target_side[:combatants])
-          (allies + enemies).map { |entry| freeze_obstacle(entry) }
+          Pathing.merge_obstacles((allies + enemies).map { |entry| freeze_obstacle(entry) }, terrain)
         end
 
         def freeze_obstacle(entry)
@@ -438,15 +444,17 @@ module Sim
           blocker = plan[:blocker]
           return "" unless blocker
 
+          blocker_label = Pathing.terrain_obstacle?(blocker) ? "местность (#{blocker[:name]})" : blocker[:name]
+
           if plan[:blocked_by_ally]
             ", путь закрыт союзником #{blocker[:name]}"
           elsif blocker_is_target?(plan, nearest)
             # Soft-stop / align on the charge target is not "обходит".
             plan[:truncated] ? ", выходит на контакт" : ""
           elsif plan[:avoided]
-            ", обходит #{blocker[:name]}"
+            ", обходит #{blocker_label}"
           elsif plan[:truncated]
-            ", путь преграждён #{blocker[:name]}"
+            ", путь преграждён #{blocker_label}"
           else
             ""
           end

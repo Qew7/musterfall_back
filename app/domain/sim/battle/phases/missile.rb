@@ -9,7 +9,7 @@ module Sim
           Decisions::MissileChoice.plan(**kwargs)
         end
 
-        def play_planned!(phase:, plan:, attack_type:, acting_side:, target_side:, round_number:, rng:)
+        def play_planned!(phase:, plan:, attack_type:, acting_side:, target_side:, round_number:, rng:, terrain: [])
           planned = Array(plan).select { |entry| entry[:attack_type] == attack_type }
           if planned.empty?
             AttackResolution.add_event(phase, "Подходящих атакующих нет.")
@@ -31,8 +31,10 @@ module Sim
             target = target_side[:combatants].find { |enemy| enemy[:entity_id] == entry[:target_id] }
             next unless target && target[:current_health].to_i > 0
 
-            unless Decisions::MissileChoice.valid_target?(actor, target, attack_type, all_combatants)
-              selection = Decisions::Targeting.choose_target(actor, target_side[:combatants], attack_type, all_combatants)
+            unless Decisions::MissileChoice.valid_target?(actor, target, attack_type, all_combatants, terrain: terrain)
+              selection = Decisions::Targeting.choose_target(
+                actor, target_side[:combatants], attack_type, all_combatants, terrain: terrain
+              )
               next unless selection
 
               target = selection[:target]
@@ -48,7 +50,8 @@ module Sim
               acting_side: acting_side,
               target_side: target_side,
               round_number: round_number,
-              rng: rng
+              rng: rng,
+              terrain: terrain
             )
           end
 

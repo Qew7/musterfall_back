@@ -5,12 +5,12 @@ module Sim
       module MissileChoice
         module_function
 
-        def plan(acting_side:, target_side:, round_number:, **)
+        def plan(acting_side:, target_side:, round_number:, terrain: [], **)
           all_combatants = acting_side[:combatants] + target_side[:combatants]
           actors = missile_actors(acting_side).sort_by { |actor| -actor[:initiative].to_i }
 
           actors.filter_map do |actor|
-            choice = choose_action(actor, target_side[:combatants], all_combatants, round_number)
+            choice = choose_action(actor, target_side[:combatants], all_combatants, round_number, terrain: terrain)
             next unless choice
 
             choice.merge(
@@ -24,28 +24,28 @@ module Sim
           end
         end
 
-        def choose_action(actor, enemies, all_combatants, round_number)
-          magic = best_option(actor, enemies, all_combatants, round_number, "magic")
-          shooting = best_option(actor, enemies, all_combatants, round_number, "shooting")
+        def choose_action(actor, enemies, all_combatants, round_number, terrain: [])
+          magic = best_option(actor, enemies, all_combatants, round_number, "magic", terrain: terrain)
+          shooting = best_option(actor, enemies, all_combatants, round_number, "shooting", terrain: terrain)
           return magic unless shooting
           return shooting unless magic
 
           magic[:expected] >= shooting[:expected] ? magic : shooting
         end
 
-        def has_missile_option?(actor, enemies, all_combatants, round_number)
-          !choose_action(actor, enemies, all_combatants, round_number).nil?
+        def has_missile_option?(actor, enemies, all_combatants, round_number, terrain: [])
+          !choose_action(actor, enemies, all_combatants, round_number, terrain: terrain).nil?
         end
 
-        def best_option(actor, enemies, all_combatants, round_number, attack_type)
+        def best_option(actor, enemies, all_combatants, round_number, attack_type, terrain: [])
           return nil unless Phases::AttackResolution.can_attack?(actor, attack_type)
 
-          selection = Targeting.choose_target(actor, enemies, attack_type, all_combatants)
+          selection = Targeting.choose_target(actor, enemies, attack_type, all_combatants, terrain: terrain)
           return nil unless selection
 
           target = selection[:target]
           vector = selection[:vector]
-          expected = expected_damage(actor, target, vector, round_number, attack_type, enemies)
+          expected = expected_damage(actor, target, vector, round_number, attack_type, enemies, terrain: terrain)
           return nil if expected <= 0
 
           {
@@ -56,7 +56,7 @@ module Sim
           }
         end
 
-        def expected_damage(actor, target, vector, round_number, attack_type, enemies)
+        def expected_damage(actor, target, vector, round_number, attack_type, enemies, terrain: [])
           shooting_rule = Rules.for(:shooting).find_applicable(actor, attack_type)
           if shooting_rule&.respond_to?(:expected_damage)
             return shooting_rule.expected_damage(actor, target, vector, round_number, attack_type, enemies)
@@ -77,7 +77,7 @@ module Sim
                   damage_fn: Phases::AttackResolution.method(:damage)
                 )
               else
-                chance = Phases::AttackResolution.hit_chance(actor, entry, "shooting")
+                chance = Phases::AttackResolution.hit_chance(actor, entry, "shooting", terrain: terrain)
                 chance * Phases::AttackResolution.damage(actor, entry, "shooting", vector, round_number) * strikes
               end
 
@@ -125,10 +125,10 @@ module Sim
           )
         end
 
-        def valid_target?(actor, target, attack_type, all_combatants)
+        def valid_target?(actor, target, attack_type, all_combatants, terrain: [])
           return false if target[:current_health].to_i <= 0
 
-          Targeting.can_target_missile?(actor, target, attack_type, all_combatants)
+          Targeting.can_target_missile?(actor, target, attack_type, all_combatants, terrain: terrain)
         end
 
         # Host has no legal cast/shot from current pose (any ranged contributor).

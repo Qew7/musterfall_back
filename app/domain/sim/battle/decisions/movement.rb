@@ -18,6 +18,10 @@ module Sim
           Array(combatant[:abilities]).include?("flying")
         end
 
+        def can_charge?(attacker, defender, terrain = [])
+          Geometry::Battlefield.can_charge_through_terrain?(attacker, defender, terrain)
+        end
+
         def planner_for(combatant)
           Rules.planner_for_movement(combatant)
         end
@@ -33,8 +37,13 @@ module Sim
           end
         end
 
-        def nearest_enemy(combatant, enemies)
-          candidates = enemies_in_front_arc(combatant, enemies)
+        def chargeable_enemies(combatant, enemies, terrain = [])
+          enemies_in_front_arc(combatant, enemies).select { |entry| can_charge?(combatant, entry, terrain) }
+        end
+
+        def nearest_enemy(combatant, enemies, terrain: [])
+          candidates = chargeable_enemies(combatant, enemies, terrain)
+          candidates = enemies_in_front_arc(combatant, enemies) if candidates.empty?
           return nil if candidates.empty?
 
           candidates.min_by { |entry| [ entry[:is_routing] ? 0 : 1, Geometry::Battlefield.distance_between_units(combatant, entry) ] }
@@ -66,23 +75,24 @@ module Sim
         end
 
         # Dispatch ground vs flying planners; shared claimed sides across both.
-        def plan_melee_entries(movers, enemies)
+        def plan_melee_entries(movers, enemies, terrain: [])
           living = Pathing.active_units(enemies)
           claimed = Hash.new { |hash, key| hash[key] = {} }
           flyers, grounders = movers.partition { |combatant| flying?(combatant) }
 
-          Rules::Flying::Movement.plan_entries(flyers, living, claimed) +
-            Rules::Ground::Movement.plan_entries(grounders, living, claimed)
+          Rules::Flying::Movement.plan_entries(flyers, living, claimed, terrain: terrain) +
+            Rules::Ground::Movement.plan_entries(grounders, living, claimed, terrain: terrain)
         end
 
-        def build_entry(combatant, enemy, side, approach_mode)
+        def build_entry(combatant, enemy, side, approach_mode, chargeable: true)
           {
             combatant: combatant,
             nearest: enemy,
             distance: Geometry::Battlefield.distance_between_units(combatant, enemy),
             vector: Geometry::Battlefield.classify_attack_vector(combatant, enemy),
             contact_slot: side,
-            approach_mode: approach_mode
+            approach_mode: approach_mode,
+            chargeable: chargeable
           }
         end
 
@@ -94,14 +104,16 @@ module Sim
             approach_mode == :flyer_approach
         end
 
-        def build_approach_intent(combatant:, nearest:, obstacles:, contact_slot: nil, allow_ally_bypass: false, approach_mode: :direct)
+        def build_approach_intent(combatant:, nearest:, obstacles:, contact_slot: nil, allow_ally_bypass: false, approach_mode: :direct, terrain: [], chargeable: true)
           planner_for(combatant).build_approach_intent(
             combatant: combatant,
             nearest: nearest,
             obstacles: obstacles,
             contact_slot: contact_slot,
             allow_ally_bypass: allow_ally_bypass,
-            approach_mode: approach_mode
+            approach_mode: approach_mode,
+            terrain: terrain,
+            chargeable: chargeable
           )
         end
 
@@ -113,17 +125,19 @@ module Sim
           return false if orbit_mode?(entry[:approach_mode])
           return false if entry[:contact_slot] == "rear" || entry[:contact_slot] == "flank"
           return false if entry[:vector] == "flank" || entry[:vector] == "rear"
+          return false if entry[:chargeable] == false
           return true if entry[:distance] <= ENGAGE + entry[:combatant][:movement].to_f * 0.35
           return true if entry[:contact_slot] == "front"
 
           false
         end
 
-        def corner_contact_reachable?(origin, defender, budget)
+        def corner_contact_reachable?(origin, defender, budget, terrain: [])
           return false unless defender
           return true if engaged?(origin, defender)
+          return false unless can_charge?(origin, defender, terrain)
 
-          planner_for(origin).corner_contact_reachable?(origin, defender, budget)
+          planner_for(origin).corner_contact_reachable?(origin, defender, budget, terrain: terrain)
         end
       end
     end

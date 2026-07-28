@@ -4,12 +4,13 @@ module Sim
       module Magic
         module_function
 
-        def play(acting_side:, target_side:, round_number:, rng:, missile_plan: nil, **)
+        def play(acting_side:, target_side:, round_number:, rng:, missile_plan: nil, terrain: [], **)
           phase = AttackResolution.create_phase("magic", "Фаза магии")
           plan = missile_plan || Missile.plan(
             acting_side: acting_side,
             target_side: target_side,
-            round_number: round_number
+            round_number: round_number,
+            terrain: terrain
           )
           Missile.play_planned!(
             phase: phase,
@@ -18,9 +19,17 @@ module Sim
             acting_side: acting_side,
             target_side: target_side,
             round_number: round_number,
-            rng: rng
+            rng: rng,
+            terrain: terrain
           )
-          Morale.resolve_post_missile!(phase: phase, acting_side: acting_side, target_side: target_side, round_number: round_number, attack_type: "magic")
+          Morale.resolve_post_missile!(
+            phase: phase,
+            acting_side: acting_side,
+            target_side: target_side,
+            round_number: round_number,
+            attack_type: "magic",
+            terrain: terrain
+          )
         end
       end
     end

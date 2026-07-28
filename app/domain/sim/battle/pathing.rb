@@ -10,11 +10,17 @@ module Sim
 
       module_function
 
+      # Units + impassable terrain OBBs for collision / bypass.
+      def merge_obstacles(unit_obstacles, terrain = [])
+        Array(unit_obstacles) + Geometry::Battlefield.impassable_obstacles(terrain)
+      end
+
       # Wheel + march toward a goal.
       # Enemy blockers: always eligible for bypass. Ally blockers: only when allow_ally_bypass
       # (flank/rear geometry or a small footprint) — otherwise hold the column, no orbit.
       # Set bypass: false for cheap reposition probes (direct line only).
-      def plan_approach(origin:, goal_point:, budget:, obstacles:, contact_id: nil, goal_unit: nil, bypass: true, allow_ally_bypass: false, approach_mode: :direct)
+      # terrain: map features (difficult cost ×2 for ground; impassable should already be in obstacles).
+      def plan_approach(origin:, goal_point:, budget:, obstacles:, contact_id: nil, goal_unit: nil, bypass: true, allow_ally_bypass: false, approach_mode: :direct, terrain: [], flying: false)
         direct_heading = Geometry::Battlefield.heading_to(origin, goal_point)
         direct = simulate_approach(
           origin: origin,
@@ -23,7 +29,9 @@ module Sim
           goal_point: goal_point,
           goal_unit: goal_unit,
           obstacles: obstacles,
-          contact_id: contact_id
+          contact_id: contact_id,
+          terrain: terrain,
+          flying: flying
         )
         base = direct.merge(avoided: false, heading: direct_heading, blocked_by_ally: false)
         return base unless bypass
@@ -43,7 +51,9 @@ module Sim
             goal_point: goal_point,
             goal_unit: goal_unit,
             obstacles: obstacles,
-            contact_id: contact_id
+            contact_id: contact_id,
+            terrain: terrain,
+            flying: flying
           )
           next unless plan[:pose]
           next if ally_blocked && ally_blocker?(origin, plan[:blocker]) && !meaningful_progress?(origin, plan[:pose])
@@ -61,7 +71,9 @@ module Sim
               goal_point: point,
               goal_unit: nil,
               obstacles: obstacles,
-              contact_id: nil
+              contact_id: nil,
+              terrain: terrain,
+              flying: flying
             )
             next unless plan[:pose]
 
@@ -79,7 +91,9 @@ module Sim
               goal_point: point,
               goal_unit: goal_unit,
               obstacles: obstacles,
-              contact_id: contact_id
+              contact_id: contact_id,
+              terrain: terrain,
+              flying: flying
             )
             next unless plan[:pose]
 
@@ -217,13 +231,17 @@ module Sim
         end
       end
 
+      def terrain_obstacle?(entry)
+        entry && (entry[:obstacle_kind] == :terrain || entry[:obstacle_kind] == "terrain")
+      end
+
       def rough_footprint_radius(unit)
         hw = (unit[:base_width] || unit[:width] || 1).to_f * 0.5
         hd = (unit[:base_depth] || unit[:depth] || 1).to_f * 0.5
         Math.hypot(hw, hd)
       end
 
-      def simulate_approach(origin:, heading:, budget:, goal_point:, goal_unit:, obstacles:, contact_id:)
+      def simulate_approach(origin:, heading:, budget:, goal_point:, goal_unit:, obstacles:, contact_id:, terrain: [], flying: false)
         wheeled_plan = simulate_wheeled_approach(
           origin: origin,
           heading: heading,
@@ -231,7 +249,9 @@ module Sim
           goal_point: goal_point,
           goal_unit: goal_unit,
           obstacles: obstacles,
-          contact_id: contact_id
+          contact_id: contact_id,
+          terrain: terrain,
+          flying: flying
         )
         return wheeled_plan if meaningful_progress?(origin, wheeled_plan[:pose])
 
@@ -243,23 +263,31 @@ module Sim
           goal_point: goal_point,
           goal_unit: goal_unit,
           obstacles: obstacles,
-          contact_id: contact_id
+          contact_id: contact_id,
+          terrain: terrain,
+          flying: flying
         )
         return straight_plan if meaningful_progress?(origin, straight_plan[:pose])
 
         wheeled_plan[:pose] ? wheeled_plan : straight_plan
       end
 
-      def simulate_wheeled_approach(origin:, heading:, budget:, goal_point:, goal_unit:, obstacles:, contact_id:)
+      def simulate_wheeled_approach(origin:, heading:, budget:, goal_point:, goal_unit:, obstacles:, contact_id:, terrain: [], flying: false)
         wheel = Geometry::Battlefield.apply_wheel(origin, heading, budget)
         wheeled = origin.merge(x: wheel[:x], y: wheel[:y], facing: wheel[:facing])
         remaining = wheel[:remaining]
         desired = approach_desired(wheeled, remaining, wheel, goal_point, goal_unit, contact_id, heading)
-        clearance = furthest_clear_pose(origin, wheel, desired, obstacles, contact_id: contact_id)
+        clearance = furthest_clear_pose(
+          origin, wheel, desired, obstacles,
+          contact_id: contact_id,
+          budget: budget,
+          terrain: terrain,
+          flying: flying
+        )
         clearance.merge(wheel: wheel, desired: desired)
       end
 
-      def simulate_straight_march(origin:, budget:, goal_point:, goal_unit:, obstacles:, contact_id:)
+      def simulate_straight_march(origin:, budget:, goal_point:, goal_unit:, obstacles:, contact_id:, terrain: [], flying: false)
         idle_wheel = {
           x: origin[:x].to_f,
           y: origin[:y].to_f,
@@ -270,7 +298,13 @@ module Sim
           delta: 0.0
         }
         desired = approach_desired(origin, budget.to_f, idle_wheel, goal_point, goal_unit, contact_id, origin[:facing])
-        clearance = furthest_clear_pose(origin, idle_wheel, desired, obstacles, contact_id: contact_id)
+        clearance = furthest_clear_pose(
+          origin, idle_wheel, desired, obstacles,
+          contact_id: contact_id,
+          budget: budget,
+          terrain: terrain,
+          flying: flying
+        )
         clearance.merge(wheel: idle_wheel, desired: desired)
       end
 
@@ -335,7 +369,7 @@ module Sim
         { pose: last_clear, desired: desired, truncated: truncated, blocker: blocker, wheel: nil }
       end
 
-      def furthest_clear_pose(origin, wheel, destination, obstacles, contact_id:)
+      def furthest_clear_pose(origin, wheel, destination, obstacles, contact_id:, budget: nil, terrain: [], flying: false)
         samples = []
         if wheel[:delta].to_f.abs > 0.05
           steps = [ [ 8, (wheel[:delta].abs / 10).ceil ].max, 20 ].min
@@ -370,7 +404,18 @@ module Sim
 
         last_clear = nil
         blocker = nil
+        cost_spent = 0.0
+        prev = origin.merge(x: origin[:x].to_f, y: origin[:y].to_f, facing: origin[:facing].to_f)
+        budget_limit = budget.nil? ? nil : budget.to_f + 0.05
+
         samples.each do |pose|
+          segment = Geometry::Battlefield.distance_between(prev, pose)
+          multiplier = Geometry::Battlefield.move_cost_multiplier_at(pose, terrain, flying: flying)
+          cost_spent += segment * multiplier
+          if budget_limit && cost_spent > budget_limit
+            break
+          end
+
           hit = first_blocker(pose, obstacles, contact_id: contact_id, origin: origin)
           if hit
             blocker = hit
@@ -378,6 +423,7 @@ module Sim
           end
 
           last_clear = pose
+          prev = pose
         end
 
         truncated = !blocker.nil? || (
@@ -385,7 +431,12 @@ module Sim
             Geometry::Battlefield.distance_between(last_clear, destination) > 0.05 ||
             Geometry::Battlefield.shortest_facing_delta(last_clear[:facing], destination[:facing]).abs > 0.05
           )
-        )
+        ) || (budget_limit && last_clear.nil? && samples.any?)
+
+        # Budget exhausted mid-path without a unit/terrain blocker still counts as truncated.
+        if budget_limit && last_clear && Geometry::Battlefield.distance_between(last_clear, destination) > 0.05
+          truncated = true
+        end
 
         { pose: last_clear, truncated: !!truncated, blocker: blocker }
       end
@@ -400,6 +451,7 @@ module Sim
 
       def ally_blocker?(origin, blocker)
         return false unless blocker
+        return false if terrain_obstacle?(blocker)
 
         !origin[:side_index].nil? && origin[:side_index] == blocker[:side_index]
       end

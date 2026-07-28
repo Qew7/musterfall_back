@@ -9,11 +9,13 @@ class SimulateBattleJob < ApplicationJob
     matchup.update!(status: "running", error_message: nil)
 
     catalog = Sim::Catalog::Loader.load
+    map_seed = Sim::Battle::TerrainMap.map_seed(rng_seed: matchup.game.rng_seed, round: matchup.campaign_round)
     result = Sim::Battle::Simulator.call(
       matchup.attacker_player,
       matchup.defender_player,
       catalog,
-      rng: Sim::Rng::Seeded.new(matchup.seed)
+      rng: Sim::Rng::Seeded.new(matchup.seed),
+      map_seed: map_seed
     )
 
     matchup.update!(

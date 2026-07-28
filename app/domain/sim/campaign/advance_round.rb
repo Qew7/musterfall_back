@@ -18,11 +18,13 @@ module Sim
 
         payload = planned.value
         battles = payload[:matchups].map do |matchup|
+          map_seed = Battle::TerrainMap.map_seed(rng_seed: seed, round: payload[:campaign].round)
           Battle::Simulator.call(
             matchup[:attacker],
             matchup[:defender],
             @catalog,
-            rng: Rng::Seeded.new(matchup[:seed])
+            rng: Rng::Seeded.new(matchup[:seed]),
+            map_seed: map_seed
           )
         end
 
