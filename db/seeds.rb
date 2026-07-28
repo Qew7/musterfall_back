@@ -36,7 +36,8 @@ end
 
 def default_movement_for(attributes)
   abilities = normalized_abilities_for(attributes)
-  return 5 if attributes.fetch(:mounted) || abilities.include?("fast") || abilities.include?("flying")
+  return 20 if abilities.include?("flying")
+  return 7 if attributes.fetch(:mounted) || abilities.include?("fast")
   return 2 if abilities.include?("machine")
   return 4 if abilities.include?("charge") || abilities.include?("skirmisher")
 
