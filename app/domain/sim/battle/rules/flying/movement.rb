@@ -162,7 +162,8 @@ module Sim
                 facing: candidate[:facing],
                 budget: budget,
                 obstacles: obstacles,
-                contact_id: nearest[:entity_id]
+                contact_id: nearest[:entity_id],
+                face_target: nearest
               )
               next unless plan && plan[:pose]
 
@@ -206,7 +207,8 @@ module Sim
                 facing: facing,
                 budget: budget,
                 obstacles: obstacles,
-                contact_id: nil
+                contact_id: nil,
+                face_target: nearest
               )
               next unless plan && plan[:pose]
 
@@ -262,7 +264,8 @@ module Sim
                 facing: facing,
                 budget: budget,
                 obstacles: obstacles,
-                contact_id: nil
+                contact_id: nil,
+                face_target: nearest
               )
               next unless plan && plan[:pose]
 
@@ -405,7 +408,7 @@ module Sim
           end
 
           # Leap anywhere in the MV disk; path is not collision-tested. Final pose must be clear.
-          def plan_flyer_leap(origin:, goal_point:, facing:, budget:, obstacles:, contact_id: nil)
+          def plan_flyer_leap(origin:, goal_point:, facing:, budget:, obstacles:, contact_id: nil, face_target: nil)
             return nil if budget.to_f <= 0.05
 
             desired_facing = Geometry::Battlefield.normalize_facing(facing)
@@ -429,9 +432,12 @@ module Sim
             return nil unless pose
             return nil unless flyer_landing_clear?(pose, obstacles, contact_id: contact_id)
 
+            pose = landing_facing_toward(pose, face_target) if face_target
+            landing_facing = pose[:facing]
+
             meaningful =
               Geometry::Battlefield.distance_between(origin, pose) > 0.05 ||
-              Geometry::Battlefield.shortest_facing_delta(origin[:facing], pose[:facing]).abs > 0.05
+              Geometry::Battlefield.shortest_facing_delta(origin[:facing], landing_facing).abs > 0.05
             return nil unless meaningful
 
             {
@@ -443,8 +449,12 @@ module Sim
               blocker: nil,
               leap: true,
               wheel: nil,
-              heading: desired_facing
+              heading: landing_facing
             }
+          end
+
+          def landing_facing_toward(pose, target)
+            pose.merge(facing: Geometry::Battlefield.heading_to(pose, target))
           end
 
           def flyer_landing_clear?(pose, obstacles, contact_id: nil)
@@ -475,7 +485,8 @@ module Sim
               facing: Geometry::Battlefield.heading_to(origin, defender),
               budget: budget.to_f,
               obstacles: [ defender ],
-              contact_id: defender[:entity_id]
+              contact_id: defender[:entity_id],
+              face_target: defender
             )
             pose = plan && plan[:pose]
             return false unless pose

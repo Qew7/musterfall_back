@@ -14,7 +14,11 @@ Rails.application.routes.draw do
       post :prepare_round
       post :advance_round
     end
-    resources :battles, only: :create, controller: "api/battles", path: "battles"
+    resources :battles, only: :create, controller: "api/battles", path: "battles" do
+      collection do
+        post :replay
+      end
+    end
     resources :round_snapshots, only: :create, controller: "api/round_snapshots", path: "round_snapshots"
   end
 end

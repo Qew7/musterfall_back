@@ -2,6 +2,8 @@ module Api
   class BattlesController < ApplicationController
     include BattlePersistence
 
+    before_action :ensure_replay_enabled!, only: :replay
+
     def create
       game = Game.find(params[:game_id])
       battle = nil
@@ -13,7 +15,31 @@ module Api
       render json: serialize_battle(battle.reload), status: :created
     end
 
+    def replay
+      game = Game.find(params[:game_id])
+      result = Games::ReplayBattle.call(
+        game: game,
+        matchup_id: replay_params[:matchup_id],
+        round_number: replay_params[:round_number],
+        left_player_id: replay_params[:left_player_id],
+        right_player_id: replay_params[:right_player_id]
+      )
+      return render json: { error: result.error }, status: :unprocessable_entity if result.failure?
+
+      render json: result.value
+    end
+
     private
+
+    def ensure_replay_enabled!
+      return if Rails.env.development? || Rails.env.test?
+
+      render json: { error: "battle replay is only available in development" }, status: :not_found
+    end
+
+    def replay_params
+      params.permit(:matchup_id, :round_number, :left_player_id, :right_player_id).to_h.symbolize_keys
+    end
 
     def battle_params
       params.require(:battle).permit(*battle_attribute_schema)

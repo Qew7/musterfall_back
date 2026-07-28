@@ -49,7 +49,9 @@ module Games
         return Sim::Result.failure(finished.find(&:failed?).error_message || "battle simulation failed")
       end
 
-      battles = finished.map(&:battle_result)
+      battles = finished.map do |matchup|
+        matchup.battle_result.merge(matchup_id: matchup.id, seed: matchup.seed)
+      end
 
       # 3) Settle campaign + persist reports.
       ActiveRecord::Base.transaction do
