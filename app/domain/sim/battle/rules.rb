@@ -35,7 +35,7 @@ module Sim
         },
         setup: -> { [ BannerAura::Setup, SteadfastAura::Setup ] },
         round: -> { [ Undead::Round ] },
-        movement: -> { [ Flying::Movement ] }
+        movement: -> { [ March::Movement, Flying::Movement ] }
       }.freeze
 
       def for(phase)
@@ -146,6 +146,26 @@ module Sim
             events.concat(Array(rule.apply_passives!(side)))
           end
           events
+        end
+
+        def movement_budget(combatant, ctx = {})
+          base = combatant[:movement].to_f
+          multiplier = @rules.reduce(1.0) do |acc, rule|
+            next acc unless rule.respond_to?(:movement_multiplier)
+
+            acc * rule.movement_multiplier(combatant, ctx).to_f
+          end
+          base * multiplier
+        end
+
+        def movement_budget_meta(combatant, ctx = {})
+          meta = {}
+          @rules.each do |rule|
+            next unless rule.respond_to?(:movement_budget_meta)
+
+            meta.merge!(rule.movement_budget_meta(combatant, ctx))
+          end
+          meta
         end
       end
     end

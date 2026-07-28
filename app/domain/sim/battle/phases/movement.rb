@@ -54,7 +54,7 @@ module Sim
           # charging different enemies act as obstacles for each other), then flank/rear
           # on the updated board (path around settled allies instead of through them).
           entries = Decisions::Movement.plan_melee_entries(physical_movers, target_side[:combatants], terrain: terrain)
-          contact_entries = entries.select { |entry| Decisions::Movement.contact_wave?(entry) }
+          contact_entries = entries.select { |entry| Decisions::Movement.contact_wave?(entry, enemies: target_side[:combatants]) }
           flank_entries = entries - contact_entries
 
           # Front claimers that share a target resolve simultaneously; different targets
@@ -136,6 +136,7 @@ module Sim
               combatant: entry[:combatant],
               nearest: entry[:nearest],
               obstacles: obstacles,
+              enemies: target_side[:combatants],
               contact_slot: entry[:contact_slot],
               allow_ally_bypass: allow_ally_bypass,
               approach_mode: entry[:approach_mode] || :direct,
@@ -379,6 +380,7 @@ module Sim
             if intent[:approach_mode]
               maneuver = maneuver.merge(approach_mode: intent[:approach_mode].to_s)
             end
+            maneuver = maneuver.merge(intent[:march_meta]) if intent[:march_meta].present?
             push_move!(
               phase,
               acting_side,
@@ -593,6 +595,11 @@ module Sim
             end
             if maneuver[:mv_budget]
               lines << "MV budget=#{format("%.2f", maneuver[:mv_budget].to_f)} wheel=#{format("%.2f", maneuver[:mv_spent_wheel].to_f)} march=#{format("%.2f", maneuver[:mv_spent_march].to_f)} dir=#{maneuver[:wheel_direction] || "-"}"
+            end
+            if maneuver[:march] == "active"
+              lines << "march=active clearance=#{format("%.1f", maneuver[:march_clearance].to_f)} multiplier=#{format("%.1f", maneuver[:march_multiplier].to_f)}"
+            elsif maneuver[:march] == "blocked"
+              lines << "march=blocked clearance=#{format("%.1f", maneuver[:march_clearance].to_f)} blocker=#{maneuver[:march_blocker_name]}(#{maneuver[:march_blocker_id]}) dist=#{format("%.2f", maneuver[:march_blocker_dist].to_f)}"
             end
           end
 

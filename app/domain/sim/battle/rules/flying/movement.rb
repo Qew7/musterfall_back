@@ -130,7 +130,7 @@ module Sim
             end
           end
 
-          def build_approach_intent(combatant:, nearest:, obstacles:, contact_slot: nil, allow_ally_bypass: false, approach_mode: :flyer_charge, terrain: [], chargeable: true)
+          def build_approach_intent(combatant:, nearest:, obstacles:, enemies: [], contact_slot: nil, allow_ally_bypass: false, approach_mode: :flyer_charge, terrain: [], chargeable: true)
             return nil unless nearest
             return nil if Decisions::Movement.engaged?(combatant, nearest)
 

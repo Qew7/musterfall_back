@@ -27,7 +27,7 @@ module Sim
           allies = acting_side[:combatants]
           enemies = target_side[:combatants]
           all = allies + enemies
-          budget = combatant[:movement].to_f
+          budget = Decisions::Movement.budget_for(combatant, enemies: enemies)
           return nil if budget <= 0.05
 
           mode = primary_mode(combatant, enemies, all, round_number)
@@ -55,7 +55,7 @@ module Sim
             next unless improves?(combatant, candidate, allies, enemies, all, mode)
 
             # First improving pose for the primary need is enough — no combinatorial search.
-            return intent_for(combatant, candidate, plan, budget, enemies, all)
+            return intent_for(combatant, candidate, plan, budget, enemies, all, march_meta: Decisions::Movement.budget_meta(combatant, enemies: enemies))
           end
 
           return nil if mode == :escape_charge
@@ -87,7 +87,7 @@ module Sim
           return [] if threats.empty?
 
           away = heading_away_from(combatant, threats)
-          step = combatant[:movement].to_f
+          step = Decisions::Movement.budget_for(combatant, enemies: threats)
           # Pure retreat often stays inside a 120° front arc; oblique headings exit range/arc cheaper.
           [ away, away + 45, away - 45, away + 30, away - 30 ].map do |heading|
             vector = Geometry::Battlefield.facing_vector(heading)
@@ -107,7 +107,7 @@ module Sim
 
           right = Geometry::Battlefield.right_vector(shooter[:facing])
           forward = Geometry::Battlefield.facing_vector(shooter[:facing])
-          step = combatant[:movement].to_f
+          step = Decisions::Movement.budget_for(combatant, enemies: [ shooter ])
           # Exit the shooter's front arc: lateral + slight forward/back so angle clears 60°.
           [ 1, -1 ].flat_map do |sign|
             [
@@ -131,7 +131,7 @@ module Sim
 
           heading = Geometry::Battlefield.heading_to(combatant, target)
           right = Geometry::Battlefield.right_vector(heading)
-          step = [ combatant[:movement].to_f * 0.55, 2.5 ].min
+          step = [ Decisions::Movement.budget_for(combatant, enemies: enemies) * 0.55, 2.5 ].min
           # Oblique goals: clear the blocker while ending roughly facing the target.
           [ 1, -1 ].flat_map do |sign|
             [ 0.6, 1.0 ].map do |scale|
@@ -159,7 +159,7 @@ module Sim
           candidate = apply_pose(combatant, wheeled[:pose])
           return nil unless improves?(combatant, candidate, allies, enemies, all, :hold)
 
-          intent_for(combatant, candidate, wheeled[:plan], budget, enemies, all)
+          intent_for(combatant, candidate, wheeled[:plan], budget, enemies, all, march_meta: Decisions::Movement.budget_meta(combatant, enemies: enemies))
         end
 
         def face_if_clear(origin, candidate, plan, budget, enemies, all, obstacles)
@@ -260,13 +260,14 @@ module Sim
           }
         end
 
-        def intent_for(combatant, candidate, plan, budget, enemies, all)
+        def intent_for(combatant, candidate, plan, budget, enemies, all, march_meta: {})
           target = best_potential_target(candidate, enemies, all)
           {
             kind: "reposition",
             combatant: combatant,
             plan: plan,
             budget: budget,
+            march_meta: march_meta,
             destination: { x: candidate[:x], y: candidate[:y], facing: candidate[:facing] },
             wait: false,
             nearest: target

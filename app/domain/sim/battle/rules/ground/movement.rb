@@ -116,7 +116,8 @@ module Sim
           def choose_setup_flank_or_rear(combatant, enemies, claimed, terrain = [])
             return nil if Decisions::Movement.engaged_with_any?(combatant, enemies)
 
-            range = combatant[:movement].to_f * Decisions::Movement::SETUP_RANGE_MV
+            budget = Decisions::Movement.budget_for(combatant, enemies: enemies)
+            range = budget * Decisions::Movement::SETUP_RANGE_MV
             return nil if range <= 0.05
 
             candidates = Pathing.active_units(enemies).select do |enemy|
@@ -149,12 +150,13 @@ module Sim
             nil
           end
 
-          def build_approach_intent(combatant:, nearest:, obstacles:, contact_slot: nil, allow_ally_bypass: false, approach_mode: :direct, terrain: [], chargeable: true)
+          def build_approach_intent(combatant:, nearest:, obstacles:, enemies: [], contact_slot: nil, allow_ally_bypass: false, approach_mode: :direct, terrain: [], chargeable: true)
             return nil unless nearest
             return nil if Decisions::Movement.engaged?(combatant, nearest)
             return nil unless Geometry::Battlefield.in_front_arc?(combatant, nearest, combatant[:facing]) || Decisions::Movement.orbit_mode?(approach_mode)
 
-            budget = combatant[:movement].to_f
+            budget = Decisions::Movement.budget_for(combatant, enemies: enemies)
+            march_meta = Decisions::Movement.budget_meta(combatant, enemies: enemies)
             goal_point = approach_goal_point(combatant, nearest, contact_slot: contact_slot, approach_mode: approach_mode)
             # Forest-hidden: march in without soft-contact until sharing the same forest.
             contact_id = chargeable ? nearest[:entity_id] : nil
@@ -184,6 +186,7 @@ module Sim
                 nearest: nearest,
                 plan: plan,
                 budget: budget,
+                march_meta: march_meta,
                 destination: nil,
                 wait: true,
                 contact_slot: contact_slot,
@@ -198,6 +201,7 @@ module Sim
               nearest: nearest,
               plan: plan,
               budget: budget,
+              march_meta: march_meta,
               destination: destination,
               wait: false,
               contact_slot: contact_slot,

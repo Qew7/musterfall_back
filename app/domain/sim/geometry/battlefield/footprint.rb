@@ -81,6 +81,19 @@ module Sim
           corners.each_with_index.map { |corner, index| [ corner, corners[(index + 1) % corners.length] ] }
         end
 
+        def nearest_enemy_within_tray_clearance(unit, enemies, clearance:)
+          Array(enemies).each_with_object([]) do |enemy, matches|
+            next if enemy[:current_health].to_i <= 0
+
+            distance = distance_between_units(unit, enemy)
+            matches << [ distance, enemy ] if distance <= clearance.to_f
+          end.min_by(&:first)&.last
+        end
+
+        def tray_clear_of_enemies?(unit, enemies, clearance:)
+          nearest_enemy_within_tray_clearance(unit, enemies, clearance: clearance).nil?
+        end
+
         def distance_between_units(left, right)
           return 0 if rectangles_overlap?(left, right)
 

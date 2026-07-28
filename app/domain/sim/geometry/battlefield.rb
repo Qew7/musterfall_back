@@ -12,7 +12,9 @@ module Sim
         contact_snap: 0.05,
         blast_radius: 1.6,
         volley_radius: 1.4,
-        breath_length: 8.0
+        breath_length: 8.0,
+        march_clearance_inches: 8.0,
+        march_multiplier: 2.0
       }.freeze
 
       extend Core

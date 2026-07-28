@@ -87,11 +87,12 @@ class SimBattleMovementWheelTest < ActiveSupport::TestCase
 
     acting_side = { player_id: "p1", combatants: [ actor ] }
     target_side = { player_id: "p2", combatants: [ enemy ] }
+    march_budget = Sim::Battle::Decisions::Movement.budget_for(actor, enemies: [ enemy ])
 
     Sim::Battle::Phases::Movement.play(acting_side: acting_side, target_side: target_side)
 
     assert_in_delta 0, actor[:facing], 0.001
-    assert_in_delta 11.0, actor[:x], 0.05
+    assert_in_delta 8.0 + march_budget, actor[:x], 0.05
   end
 
   test "right-side row advance keeps facing and does not remirror to 0" do
