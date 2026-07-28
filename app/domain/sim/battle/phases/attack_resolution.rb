@@ -14,7 +14,7 @@ module Sim
           phase[:events] << event
         end
 
-        def resolve!(phase:, acting_side:, target_side:, round_number:, attack_type:, rng:)
+        def resolve!(phase:, acting_side:, target_side:, round_number:, attack_type:, rng:, terrain: [])
           all_combatants = acting_side[:combatants] + target_side[:combatants]
           attackers = acting_side[:combatants]
             .select { |entry| entry[:current_health].to_i > 0 }
@@ -34,7 +34,9 @@ module Sim
               next
             end
 
-            selection = Decisions::Targeting.choose_target(attacker, target_side[:combatants], attack_type, all_combatants)
+            selection = Decisions::Targeting.choose_target(
+              attacker, target_side[:combatants], attack_type, all_combatants, terrain: terrain
+            )
             next unless selection
 
             target = selection[:target]
@@ -47,7 +49,8 @@ module Sim
               acting_side: acting_side,
               target_side: target_side,
               round_number: round_number,
-              rng: rng
+              rng: rng,
+              terrain: terrain
             )
           end
 
@@ -56,10 +59,14 @@ module Sim
           phase
         end
 
-        def resolve_missile_strike!(phase:, actor:, target:, vector:, attack_type:, acting_side:, target_side:, round_number:, rng:)
+        def resolve_missile_strike!(phase:, actor:, target:, vector:, attack_type:, acting_side:, target_side:, round_number:, rng:, terrain: [])
           all_combatants = acting_side[:combatants] + target_side[:combatants]
           profile = attack_type == "magic" ? SpellCasting.profile(actor) : actor
-          blockers = profile[:requires_line_of_sight] ? Geometry::Battlefield.line_of_sight_blockers(profile, target, all_combatants) : []
+          blockers = if profile[:requires_line_of_sight]
+            Geometry::Battlefield.line_of_sight_blockers(profile, target, all_combatants, terrain: terrain)
+          else
+            []
+          end
           victims = Geometry::Battlefield.attack_victims(profile, target, target_side[:combatants], attack_type)
           return phase if victims.empty?
 
@@ -95,7 +102,7 @@ module Sim
               strike_damage = [ 1, (strike_damage * victim_entry[:multiplier].to_f).round ].max if victim_entry[:multiplier]
               next if strike_damage <= 0
 
-              unless hit?(profile, victim, attack_type, rng)
+              unless hit?(profile, victim, attack_type, rng, terrain: terrain)
                 add_event(phase, "#{format_actor(actor[:actor_role], actor[:actor_name])} промахивается по #{victim[:name]}.")
                 next
               end
@@ -162,7 +169,7 @@ module Sim
           phase[:actions] << action
         end
 
-        def resolve_melee_strike!(phase:, attacker:, target:, vector:, acting_side:, target_side:, round_number:, rng:)
+        def resolve_melee_strike!(phase:, attacker:, target:, vector:, acting_side:, target_side:, round_number:, rng:, terrain: [])
           blockers = []
           victims = [ { target: target, multiplier: 1 } ]
           entries = melee_entries(attacker, target, vector, round_number)
@@ -237,7 +244,7 @@ module Sim
           end
         end
 
-        def hit_chance(attacker, defender, attack_type)
+        def hit_chance(attacker, defender, attack_type, terrain: [])
           case attack_type
           when "melee"
             attacker_skill = attacker[:skill] || 3
@@ -247,7 +254,9 @@ module Sim
 
             4 / 6.0
           when "shooting"
-            (attacker[:skill] || 3) / 7.0
+            skill = (attacker[:skill] || 3).to_i
+            skill -= 1 if Geometry::Battlefield.in_forest?(defender, terrain)
+            [ skill, 1 ].max / 7.0
           when "magic"
             SpellCasting.hit_chance(attacker, defender)
           else
@@ -255,8 +264,8 @@ module Sim
           end
         end
 
-        def hit?(attacker, defender, attack_type, rng)
-          rng.rand < hit_chance(attacker, defender, attack_type)
+        def hit?(attacker, defender, attack_type, rng, terrain: [])
+          rng.rand < hit_chance(attacker, defender, attack_type, terrain: terrain)
         end
 
         def can_attack?(attacker, attack_type, allow_routing_melee: false)

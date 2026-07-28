@@ -55,10 +55,12 @@ module Api
       return render_failure(result, game: game) if result.failure?
 
       payload = result.value
+      campaign_hash = payload[:campaign].to_api_hash
+      campaign_hash[:terrain] = serialize_terrain(payload[:game], payload[:campaign].round)
       render json: {
         gameId: payload[:game].id,
         version: payload[:campaign].version,
-        campaign: payload[:campaign].to_api_hash,
+        campaign: campaign_hash,
         metaReward: camelize_meta(payload[:meta_reward]),
         battles: payload[:battles].map { |battle| serialize_battle(battle) }
       }
@@ -77,10 +79,12 @@ module Api
       return render_failure(result, game: game) if result.failure?
 
       payload = result.value
+      campaign_hash = payload[:campaign].to_api_hash
+      campaign_hash[:terrain] = serialize_terrain(game, payload[:campaign].round)
       render json: {
         gameId: payload[:game].id,
         version: payload[:campaign].version,
-        campaign: payload[:campaign].to_api_hash
+        campaign: campaign_hash
       }
     end
 
@@ -89,8 +93,10 @@ module Api
       body = { error: result.error }
       if result.code == :conflict && game
         campaign = Sim::Persistence::CampaignRepository.new.load(game)
+        campaign_hash = campaign.to_api_hash
+        campaign_hash[:terrain] = serialize_terrain(game, campaign.round)
         body[:version] = campaign.version
-        body[:campaign] = campaign.to_api_hash
+        body[:campaign] = campaign_hash
       end
       render json: body, status: status
     end
@@ -135,8 +141,10 @@ module Api
 
       if include_campaign
         campaign = Sim::Persistence::CampaignRepository.new.load(game)
-        payload[:campaign] = campaign.to_api_hash
-        payload[:statePayload] = { campaign: campaign.to_api_hash }
+        campaign_hash = campaign.to_api_hash
+        campaign_hash[:terrain] = serialize_terrain(game, campaign.round)
+        payload[:campaign] = campaign_hash
+        payload[:statePayload] = { campaign: campaign_hash }
       end
 
       if include_snapshots
@@ -144,6 +152,26 @@ module Api
       end
 
       payload
+    end
+
+    def serialize_terrain(game, round)
+      seed = Sim::Battle::TerrainMap.map_seed(rng_seed: game.rng_seed, round: round)
+      features = Sim::Battle::TerrainMap.generate(seed: seed)
+      features.map { |feature| camelize_terrain_feature(feature) }
+    end
+
+    def camelize_terrain_feature(feature)
+      {
+        id: feature[:id],
+        type: feature[:type],
+        x: feature[:x],
+        y: feature[:y],
+        width: feature[:width],
+        depth: feature[:depth],
+        impassable: feature[:impassable],
+        blocksLos: feature[:blocks_los],
+        moveCost: feature[:move_cost]
+      }
     end
 
     def serialize_snapshot(snapshot)

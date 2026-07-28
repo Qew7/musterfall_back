@@ -8,13 +8,13 @@ module Sim
 
           module_function
 
-          def plan_entries(movers, enemies, claimed)
+          def plan_entries(movers, enemies, claimed, terrain: [])
             living = Pathing.active_units(enemies)
             ranked = movers.sort_by { |combatant| [ combatant[:entity_id].to_s ] }
             entries_by_id = {}
 
             ranked.each do |combatant|
-              entry = plan_entry(combatant, living, claimed)
+              entry = plan_entry(combatant, living, claimed, terrain)
               next unless entry
 
               claimed[entry[:nearest][:entity_id]][entry[:contact_slot]] = combatant[:entity_id]
@@ -24,19 +24,21 @@ module Sim
             ranked.filter_map { |combatant| entries_by_id[combatant[:entity_id]] }
           end
 
-          def plan_entry(combatant, enemies, claimed)
+          def plan_entry(combatant, enemies, claimed, terrain = [])
             return nil if Decisions::Movement.engaged_with_any?(combatant, enemies)
 
-            choose_charge(combatant, enemies, claimed) ||
-              choose_setup(combatant, enemies, claimed) ||
-              choose_approach(combatant, enemies, claimed)
+            choose_charge(combatant, enemies, claimed, terrain) ||
+              choose_setup(combatant, enemies, claimed, terrain) ||
+              choose_approach(combatant, enemies, claimed, terrain)
           end
 
-          def choose_charge(combatant, enemies, claimed)
+          def choose_charge(combatant, enemies, claimed, terrain = [])
             budget = combatant[:movement].to_f
             return nil if budget <= 0.05
 
             candidates = Decisions::Movement.enemies_in_front_arc(combatant, enemies).select do |enemy|
+              next false unless Decisions::Movement.can_charge?(combatant, enemy, terrain)
+
               Geometry::Battlefield.distance_between_units(combatant, enemy) <= budget
             end
             return nil if candidates.empty?
@@ -55,12 +57,12 @@ module Sim
               next unless %w[flank rear].include?(side)
               next if claimed[enemy[:entity_id]].key?(side)
 
-              return Decisions::Movement.build_entry(combatant, enemy, side, :flyer_charge)
+              return Decisions::Movement.build_entry(combatant, enemy, side, :flyer_charge, chargeable: true)
             end
             nil
           end
 
-          def choose_setup(combatant, enemies, claimed)
+          def choose_setup(combatant, enemies, claimed, terrain = [])
             budget = combatant[:movement].to_f
             return nil if budget <= 0.05
 
@@ -70,6 +72,7 @@ module Sim
             # Furthest first — fly behind the deep target when MV allows.
             ordered = living.sort_by do |enemy|
               [
+                Decisions::Movement.can_charge?(combatant, enemy, terrain) ? 0 : 1,
                 enemy[:is_routing] ? 1 : 0,
                 -Geometry::Battlefield.distance_between_units(combatant, enemy),
                 enemy[:entity_id].to_s
@@ -78,6 +81,7 @@ module Sim
 
             ordered.each do |enemy|
               claimed_sides = claimed[enemy[:entity_id]]
+              chargeable = Decisions::Movement.can_charge?(combatant, enemy, terrain)
               [
                 [ "rear", :flyer_setup_rear ],
                 [ "flank", :flyer_setup_flank ]
@@ -85,14 +89,14 @@ module Sim
                 next if claimed_sides.key?(slot)
                 next unless setup_goal_within_budget?(combatant, enemy, slot, budget)
 
-                return Decisions::Movement.build_entry(combatant, enemy, slot, mode)
+                return Decisions::Movement.build_entry(combatant, enemy, slot, mode, chargeable: chargeable)
               end
             end
             nil
           end
 
           # Out of setup/charge range: still close toward rear/flank, staying off enemy front arcs.
-          def choose_approach(combatant, enemies, claimed)
+          def choose_approach(combatant, enemies, claimed, terrain = [])
             budget = combatant[:movement].to_f
             return nil if budget <= 0.05
 
@@ -101,6 +105,7 @@ module Sim
 
             ordered = living.sort_by do |enemy|
               [
+                Decisions::Movement.can_charge?(combatant, enemy, terrain) ? 0 : 1,
                 enemy[:is_routing] ? 1 : 0,
                 -Geometry::Battlefield.distance_between_units(combatant, enemy),
                 enemy[:entity_id].to_s
@@ -109,10 +114,11 @@ module Sim
 
             ordered.each do |enemy|
               claimed_sides = claimed[enemy[:entity_id]]
+              chargeable = Decisions::Movement.can_charge?(combatant, enemy, terrain)
               %w[rear flank].each do |slot|
                 next if claimed_sides.key?(slot)
 
-                return Decisions::Movement.build_entry(combatant, enemy, slot, :flyer_approach)
+                return Decisions::Movement.build_entry(combatant, enemy, slot, :flyer_approach, chargeable: chargeable)
               end
             end
             nil
@@ -124,7 +130,7 @@ module Sim
             end
           end
 
-          def build_approach_intent(combatant:, nearest:, obstacles:, contact_slot: nil, allow_ally_bypass: false, approach_mode: :flyer_charge)
+          def build_approach_intent(combatant:, nearest:, obstacles:, contact_slot: nil, allow_ally_bypass: false, approach_mode: :flyer_charge, terrain: [], chargeable: true)
             return nil unless nearest
             return nil if Decisions::Movement.engaged?(combatant, nearest)
 
@@ -133,6 +139,8 @@ module Sim
 
             case approach_mode
             when :flyer_charge
+              return nil unless chargeable
+
               build_charge_intent(combatant, nearest, obstacles, contact_slot, budget, approach_mode)
             when :flyer_approach
               build_closing_intent(combatant, nearest, obstacles, contact_slot, budget, approach_mode)
@@ -460,7 +468,7 @@ module Sim
             best
           end
 
-          def corner_contact_reachable?(origin, defender, budget)
+          def corner_contact_reachable?(origin, defender, budget, terrain: [])
             plan = plan_flyer_leap(
               origin: origin,
               goal_point: defender,

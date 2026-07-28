@@ -4,7 +4,7 @@ module Sim
       module Morale
         module_function
 
-        def play_start(acting_side:, target_side:, round_number:, **)
+        def play_start(acting_side:, target_side:, round_number:, terrain: [], **)
           phase = AttackResolution.create_phase("start", "Фаза начала")
           routed = acting_side[:combatants].select { |combatant| combatant[:current_health].to_i > 0 && combatant[:is_routing] }
           if routed.empty?
@@ -22,7 +22,8 @@ module Sim
               phase_type: "start",
               combat_score_delta: 0,
               sequence: sequence,
-              engaged_enemies: []
+              engaged_enemies: [],
+              terrain: terrain
             )
             action[:snapshot] = State.snapshot_battlefield([ acting_side, target_side ])
             phase[:actions] << action
@@ -32,7 +33,7 @@ module Sim
           phase
         end
 
-        def resolve_post_melee!(phase:, acting_side:, target_side:, round_number:)
+        def resolve_post_melee!(phase:, acting_side:, target_side:, round_number:, terrain: [])
           engagements = melee_engagements(acting_side, target_side)
           engagements.each_with_index do |engagement, engagement_index|
             score = score_engagement(phase[:actions], engagement)
@@ -45,7 +46,8 @@ module Sim
                 battle_sides: [ acting_side, target_side ],
                 round_number: round_number,
                 engagement_index: engagement_index,
-                combat_score_delta: score[:right] - score[:left]
+                combat_score_delta: score[:right] - score[:left],
+                terrain: terrain
               )
             end
             if score[:right] <= score[:left]
@@ -57,7 +59,8 @@ module Sim
                 battle_sides: [ acting_side, target_side ],
                 round_number: round_number,
                 engagement_index: engagement_index,
-                combat_score_delta: score[:left] - score[:right]
+                combat_score_delta: score[:left] - score[:right],
+                terrain: terrain
               )
             end
           end
@@ -65,7 +68,7 @@ module Sim
           phase
         end
 
-        def resolve_post_missile!(phase:, acting_side:, target_side:, round_number:, attack_type:)
+        def resolve_post_missile!(phase:, acting_side:, target_side:, round_number:, attack_type:, terrain: [])
           turn_key = "#{round_number}:#{acting_side[:player_id]}"
           collect_casualty_triggers(phase[:actions], attack_type, target_side[:combatants]).each_with_index do |entry, index|
             combatant = entry[:combatant]
@@ -81,7 +84,8 @@ module Sim
               combat_score_delta: 0,
               sequence: index,
               engaged_enemies: [],
-              trigger: entry.slice(:reason, :phase_damage, :lost_models, :phase_start_models, :threshold_models).merge(starting_models: combatant[:starting_models])
+              trigger: entry.slice(:reason, :phase_damage, :lost_models, :phase_start_models, :threshold_models).merge(starting_models: combatant[:starting_models]),
+              terrain: terrain
             )
             combatant[:last_missile_morale_turn_key] = turn_key
             action[:snapshot] = State.snapshot_battlefield([ acting_side, target_side ])
@@ -92,7 +96,7 @@ module Sim
           phase
         end
 
-        def resolve_losing_side!(phase:, loser_side:, loser_combatants:, winner_combatants:, battle_sides:, round_number:, engagement_index:, combat_score_delta:)
+        def resolve_losing_side!(phase:, loser_side:, loser_combatants:, winner_combatants:, battle_sides:, round_number:, engagement_index:, combat_score_delta:, terrain: [])
           return if combat_score_delta <= 0
 
           loser_combatants.select { |combatant| combatant[:current_health].to_i > 0 }.each_with_index do |combatant, combatant_index|
@@ -104,7 +108,8 @@ module Sim
               phase_type: "melee",
               combat_score_delta: combat_score_delta,
               sequence: (engagement_index * 10) + combatant_index,
-              engaged_enemies: winner_combatants
+              engaged_enemies: winner_combatants,
+              terrain: terrain
             )
             action[:snapshot] = State.snapshot_battlefield(battle_sides)
             phase[:actions] << action
@@ -112,7 +117,7 @@ module Sim
           end
         end
 
-        def resolve_action(combatant:, allies:, enemies:, round_number:, phase_type:, combat_score_delta:, sequence:, engaged_enemies: [], trigger: nil)
+        def resolve_action(combatant:, allies:, enemies:, round_number:, phase_type:, combat_score_delta:, sequence:, engaged_enemies: [], trigger: nil, terrain: [])
           before = State.snapshot_combatant(combatant)
           from = position_of(combatant)
           check = resolve_check(combatant: combatant, allies: allies, enemies: enemies, round_number: round_number, phase_type: phase_type, combat_score_delta: combat_score_delta, sequence: sequence)
@@ -149,7 +154,10 @@ module Sim
             preferred_heading = if newly_routing
               Decisions::Flee.flee_facing_for(combatant, engaged_enemies, enemies)
             end
-            blockers = (Array(allies) + Array(enemies)).reject { |entry| entry[:entity_id] == combatant[:entity_id] }
+            blockers = Pathing.merge_obstacles(
+              (Array(allies) + Array(enemies)).reject { |entry| entry[:entity_id] == combatant[:entity_id] },
+              Array(terrain)
+            )
             retreat = Decisions::Flee.retreat_toward_edge(
               combatant,
               combatant[:movement],

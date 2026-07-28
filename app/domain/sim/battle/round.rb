@@ -9,6 +9,7 @@ module Sim
           { acting_side: battle[:sides][:left], target_side: battle[:sides][:right] },
           { acting_side: battle[:sides][:right], target_side: battle[:sides][:left] }
         ]
+        terrain = Array(battle[:terrain])
 
         pairs.each do |pair|
           next unless State.living?(pair[:acting_side]) && State.living?(pair[:target_side])
@@ -18,7 +19,8 @@ module Sim
             round_number: round_number,
             acting_side: pair[:acting_side],
             target_side: pair[:target_side],
-            rng: rng
+            rng: rng,
+            terrain: terrain
           )
         end
 

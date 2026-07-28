@@ -4,7 +4,7 @@ module Sim
       module Melee
         module_function
 
-        def play(acting_side:, target_side:, round_number:, rng:, **)
+        def play(acting_side:, target_side:, round_number:, rng:, terrain: [], **)
           phase = AttackResolution.create_phase("melee", "Фаза боя")
           Rules.for(:melee).before_play!(
             phase: phase,
@@ -19,7 +19,8 @@ module Sim
             target_side: target_side,
             round_number: round_number,
             attack_type: "melee",
-            rng: rng
+            rng: rng,
+            terrain: terrain
           )
           phase[:allow_routing_melee] = true
           AttackResolution.resolve!(
@@ -28,9 +29,16 @@ module Sim
             target_side: acting_side,
             round_number: round_number,
             attack_type: "melee",
-            rng: rng
+            rng: rng,
+            terrain: terrain
           )
-          Morale.resolve_post_melee!(phase: phase, acting_side: acting_side, target_side: target_side, round_number: round_number)
+          Morale.resolve_post_melee!(
+            phase: phase,
+            acting_side: acting_side,
+            target_side: target_side,
+            round_number: round_number,
+            terrain: terrain
+          )
         end
       end
     end

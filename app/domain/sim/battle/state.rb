@@ -3,7 +3,7 @@ module Sim
     module State
       module_function
 
-      def create(player_a, player_b, catalog)
+      def create(player_a, player_b, catalog, terrain: [])
         {
           catalog: catalog,
           players: { left: player_a, right: player_b },
@@ -11,6 +11,7 @@ module Sim
             left: build_side(player_a, "left", 0),
             right: build_side(player_b, "right", 1)
           },
+          terrain: Array(terrain),
           rounds: []
         }
       end

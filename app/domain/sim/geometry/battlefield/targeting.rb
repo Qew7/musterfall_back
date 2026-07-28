@@ -2,16 +2,22 @@ module Sim
   module Geometry
     module Battlefield
       module Targeting
-        def line_of_sight_blockers(attacker, defender, blockers)
+        def line_of_sight_blockers(attacker, defender, blockers, terrain: [])
           line_start = front_center(attacker)
           line_end = closest_point_on_unit(line_start, defender)
 
-          blockers.select do |blocker|
+          unit_hits = blockers.select do |blocker|
             next false if blocker[:entity_id] == attacker[:entity_id] || blocker[:entity_id] == defender[:entity_id]
             next false if blocker[:current_health].to_i <= 0
 
             line_intersects_unit?(line_start, line_end, blocker)
           end
+
+          terrain_hits = los_blocking_features(terrain).select do |feature|
+            line_intersects_feature?(line_start, line_end, feature)
+          end
+
+          unit_hits + terrain_hits.map { |feature| feature_as_obstacle(feature) }
         end
 
         def attack_victims(attacker, primary_target, enemies, attack_type)

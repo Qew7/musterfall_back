@@ -9,7 +9,7 @@ module Sim
 
         module_function
 
-        def choose_target(attacker, enemies, attack_type, all_combatants)
+        def choose_target(attacker, enemies, attack_type, all_combatants, terrain: [])
           living = enemies.select { |entry| entry[:current_health].to_i > 0 }
           return nil if living.empty?
 
@@ -24,7 +24,7 @@ module Sim
           end
 
           # Shooting and magic both refuse units locked in enemy melee.
-          available = living.select { |target| can_target_missile?(attacker, target, attack_type, all_combatants) }
+          available = living.select { |target| can_target_missile?(attacker, target, attack_type, all_combatants, terrain: terrain) }
           return nil if available.empty?
 
           prioritized = prioritize_routing(available)
@@ -42,21 +42,21 @@ module Sim
           { target: prioritized.first, vector: "front" }
         end
 
-        def can_target_missile?(attacker, target, attack_type, all_combatants)
+        def can_target_missile?(attacker, target, attack_type, all_combatants, terrain: [])
           return false if in_melee_combat?(target, all_combatants)
           return true if attack_type == "magic"
 
-          can_target_ranged?(attacker, target, all_combatants)
+          can_target_ranged?(attacker, target, all_combatants, terrain: terrain)
         end
 
-        def can_target_ranged?(attacker, target, all_combatants)
+        def can_target_ranged?(attacker, target, all_combatants, terrain: [])
           if Rules.for(:shooting).requires_front_arc_for_ranged?(attacker) &&
               !Geometry::Battlefield.in_front_arc?(attacker, target, attacker[:facing])
             return false
           end
           return false if in_melee_combat?(target, all_combatants)
 
-          Geometry::Battlefield.line_of_sight_blockers(attacker, target, all_combatants).empty?
+          Geometry::Battlefield.line_of_sight_blockers(attacker, target, all_combatants, terrain: terrain).empty?
         end
 
         # Locked in combat = footprint contact with a living enemy (allies do not count).
