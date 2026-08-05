@@ -354,12 +354,9 @@ class SimBattleMovementWheelTest < ActiveSupport::TestCase
     refute Sim::Geometry::Battlefield.rectangles_overlap?(actor, blocker)
     assert_operator after, :<, before
     assert_operator (actor[:y] - 12).abs, :>, 0.2
-    assert phase[:actions].any? { |action|
-      action.dig(:maneuver, :avoided) ||
-        action.dig(:maneuver, :kind) == "bypass" ||
-        action[:summary].include?("обходит") ||
-        action[:details].any? { |line| line.include?("pathing_avoided=true") }
-    }
+    action = phase[:actions].find { |entry| entry[:actor_id] == "knights" }
+    assert action.dig(:maneuver, :avoided)
+    assert_equal "bypass", action.dig(:maneuver, :kind)
   end
 
   test "co-moving allies do not force each other to wait or orbit" do
@@ -491,13 +488,9 @@ class SimBattleMovementWheelTest < ActiveSupport::TestCase
 
     assert knight_actions.any?
     refute knight_actions.any? { |action| action.dig(:maneuver, :avoided) }
-    refute knight_actions.any? { |action| action[:summary].include?("обходит") }
-    assert knight_actions.any? { |action|
-      action.dig(:maneuver, :blocked_by_ally) ||
-        action.dig(:maneuver, :kind) == "blocked_by_ally" ||
-        action[:summary].include?("союзником") ||
-        action[:summary].include?("ждёт прохода")
-    }
+    blocked = knight_actions.find { |action| action.dig(:maneuver, :blocked_by_ally) }
+    assert blocked
+    assert_equal "blocked_by_ally", blocked.dig(:maneuver, :kind)
     assert_operator (actor[:y] - start_y).abs, :<, 1.5
     refute Sim::Geometry::Battlefield.rectangles_overlap?(actor, ally)
   end

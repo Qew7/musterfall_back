@@ -1,0 +1,1118 @@
+{
+  "version": 1,
+  "id": "matchup-119",
+  "source": {
+    "matchup_id": 119,
+    "game_id": 29,
+    "campaign_round": 1
+  },
+  "seed": 1613179849,
+  "map_seed": 1613179438,
+  "tags": [
+    "magic",
+    "morale",
+    "movement",
+    "shooting"
+  ],
+  "attacker": {
+    "id": "player-7",
+    "name": "Бот 6",
+    "is_bot": true,
+    "roster": [
+      {
+        "id": "hero-7",
+        "kind": "hero",
+        "name": "Боевой маг",
+        "state": {
+          "is_routing": false,
+          "attached_to": null,
+          "attached_slot": null,
+          "current_health": 2
+        },
+        "owner_id": "player-7",
+        "components": {
+          "hero": {
+            "mounted": false
+          },
+          "combat": {
+            "melee": 2,
+            "skill": 5,
+            "spell": 5,
+            "morale": 8,
+            "ranged": 4,
+            "attacks": 2,
+            "movement": 3,
+            "armor_type": "magic",
+            "initiative": 5,
+            "spell_range": 8,
+            "weapon_type": "magic",
+            "shooting_range": 9,
+            "spell_template": "blast",
+            "missile_attacks": 1,
+            "shooting_template": "single",
+            "requires_line_of_sight": true
+          },
+          "health": {
+            "max": 2,
+            "model_health": 2
+          },
+          "economy": {
+            "cost": 0
+          },
+          "identity": {
+            "archetype": "character",
+            "faction_id": "empire"
+          },
+          "abilities": [
+            "leader",
+            "muster",
+            "wizard"
+          ],
+          "formation": {
+            "x": 8,
+            "y": 4,
+            "row": "front",
+            "lane": "left",
+            "depth": 1,
+            "files": 1,
+            "ranks": 1,
+            "width": 1,
+            "facing": 0.0,
+            "models": 1,
+            "frontage": 1,
+            "max_files": 5,
+            "model_class": "infantry",
+            "model_depth": 1,
+            "model_width": 1
+          },
+          "progression": {
+            "level": 1,
+            "experience": 0,
+            "pending_draft": [],
+            "spent_experience": 0,
+            "picked_upgrade_ids": []
+          }
+        },
+        "template_id": "battle_wizard"
+      },
+      {
+        "id": "unit-25",
+        "kind": "unit",
+        "name": "Большая пушка",
+        "state": {
+          "is_routing": false,
+          "current_health": 8,
+          "attached_hero_ids": []
+        },
+        "owner_id": "player-7",
+        "components": {
+          "combat": {
+            "melee": 2,
+            "skill": 2,
+            "spell": 0,
+            "morale": 5,
+            "ranged": 7,
+            "attacks": 1,
+            "movement": 2,
+            "armor_type": "machine",
+            "initiative": 4,
+            "spell_range": 0,
+            "weapon_type": "demolish",
+            "shooting_range": 14,
+            "spell_template": "single",
+            "missile_attacks": 1,
+            "shooting_template": "blast",
+            "requires_line_of_sight": false
+          },
+          "health": {
+            "max": 8,
+            "model_health": 4
+          },
+          "economy": {
+            "cost": 12
+          },
+          "identity": {
+            "archetype": "formation",
+            "faction_id": "empire"
+          },
+          "abilities": [
+            "machine",
+            "ranged"
+          ],
+          "formation": {
+            "x": 8,
+            "y": 12,
+            "row": "front",
+            "lane": "center",
+            "depth": 2,
+            "files": 2,
+            "ranks": 1,
+            "width": 4,
+            "facing": 0.0,
+            "models": 2,
+            "frontage": 2,
+            "max_files": 5,
+            "model_class": "machine",
+            "model_depth": 2,
+            "model_width": 2
+          }
+        },
+        "template_id": "great_cannon"
+      },
+      {
+        "id": "unit-26",
+        "kind": "unit",
+        "name": "Аутрайдеры",
+        "state": {
+          "is_routing": false,
+          "current_health": 6,
+          "attached_hero_ids": []
+        },
+        "owner_id": "player-7",
+        "components": {
+          "combat": {
+            "melee": 3,
+            "skill": 4,
+            "spell": 0,
+            "morale": 5,
+            "ranged": 4,
+            "attacks": 1,
+            "movement": 7,
+            "armor_type": "medium",
+            "initiative": 4,
+            "spell_range": 0,
+            "weapon_type": "ranged",
+            "shooting_range": 9,
+            "spell_template": "single",
+            "missile_attacks": 1,
+            "shooting_template": "volley",
+            "requires_line_of_sight": true
+          },
+          "health": {
+            "max": 6,
+            "model_health": 1
+          },
+          "economy": {
+            "cost": 10
+          },
+          "identity": {
+            "archetype": "formation",
+            "faction_id": "empire"
+          },
+          "abilities": [
+            "fast",
+            "ranged"
+          ],
+          "formation": {
+            "x": 8,
+            "y": 20,
+            "row": "front",
+            "lane": "right",
+            "depth": 4,
+            "files": 3,
+            "ranks": 2,
+            "width": 3,
+            "facing": 0.0,
+            "models": 6,
+            "frontage": 3,
+            "max_files": 5,
+            "model_class": "cavalry",
+            "model_depth": 2,
+            "model_width": 1
+          }
+        },
+        "template_id": "outriders"
+      },
+      {
+        "id": "unit-27",
+        "kind": "unit",
+        "name": "Имперские мечники",
+        "state": {
+          "is_routing": false,
+          "current_health": 16,
+          "attached_hero_ids": []
+        },
+        "owner_id": "player-7",
+        "components": {
+          "combat": {
+            "melee": 4,
+            "skill": 3,
+            "spell": 0,
+            "morale": 7,
+            "ranged": 0,
+            "attacks": 1,
+            "movement": 3,
+            "armor_type": "medium",
+            "initiative": 3,
+            "spell_range": 0,
+            "weapon_type": "slash",
+            "shooting_range": 0,
+            "spell_template": "single",
+            "missile_attacks": 1,
+            "shooting_template": "single",
+            "requires_line_of_sight": true
+          },
+          "health": {
+            "max": 16,
+            "model_health": 1
+          },
+          "economy": {
+            "cost": 8
+          },
+          "identity": {
+            "archetype": "formation",
+            "faction_id": "empire"
+          },
+          "abilities": [
+            "disciplined",
+            "shieldwall"
+          ],
+          "formation": {
+            "x": 4,
+            "y": 4,
+            "row": "support",
+            "lane": "left",
+            "depth": 4,
+            "files": 4,
+            "ranks": 4,
+            "width": 4,
+            "facing": 0.0,
+            "models": 16,
+            "frontage": 4,
+            "max_files": 5,
+            "model_class": "infantry",
+            "model_depth": 1,
+            "model_width": 1
+          }
+        },
+        "template_id": "state_swords"
+      }
+    ],
+    "status": "active",
+    "treasury": 6,
+    "victories": 0,
+    "faction_id": "empire",
+    "round_notes": []
+  },
+  "defender": {
+    "id": "player-8",
+    "name": "Бот 7",
+    "is_bot": true,
+    "roster": [
+      {
+        "id": "hero-8",
+        "kind": "hero",
+        "name": "Вэйстокер",
+        "state": {
+          "is_routing": false,
+          "attached_to": null,
+          "attached_slot": null,
+          "current_health": 2
+        },
+        "owner_id": "player-8",
+        "components": {
+          "hero": {
+            "mounted": false
+          },
+          "combat": {
+            "melee": 2,
+            "skill": 5,
+            "spell": 0,
+            "morale": 8,
+            "ranged": 5,
+            "attacks": 2,
+            "movement": 3,
+            "armor_type": "light",
+            "initiative": 5,
+            "spell_range": 0,
+            "weapon_type": "ranged",
+            "shooting_range": 9,
+            "spell_template": "single",
+            "missile_attacks": 1,
+            "shooting_template": "volley",
+            "requires_line_of_sight": true
+          },
+          "health": {
+            "max": 2,
+            "model_health": 2
+          },
+          "economy": {
+            "cost": 0
+          },
+          "identity": {
+            "archetype": "character",
+            "faction_id": "wildwood"
+          },
+          "abilities": [
+            "leader",
+            "muster",
+            "ranged"
+          ],
+          "formation": {
+            "x": 8,
+            "y": 4,
+            "row": "front",
+            "lane": "left",
+            "depth": 1,
+            "files": 1,
+            "ranks": 1,
+            "width": 1,
+            "facing": 0.0,
+            "models": 1,
+            "frontage": 1,
+            "max_files": 5,
+            "model_class": "infantry",
+            "model_depth": 1,
+            "model_width": 1
+          },
+          "progression": {
+            "level": 1,
+            "experience": 0,
+            "pending_draft": [],
+            "spent_experience": 0,
+            "picked_upgrade_ids": []
+          }
+        },
+        "template_id": "waystalker"
+      },
+      {
+        "id": "unit-28",
+        "kind": "unit",
+        "name": "Стража поляны",
+        "state": {
+          "is_routing": false,
+          "current_health": 10,
+          "attached_hero_ids": []
+        },
+        "owner_id": "player-8",
+        "components": {
+          "combat": {
+            "melee": 2,
+            "skill": 4,
+            "spell": 0,
+            "morale": 5,
+            "ranged": 5,
+            "attacks": 1,
+            "movement": 3,
+            "armor_type": "light",
+            "initiative": 4,
+            "spell_range": 0,
+            "weapon_type": "ranged",
+            "shooting_range": 11,
+            "spell_template": "single",
+            "missile_attacks": 1,
+            "shooting_template": "volley",
+            "requires_line_of_sight": true
+          },
+          "health": {
+            "max": 10,
+            "model_health": 1
+          },
+          "economy": {
+            "cost": 9
+          },
+          "identity": {
+            "archetype": "formation",
+            "faction_id": "wildwood"
+          },
+          "abilities": [
+            "precision",
+            "ranged"
+          ],
+          "formation": {
+            "x": 8,
+            "y": 12,
+            "row": "front",
+            "lane": "center",
+            "depth": 2,
+            "files": 5,
+            "ranks": 2,
+            "width": 5,
+            "facing": 0.0,
+            "models": 10,
+            "frontage": 5,
+            "max_files": 5,
+            "model_class": "infantry",
+            "model_depth": 1,
+            "model_width": 1
+          }
+        },
+        "template_id": "glade_guard"
+      },
+      {
+        "id": "unit-29",
+        "kind": "unit",
+        "name": "Стража поляны",
+        "state": {
+          "is_routing": false,
+          "current_health": 10,
+          "attached_hero_ids": []
+        },
+        "owner_id": "player-8",
+        "components": {
+          "combat": {
+            "melee": 2,
+            "skill": 4,
+            "spell": 0,
+            "morale": 5,
+            "ranged": 5,
+            "attacks": 1,
+            "movement": 3,
+            "armor_type": "light",
+            "initiative": 4,
+            "spell_range": 0,
+            "weapon_type": "ranged",
+            "shooting_range": 11,
+            "spell_template": "single",
+            "missile_attacks": 1,
+            "shooting_template": "volley",
+            "requires_line_of_sight": true
+          },
+          "health": {
+            "max": 10,
+            "model_health": 1
+          },
+          "economy": {
+            "cost": 9
+          },
+          "identity": {
+            "archetype": "formation",
+            "faction_id": "wildwood"
+          },
+          "abilities": [
+            "precision",
+            "ranged"
+          ],
+          "formation": {
+            "x": 8,
+            "y": 20,
+            "row": "front",
+            "lane": "right",
+            "depth": 2,
+            "files": 5,
+            "ranks": 2,
+            "width": 5,
+            "facing": 0.0,
+            "models": 10,
+            "frontage": 5,
+            "max_files": 5,
+            "model_class": "infantry",
+            "model_depth": 1,
+            "model_width": 1
+          }
+        },
+        "template_id": "glade_guard"
+      },
+      {
+        "id": "unit-30",
+        "kind": "unit",
+        "name": "Стража поляны",
+        "state": {
+          "is_routing": false,
+          "current_health": 10,
+          "attached_hero_ids": []
+        },
+        "owner_id": "player-8",
+        "components": {
+          "combat": {
+            "melee": 2,
+            "skill": 4,
+            "spell": 0,
+            "morale": 5,
+            "ranged": 5,
+            "attacks": 1,
+            "movement": 3,
+            "armor_type": "light",
+            "initiative": 4,
+            "spell_range": 0,
+            "weapon_type": "ranged",
+            "shooting_range": 11,
+            "spell_template": "single",
+            "missile_attacks": 1,
+            "shooting_template": "volley",
+            "requires_line_of_sight": true
+          },
+          "health": {
+            "max": 10,
+            "model_health": 1
+          },
+          "economy": {
+            "cost": 9
+          },
+          "identity": {
+            "archetype": "formation",
+            "faction_id": "wildwood"
+          },
+          "abilities": [
+            "precision",
+            "ranged"
+          ],
+          "formation": {
+            "x": 4,
+            "y": 4,
+            "row": "support",
+            "lane": "left",
+            "depth": 2,
+            "files": 5,
+            "ranks": 2,
+            "width": 5,
+            "facing": 0.0,
+            "models": 10,
+            "frontage": 5,
+            "max_files": 5,
+            "model_class": "infantry",
+            "model_depth": 1,
+            "model_width": 1
+          }
+        },
+        "template_id": "glade_guard"
+      },
+      {
+        "id": "unit-31",
+        "kind": "unit",
+        "name": "Стража поляны",
+        "state": {
+          "is_routing": false,
+          "current_health": 10,
+          "attached_hero_ids": []
+        },
+        "owner_id": "player-8",
+        "components": {
+          "combat": {
+            "melee": 2,
+            "skill": 4,
+            "spell": 0,
+            "morale": 5,
+            "ranged": 5,
+            "attacks": 1,
+            "movement": 3,
+            "armor_type": "light",
+            "initiative": 4,
+            "spell_range": 0,
+            "weapon_type": "ranged",
+            "shooting_range": 11,
+            "spell_template": "single",
+            "missile_attacks": 1,
+            "shooting_template": "volley",
+            "requires_line_of_sight": true
+          },
+          "health": {
+            "max": 10,
+            "model_health": 1
+          },
+          "economy": {
+            "cost": 9
+          },
+          "identity": {
+            "archetype": "formation",
+            "faction_id": "wildwood"
+          },
+          "abilities": [
+            "precision",
+            "ranged"
+          ],
+          "formation": {
+            "x": 4,
+            "y": 12,
+            "row": "support",
+            "lane": "center",
+            "depth": 2,
+            "files": 5,
+            "ranks": 2,
+            "width": 5,
+            "facing": 0.0,
+            "models": 10,
+            "frontage": 5,
+            "max_files": 5,
+            "model_class": "infantry",
+            "model_depth": 1,
+            "model_width": 1
+          }
+        },
+        "template_id": "glade_guard"
+      }
+    ],
+    "status": "active",
+    "treasury": 0,
+    "victories": 0,
+    "faction_id": "wildwood",
+    "round_notes": []
+  },
+  "expected": {
+    "version": 2,
+    "mode": "outcome",
+    "winner_id": "player-8",
+    "rounds": 6,
+    "side_health": {
+      "left": 7.0,
+      "right": 30.0
+    },
+    "action_counts": {
+      "magic": 2,
+      "morale": 10,
+      "movement": 5,
+      "shooting": 11
+    },
+    "contacts": [],
+    "rule_effects": {
+      "blast": 1,
+      "disciplined": 1,
+      "machine": 1,
+      "march": 5,
+      "volley": 10
+    },
+    "actions": [
+      {
+        "path": "R1/T1/magic/A1",
+        "type": "magic",
+        "actor_id": "hero-7",
+        "target_id": "hero-8",
+        "maneuver": {},
+        "damage": 3,
+        "morale": {},
+        "trace": {
+          "version": 1,
+          "result": "hit"
+        }
+      },
+      {
+        "path": "R1/T1/movement/unit-27",
+        "type": "movement",
+        "actor_id": "unit-27",
+        "target_id": "unit-29",
+        "outcome": {
+          "category": "blocked",
+          "contact_slot": "front",
+          "engaged": false,
+          "progress": "closer"
+        },
+        "trace": {
+          "rule_keys": [
+            "march"
+          ]
+        }
+      },
+      {
+        "path": "R1/T1/shooting/A1",
+        "type": "shooting",
+        "actor_id": "unit-26",
+        "target_id": "unit-29",
+        "maneuver": {},
+        "damage": 2,
+        "morale": {},
+        "trace": {
+          "version": 1,
+          "rule_keys": [
+            "volley"
+          ],
+          "result": "hit"
+        }
+      },
+      {
+        "path": "R1/T2/shooting/A1",
+        "type": "shooting",
+        "actor_id": "unit-28",
+        "target_id": "unit-25",
+        "maneuver": {},
+        "damage": 2,
+        "morale": {},
+        "trace": {
+          "version": 1,
+          "rule_keys": [
+            "volley"
+          ],
+          "result": "hit"
+        }
+      },
+      {
+        "path": "R1/T2/shooting/A2",
+        "type": "shooting",
+        "actor_id": "unit-29",
+        "target_id": "unit-26",
+        "maneuver": {},
+        "damage": 2,
+        "morale": {},
+        "trace": {
+          "version": 1,
+          "rule_keys": [
+            "volley"
+          ],
+          "result": "hit"
+        }
+      },
+      {
+        "path": "R1/T2/shooting/A3",
+        "type": "morale",
+        "actor_id": "unit-26",
+        "maneuver": {},
+        "damage": 0,
+        "morale": {
+          "roll": 9,
+          "threshold": 5,
+          "passed": false
+        },
+        "trace": {
+          "version": 1,
+          "result": "routing"
+        }
+      },
+      {
+        "path": "R2/T1/magic/A1",
+        "type": "magic",
+        "actor_id": "hero-7",
+        "target_id": "unit-30",
+        "maneuver": {},
+        "damage": 4,
+        "morale": {},
+        "trace": {
+          "version": 1,
+          "result": "hit"
+        }
+      },
+      {
+        "path": "R2/T1/magic/A2",
+        "type": "morale",
+        "actor_id": "unit-30",
+        "maneuver": {},
+        "damage": 0,
+        "morale": {
+          "roll": 9,
+          "threshold": 8,
+          "passed": false
+        },
+        "trace": {
+          "version": 1,
+          "result": "routing"
+        }
+      },
+      {
+        "path": "R2/T1/movement/unit-27",
+        "type": "movement",
+        "actor_id": "unit-27",
+        "target_id": "unit-29",
+        "outcome": {
+          "category": "blocked",
+          "contact_slot": "front",
+          "engaged": false,
+          "progress": "same"
+        },
+        "trace": {
+          "rule_keys": [
+            "march"
+          ]
+        }
+      },
+      {
+        "path": "R2/T1/shooting/A1",
+        "type": "shooting",
+        "actor_id": "unit-25",
+        "target_id": "unit-28",
+        "maneuver": {},
+        "damage": 4,
+        "morale": {},
+        "trace": {
+          "version": 1,
+          "rule_keys": [
+            "blast",
+            "machine"
+          ],
+          "result": "hit"
+        }
+      },
+      {
+        "path": "R2/T1/shooting/A2",
+        "type": "morale",
+        "actor_id": "unit-28",
+        "maneuver": {},
+        "damage": 0,
+        "morale": {
+          "roll": 10,
+          "threshold": 5,
+          "passed": false
+        },
+        "trace": {
+          "version": 1,
+          "result": "routing"
+        }
+      },
+      {
+        "path": "R2/T1/start/A1",
+        "type": "morale",
+        "actor_id": "unit-26",
+        "maneuver": {},
+        "damage": 0,
+        "morale": {
+          "roll": 12,
+          "threshold": 5,
+          "passed": false
+        },
+        "trace": {
+          "version": 1,
+          "result": "escaped"
+        }
+      },
+      {
+        "path": "R2/T2/shooting/A1",
+        "type": "shooting",
+        "actor_id": "unit-29",
+        "target_id": "hero-7",
+        "maneuver": {},
+        "damage": 2,
+        "morale": {},
+        "trace": {
+          "version": 1,
+          "rule_keys": [
+            "volley"
+          ],
+          "result": "hit"
+        }
+      },
+      {
+        "path": "R2/T2/shooting/A2",
+        "type": "shooting",
+        "actor_id": "unit-31",
+        "target_id": "unit-25",
+        "maneuver": {},
+        "damage": 2,
+        "morale": {},
+        "trace": {
+          "version": 1,
+          "rule_keys": [
+            "volley"
+          ],
+          "result": "hit"
+        }
+      },
+      {
+        "path": "R2/T2/shooting/A3",
+        "type": "morale",
+        "actor_id": "unit-25",
+        "maneuver": {},
+        "damage": 0,
+        "morale": {
+          "roll": 7,
+          "threshold": 5,
+          "passed": false
+        },
+        "trace": {
+          "version": 1,
+          "result": "routing"
+        }
+      },
+      {
+        "path": "R2/T2/start/A1",
+        "type": "morale",
+        "actor_id": "unit-28",
+        "maneuver": {},
+        "damage": 0,
+        "morale": {
+          "roll": 3,
+          "threshold": 8,
+          "passed": true
+        },
+        "trace": {
+          "version": 1,
+          "result": "rallied"
+        }
+      },
+      {
+        "path": "R2/T2/start/A2",
+        "type": "morale",
+        "actor_id": "unit-30",
+        "maneuver": {},
+        "damage": 0,
+        "morale": {
+          "roll": 8,
+          "threshold": 8,
+          "passed": true
+        },
+        "trace": {
+          "version": 1,
+          "result": "rallied"
+        }
+      },
+      {
+        "path": "R3/T1/movement/unit-27",
+        "type": "movement",
+        "actor_id": "unit-27",
+        "target_id": "unit-28",
+        "outcome": {
+          "category": "repositioned",
+          "contact_slot": "flank",
+          "engaged": false,
+          "progress": "closer"
+        },
+        "trace": {
+          "rule_keys": [
+            "march"
+          ]
+        }
+      },
+      {
+        "path": "R3/T1/start/A1",
+        "type": "morale",
+        "actor_id": "unit-25",
+        "maneuver": {},
+        "damage": 0,
+        "morale": {
+          "roll": 9,
+          "threshold": 5,
+          "passed": false
+        },
+        "trace": {
+          "version": 1,
+          "result": "routing"
+        }
+      },
+      {
+        "path": "R3/T2/shooting/A1",
+        "type": "shooting",
+        "actor_id": "unit-31",
+        "target_id": "unit-25",
+        "maneuver": {},
+        "damage": 2,
+        "morale": {},
+        "trace": {
+          "version": 1,
+          "rule_keys": [
+            "volley"
+          ],
+          "result": "hit"
+        }
+      },
+      {
+        "path": "R4/T1/movement/unit-27",
+        "type": "movement",
+        "actor_id": "unit-27",
+        "target_id": "unit-29",
+        "outcome": {
+          "category": "advanced",
+          "contact_slot": "front",
+          "engaged": false,
+          "progress": "closer"
+        },
+        "trace": {
+          "rule_keys": [
+            "march"
+          ]
+        }
+      },
+      {
+        "path": "R4/T1/start/A1",
+        "type": "morale",
+        "actor_id": "unit-25",
+        "maneuver": {},
+        "damage": 0,
+        "morale": {
+          "roll": 6,
+          "threshold": 5,
+          "passed": false
+        },
+        "trace": {
+          "version": 1,
+          "result": "routing"
+        }
+      },
+      {
+        "path": "R4/T2/shooting/A1",
+        "type": "shooting",
+        "actor_id": "unit-29",
+        "target_id": "unit-27",
+        "maneuver": {},
+        "damage": 3,
+        "morale": {},
+        "trace": {
+          "version": 1,
+          "rule_keys": [
+            "volley"
+          ],
+          "result": "hit"
+        }
+      },
+      {
+        "path": "R4/T2/shooting/A2",
+        "type": "shooting",
+        "actor_id": "unit-31",
+        "target_id": "unit-25",
+        "maneuver": {},
+        "damage": 2,
+        "morale": {},
+        "trace": {
+          "version": 1,
+          "rule_keys": [
+            "volley"
+          ],
+          "result": "hit"
+        }
+      },
+      {
+        "path": "R5/T1/movement/unit-27",
+        "type": "movement",
+        "actor_id": "unit-27",
+        "target_id": "unit-29",
+        "outcome": {
+          "category": "advanced",
+          "contact_slot": "front",
+          "engaged": false,
+          "progress": "same"
+        },
+        "trace": {
+          "rule_keys": [
+            "march"
+          ]
+        }
+      },
+      {
+        "path": "R5/T2/shooting/A1",
+        "type": "shooting",
+        "actor_id": "unit-29",
+        "target_id": "unit-27",
+        "maneuver": {},
+        "damage": 3,
+        "morale": {},
+        "trace": {
+          "version": 1,
+          "rule_keys": [
+            "volley"
+          ],
+          "result": "hit"
+        }
+      },
+      {
+        "path": "R6/T2/shooting/A1",
+        "type": "shooting",
+        "actor_id": "unit-29",
+        "target_id": "unit-27",
+        "maneuver": {},
+        "damage": 3,
+        "morale": {},
+        "trace": {
+          "version": 1,
+          "rule_keys": [
+            "volley"
+          ],
+          "result": "hit"
+        }
+      },
+      {
+        "path": "R6/T2/shooting/A2",
+        "type": "morale",
+        "actor_id": "unit-27",
+        "maneuver": {},
+        "damage": 0,
+        "morale": {
+          "roll": 4,
+          "threshold": 9,
+          "passed": true
+        },
+        "trace": {
+          "version": 1,
+          "rule_keys": [
+            "disciplined"
+          ],
+          "result": "passed"
+        }
+      }
+    ]
+  }
+}

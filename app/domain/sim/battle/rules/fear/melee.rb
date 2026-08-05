@@ -120,6 +120,12 @@ module Sim
               damage: 0,
               summary: summary,
               morale_check: check.merge(trigger: { reason: reason, source_id: source[:entity_id], source_name: source[:name] }),
+              trace: Trace.build(
+                rule_keys: [ "fear" ],
+                trigger: reason,
+                result: check[:passed] ? "passed" : "attack_blocked",
+                target_ids: [ source[:entity_id] ]
+              ),
               actor_state: before,
               target_state_before: before,
               target_state_after: State.snapshot_combatant(subject),

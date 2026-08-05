@@ -247,8 +247,23 @@ module Sim
               retreat_edge: retreat_edge,
               escaped: escaped
             },
+            trace: Trace.build(
+              rule_keys: Trace.rule_keys_for(combatant, :morale),
+              trigger: trigger&.dig(:reason) || phase_type,
+              result: morale_trace_result(check, before, after, damage, escaped),
+              target_ids: Array(enemies).map { |enemy| enemy[:entity_id] }
+            ),
             snapshot: nil
           }
+        end
+
+        def morale_trace_result(check, before, after, damage, escaped)
+          return "escaped" if escaped
+          return "rule_failure" if damage.to_i.positive?
+          return "rallied" if check[:passed] && before[:is_routing] && !after[:is_routing]
+          return "passed" if check[:passed]
+
+          "routing"
         end
 
         def build_morale_details(combatant:, before:, after:, check:, combat_score_delta:, phase_type:, about_faced:, retreat:, retreat_edge:, escaped:, damage:, from:, to:, trigger:)

@@ -1,0 +1,1529 @@
+{
+  "version": 1,
+  "id": "matchup-120",
+  "source": {
+    "matchup_id": 120,
+    "game_id": 29,
+    "campaign_round": 2
+  },
+  "seed": 1614179563,
+  "map_seed": 1614179441,
+  "tags": [
+    "magic",
+    "morale",
+    "movement",
+    "shooting"
+  ],
+  "attacker": {
+    "id": "player-2",
+    "name": "Бот 1",
+    "is_bot": true,
+    "roster": [
+      {
+        "id": "hero-2",
+        "kind": "hero",
+        "name": "Боевой маг",
+        "state": {
+          "is_routing": false,
+          "attached_to": null,
+          "attached_slot": null,
+          "current_health": 2
+        },
+        "owner_id": "player-2",
+        "components": {
+          "hero": {
+            "mounted": false
+          },
+          "combat": {
+            "melee": 2,
+            "skill": 5,
+            "spell": 5,
+            "morale": 8,
+            "ranged": 4,
+            "attacks": 2,
+            "movement": 3,
+            "armor_type": "magic",
+            "initiative": 5,
+            "spell_range": 8,
+            "weapon_type": "magic",
+            "shooting_range": 9,
+            "spell_template": "blast",
+            "missile_attacks": 1,
+            "shooting_template": "single",
+            "requires_line_of_sight": true
+          },
+          "health": {
+            "max": 2,
+            "model_health": 2
+          },
+          "economy": {
+            "cost": 0
+          },
+          "identity": {
+            "archetype": "character",
+            "faction_id": "empire"
+          },
+          "abilities": [
+            "leader",
+            "muster",
+            "wizard"
+          ],
+          "formation": {
+            "x": 8,
+            "y": 4,
+            "row": "front",
+            "lane": "left",
+            "depth": 1,
+            "files": 1,
+            "ranks": 1,
+            "width": 1,
+            "facing": 0.0,
+            "models": 1,
+            "frontage": 1,
+            "max_files": 5,
+            "model_class": "infantry",
+            "model_depth": 1,
+            "model_width": 1
+          },
+          "progression": {
+            "level": 1,
+            "experience": 0,
+            "pending_draft": [],
+            "spent_experience": 0,
+            "picked_upgrade_ids": []
+          }
+        },
+        "template_id": "battle_wizard"
+      },
+      {
+        "id": "unit-9",
+        "kind": "unit",
+        "name": "Большая пушка",
+        "state": {
+          "is_routing": false,
+          "current_health": 8,
+          "attached_hero_ids": []
+        },
+        "owner_id": "player-2",
+        "components": {
+          "combat": {
+            "melee": 2,
+            "skill": 2,
+            "spell": 0,
+            "morale": 5,
+            "ranged": 7,
+            "attacks": 1,
+            "movement": 2,
+            "armor_type": "machine",
+            "initiative": 4,
+            "spell_range": 0,
+            "weapon_type": "demolish",
+            "shooting_range": 14,
+            "spell_template": "single",
+            "missile_attacks": 1,
+            "shooting_template": "blast",
+            "requires_line_of_sight": false
+          },
+          "health": {
+            "max": 8,
+            "model_health": 4
+          },
+          "economy": {
+            "cost": 12
+          },
+          "identity": {
+            "archetype": "formation",
+            "faction_id": "empire"
+          },
+          "abilities": [
+            "machine",
+            "ranged"
+          ],
+          "formation": {
+            "x": 8,
+            "y": 12,
+            "row": "front",
+            "lane": "center",
+            "depth": 2,
+            "files": 2,
+            "ranks": 1,
+            "width": 4,
+            "facing": 0.0,
+            "models": 2,
+            "frontage": 2,
+            "max_files": 5,
+            "model_class": "machine",
+            "model_depth": 2,
+            "model_width": 2
+          }
+        },
+        "template_id": "great_cannon"
+      },
+      {
+        "id": "unit-10",
+        "kind": "unit",
+        "name": "Аркебузиры",
+        "state": {
+          "is_routing": false,
+          "current_health": 10,
+          "attached_hero_ids": []
+        },
+        "owner_id": "player-2",
+        "components": {
+          "combat": {
+            "melee": 2,
+            "skill": 3,
+            "spell": 0,
+            "morale": 5,
+            "ranged": 5,
+            "attacks": 1,
+            "movement": 3,
+            "armor_type": "light",
+            "initiative": 4,
+            "spell_range": 0,
+            "weapon_type": "ranged",
+            "shooting_range": 9,
+            "spell_template": "single",
+            "missile_attacks": 1,
+            "shooting_template": "volley",
+            "requires_line_of_sight": true
+          },
+          "health": {
+            "max": 10,
+            "model_health": 1
+          },
+          "economy": {
+            "cost": 9
+          },
+          "identity": {
+            "archetype": "formation",
+            "faction_id": "empire"
+          },
+          "abilities": [
+            "armorPiercing",
+            "ranged"
+          ],
+          "formation": {
+            "x": 8,
+            "y": 20,
+            "row": "front",
+            "lane": "right",
+            "depth": 2,
+            "files": 5,
+            "ranks": 2,
+            "width": 5,
+            "facing": 0.0,
+            "models": 10,
+            "frontage": 5,
+            "max_files": 5,
+            "model_class": "infantry",
+            "model_depth": 1,
+            "model_width": 1
+          }
+        },
+        "template_id": "handgunners"
+      },
+      {
+        "id": "unit-11",
+        "kind": "unit",
+        "name": "Аутрайдеры",
+        "state": {
+          "is_routing": false,
+          "current_health": 6,
+          "attached_hero_ids": []
+        },
+        "owner_id": "player-2",
+        "components": {
+          "combat": {
+            "melee": 3,
+            "skill": 4,
+            "spell": 0,
+            "morale": 5,
+            "ranged": 4,
+            "attacks": 1,
+            "movement": 7,
+            "armor_type": "medium",
+            "initiative": 4,
+            "spell_range": 0,
+            "weapon_type": "ranged",
+            "shooting_range": 9,
+            "spell_template": "single",
+            "missile_attacks": 1,
+            "shooting_template": "volley",
+            "requires_line_of_sight": true
+          },
+          "health": {
+            "max": 6,
+            "model_health": 1
+          },
+          "economy": {
+            "cost": 10
+          },
+          "identity": {
+            "archetype": "formation",
+            "faction_id": "empire"
+          },
+          "abilities": [
+            "fast",
+            "ranged"
+          ],
+          "formation": {
+            "x": 4,
+            "y": 4,
+            "row": "support",
+            "lane": "left",
+            "depth": 4,
+            "files": 3,
+            "ranks": 2,
+            "width": 3,
+            "facing": 0.0,
+            "models": 6,
+            "frontage": 3,
+            "max_files": 5,
+            "model_class": "cavalry",
+            "model_depth": 2,
+            "model_width": 1
+          }
+        },
+        "template_id": "outriders"
+      },
+      {
+        "id": "unit-34",
+        "kind": "unit",
+        "name": "Алебардисты",
+        "state": {
+          "is_routing": false,
+          "current_health": 14,
+          "attached_hero_ids": []
+        },
+        "owner_id": "player-2",
+        "components": {
+          "combat": {
+            "melee": 5,
+            "skill": 4,
+            "spell": 0,
+            "morale": 5,
+            "ranged": 0,
+            "attacks": 1,
+            "movement": 3,
+            "armor_type": "light",
+            "initiative": 3,
+            "spell_range": 0,
+            "weapon_type": "puncture",
+            "shooting_range": 0,
+            "spell_template": "single",
+            "missile_attacks": 1,
+            "shooting_template": "single",
+            "requires_line_of_sight": true
+          },
+          "health": {
+            "max": 14,
+            "model_health": 1
+          },
+          "economy": {
+            "cost": 7
+          },
+          "identity": {
+            "archetype": "formation",
+            "faction_id": "empire"
+          },
+          "abilities": [
+            "antiLarge"
+          ],
+          "formation": {
+            "x": 4,
+            "y": 12,
+            "row": "support",
+            "lane": "center",
+            "depth": 4,
+            "files": 4,
+            "ranks": 4,
+            "width": 4,
+            "facing": 0.0,
+            "models": 14,
+            "frontage": 4,
+            "max_files": 5,
+            "model_class": "infantry",
+            "model_depth": 1,
+            "model_width": 1
+          }
+        },
+        "template_id": "halberdiers"
+      },
+      {
+        "id": "unit-35",
+        "kind": "unit",
+        "name": "Алебардисты",
+        "state": {
+          "is_routing": false,
+          "current_health": 14,
+          "attached_hero_ids": []
+        },
+        "owner_id": "player-2",
+        "components": {
+          "combat": {
+            "melee": 5,
+            "skill": 4,
+            "spell": 0,
+            "morale": 5,
+            "ranged": 0,
+            "attacks": 1,
+            "movement": 3,
+            "armor_type": "light",
+            "initiative": 3,
+            "spell_range": 0,
+            "weapon_type": "puncture",
+            "shooting_range": 0,
+            "spell_template": "single",
+            "missile_attacks": 1,
+            "shooting_template": "single",
+            "requires_line_of_sight": true
+          },
+          "health": {
+            "max": 14,
+            "model_health": 1
+          },
+          "economy": {
+            "cost": 7
+          },
+          "identity": {
+            "archetype": "formation",
+            "faction_id": "empire"
+          },
+          "abilities": [
+            "antiLarge"
+          ],
+          "formation": {
+            "x": 4,
+            "y": 20,
+            "row": "support",
+            "lane": "right",
+            "depth": 4,
+            "files": 4,
+            "ranks": 4,
+            "width": 4,
+            "facing": 0.0,
+            "models": 14,
+            "frontage": 4,
+            "max_files": 5,
+            "model_class": "infantry",
+            "model_depth": 1,
+            "model_width": 1
+          }
+        },
+        "template_id": "halberdiers"
+      }
+    ],
+    "status": "active",
+    "treasury": 3,
+    "victories": 1,
+    "faction_id": "empire",
+    "round_notes": [
+      "Победа в раунде 1: +12 припасов"
+    ]
+  },
+  "defender": {
+    "id": "player-3",
+    "name": "Бот 2",
+    "is_bot": true,
+    "roster": [
+      {
+        "id": "hero-3",
+        "kind": "hero",
+        "name": "Варбосс",
+        "state": {
+          "is_routing": false,
+          "attached_to": null,
+          "attached_slot": null,
+          "current_health": 4
+        },
+        "owner_id": "player-3",
+        "components": {
+          "hero": {
+            "mounted": false
+          },
+          "combat": {
+            "melee": 5,
+            "skill": 5,
+            "spell": 0,
+            "morale": 8,
+            "ranged": 0,
+            "attacks": 2,
+            "movement": 3,
+            "armor_type": "heavy",
+            "initiative": 5,
+            "spell_range": 0,
+            "weapon_type": "slash",
+            "shooting_range": 0,
+            "spell_template": "single",
+            "missile_attacks": 1,
+            "shooting_template": "single",
+            "requires_line_of_sight": true
+          },
+          "health": {
+            "max": 4,
+            "model_health": 4
+          },
+          "economy": {
+            "cost": 0
+          },
+          "identity": {
+            "archetype": "character",
+            "faction_id": "greenskins"
+          },
+          "abilities": [
+            "ferocious",
+            "leader",
+            "muster"
+          ],
+          "formation": {
+            "x": 8,
+            "y": 4,
+            "row": "front",
+            "lane": "left",
+            "depth": 1,
+            "files": 1,
+            "ranks": 1,
+            "width": 1,
+            "facing": 0.0,
+            "models": 1,
+            "frontage": 1,
+            "max_files": 5,
+            "model_class": "infantry",
+            "model_depth": 1,
+            "model_width": 1
+          },
+          "progression": {
+            "level": 1,
+            "experience": 0,
+            "pending_draft": [],
+            "spent_experience": 0,
+            "picked_upgrade_ids": []
+          }
+        },
+        "template_id": "warboss"
+      },
+      {
+        "id": "unit-12",
+        "kind": "unit",
+        "name": "Катапульта-камикадзе",
+        "state": {
+          "is_routing": false,
+          "current_health": 8,
+          "attached_hero_ids": []
+        },
+        "owner_id": "player-3",
+        "components": {
+          "combat": {
+            "melee": 1,
+            "skill": 2,
+            "spell": 0,
+            "morale": 5,
+            "ranged": 7,
+            "attacks": 1,
+            "movement": 2,
+            "armor_type": "machine",
+            "initiative": 4,
+            "spell_range": 0,
+            "weapon_type": "demolish",
+            "shooting_range": 14,
+            "spell_template": "single",
+            "missile_attacks": 1,
+            "shooting_template": "blast",
+            "requires_line_of_sight": false
+          },
+          "health": {
+            "max": 8,
+            "model_health": 4
+          },
+          "economy": {
+            "cost": 12
+          },
+          "identity": {
+            "archetype": "formation",
+            "faction_id": "greenskins"
+          },
+          "abilities": [
+            "machine",
+            "ranged"
+          ],
+          "formation": {
+            "x": 8,
+            "y": 12,
+            "row": "front",
+            "lane": "center",
+            "depth": 2,
+            "files": 2,
+            "ranks": 1,
+            "width": 4,
+            "facing": 0.0,
+            "models": 2,
+            "frontage": 2,
+            "max_files": 5,
+            "model_class": "machine",
+            "model_depth": 2,
+            "model_width": 2
+          }
+        },
+        "template_id": "doom_diver"
+      },
+      {
+        "id": "unit-13",
+        "kind": "unit",
+        "name": "Гоблины-лучники",
+        "state": {
+          "is_routing": false,
+          "current_health": 12,
+          "attached_hero_ids": []
+        },
+        "owner_id": "player-3",
+        "components": {
+          "combat": {
+            "melee": 2,
+            "skill": 2,
+            "spell": 0,
+            "morale": 5,
+            "ranged": 4,
+            "attacks": 1,
+            "movement": 4,
+            "armor_type": "light",
+            "initiative": 4,
+            "spell_range": 0,
+            "weapon_type": "ranged",
+            "shooting_range": 9,
+            "spell_template": "single",
+            "missile_attacks": 1,
+            "shooting_template": "volley",
+            "requires_line_of_sight": true
+          },
+          "health": {
+            "max": 12,
+            "model_health": 1
+          },
+          "economy": {
+            "cost": 6
+          },
+          "identity": {
+            "archetype": "formation",
+            "faction_id": "greenskins"
+          },
+          "abilities": [
+            "ranged",
+            "skirmisher"
+          ],
+          "formation": {
+            "x": 8,
+            "y": 20,
+            "row": "front",
+            "lane": "right",
+            "depth": 3,
+            "files": 4,
+            "ranks": 3,
+            "width": 4,
+            "facing": 0.0,
+            "models": 12,
+            "frontage": 4,
+            "max_files": 5,
+            "model_class": "infantry",
+            "model_depth": 1,
+            "model_width": 1
+          }
+        },
+        "template_id": "goblin_archers"
+      },
+      {
+        "id": "unit-14",
+        "kind": "unit",
+        "name": "Орки-бойзы",
+        "state": {
+          "is_routing": false,
+          "current_health": 16,
+          "attached_hero_ids": []
+        },
+        "owner_id": "player-3",
+        "components": {
+          "combat": {
+            "melee": 5,
+            "skill": 3,
+            "spell": 0,
+            "morale": 5,
+            "ranged": 0,
+            "attacks": 1,
+            "movement": 3,
+            "armor_type": "medium",
+            "initiative": 3,
+            "spell_range": 0,
+            "weapon_type": "slash",
+            "shooting_range": 0,
+            "spell_template": "single",
+            "missile_attacks": 1,
+            "shooting_template": "single",
+            "requires_line_of_sight": true
+          },
+          "health": {
+            "max": 16,
+            "model_health": 1
+          },
+          "economy": {
+            "cost": 8
+          },
+          "identity": {
+            "archetype": "formation",
+            "faction_id": "greenskins"
+          },
+          "abilities": [
+            "ferocious"
+          ],
+          "formation": {
+            "x": 4,
+            "y": 4,
+            "row": "support",
+            "lane": "left",
+            "depth": 4,
+            "files": 4,
+            "ranks": 4,
+            "width": 4,
+            "facing": 0.0,
+            "models": 16,
+            "frontage": 4,
+            "max_files": 5,
+            "model_class": "infantry",
+            "model_depth": 1,
+            "model_width": 1
+          }
+        },
+        "template_id": "orc_boyz"
+      },
+      {
+        "id": "unit-15",
+        "kind": "unit",
+        "name": "Гоблины-лучники",
+        "state": {
+          "is_routing": false,
+          "current_health": 12,
+          "attached_hero_ids": []
+        },
+        "owner_id": "player-3",
+        "components": {
+          "combat": {
+            "melee": 2,
+            "skill": 2,
+            "spell": 0,
+            "morale": 5,
+            "ranged": 4,
+            "attacks": 1,
+            "movement": 4,
+            "armor_type": "light",
+            "initiative": 4,
+            "spell_range": 0,
+            "weapon_type": "ranged",
+            "shooting_range": 9,
+            "spell_template": "single",
+            "missile_attacks": 1,
+            "shooting_template": "volley",
+            "requires_line_of_sight": true
+          },
+          "health": {
+            "max": 12,
+            "model_health": 1
+          },
+          "economy": {
+            "cost": 6
+          },
+          "identity": {
+            "archetype": "formation",
+            "faction_id": "greenskins"
+          },
+          "abilities": [
+            "ranged",
+            "skirmisher"
+          ],
+          "formation": {
+            "x": 4,
+            "y": 12,
+            "row": "support",
+            "lane": "center",
+            "depth": 3,
+            "files": 4,
+            "ranks": 3,
+            "width": 4,
+            "facing": 0.0,
+            "models": 12,
+            "frontage": 4,
+            "max_files": 5,
+            "model_class": "infantry",
+            "model_depth": 1,
+            "model_width": 1
+          }
+        },
+        "template_id": "goblin_archers"
+      },
+      {
+        "id": "unit-36",
+        "kind": "unit",
+        "name": "Гоблины-лучники",
+        "state": {
+          "is_routing": false,
+          "current_health": 12,
+          "attached_hero_ids": []
+        },
+        "owner_id": "player-3",
+        "components": {
+          "combat": {
+            "melee": 2,
+            "skill": 2,
+            "spell": 0,
+            "morale": 5,
+            "ranged": 4,
+            "attacks": 1,
+            "movement": 4,
+            "armor_type": "light",
+            "initiative": 4,
+            "spell_range": 0,
+            "weapon_type": "ranged",
+            "shooting_range": 9,
+            "spell_template": "single",
+            "missile_attacks": 1,
+            "shooting_template": "volley",
+            "requires_line_of_sight": true
+          },
+          "health": {
+            "max": 12,
+            "model_health": 1
+          },
+          "economy": {
+            "cost": 6
+          },
+          "identity": {
+            "archetype": "formation",
+            "faction_id": "greenskins"
+          },
+          "abilities": [
+            "ranged",
+            "skirmisher"
+          ],
+          "formation": {
+            "x": 4,
+            "y": 20,
+            "row": "support",
+            "lane": "right",
+            "depth": 3,
+            "files": 4,
+            "ranks": 3,
+            "width": 4,
+            "facing": 0.0,
+            "models": 12,
+            "frontage": 4,
+            "max_files": 5,
+            "model_class": "infantry",
+            "model_depth": 1,
+            "model_width": 1
+          }
+        },
+        "template_id": "goblin_archers"
+      },
+      {
+        "id": "unit-37",
+        "kind": "unit",
+        "name": "Орки-бойзы",
+        "state": {
+          "is_routing": false,
+          "current_health": 16,
+          "attached_hero_ids": []
+        },
+        "owner_id": "player-3",
+        "components": {
+          "combat": {
+            "melee": 5,
+            "skill": 3,
+            "spell": 0,
+            "morale": 5,
+            "ranged": 0,
+            "attacks": 1,
+            "movement": 3,
+            "armor_type": "medium",
+            "initiative": 3,
+            "spell_range": 0,
+            "weapon_type": "slash",
+            "shooting_range": 0,
+            "spell_template": "single",
+            "missile_attacks": 1,
+            "shooting_template": "single",
+            "requires_line_of_sight": true
+          },
+          "health": {
+            "max": 16,
+            "model_health": 1
+          },
+          "economy": {
+            "cost": 8
+          },
+          "identity": {
+            "archetype": "formation",
+            "faction_id": "greenskins"
+          },
+          "abilities": [
+            "ferocious"
+          ],
+          "formation": {
+            "x": 0,
+            "y": 9,
+            "row": "reserve",
+            "lane": "center",
+            "depth": 4,
+            "files": 4,
+            "ranks": 4,
+            "width": 4,
+            "facing": 0.0,
+            "models": 16,
+            "frontage": 4,
+            "max_files": 5,
+            "model_class": "infantry",
+            "model_depth": 1,
+            "model_width": 1
+          }
+        },
+        "template_id": "orc_boyz"
+      }
+    ],
+    "status": "active",
+    "treasury": 2,
+    "victories": 1,
+    "faction_id": "greenskins",
+    "round_notes": [
+      "Победа в раунде 1: +12 припасов"
+    ]
+  },
+  "expected": {
+    "version": 2,
+    "mode": "outcome",
+    "winner_id": "player-2",
+    "rounds": 6,
+    "side_health": {
+      "left": 47.0,
+      "right": 34.0
+    },
+    "action_counts": {
+      "magic": 6,
+      "morale": 6,
+      "movement": 17,
+      "shooting": 9
+    },
+    "contacts": [],
+    "rule_effects": {
+      "blast": 3,
+      "machine": 3,
+      "march": 16,
+      "skirmisher": 1,
+      "volley": 6
+    },
+    "actions": [
+      {
+        "path": "R1/T1/magic/A1",
+        "type": "magic",
+        "actor_id": "hero-2",
+        "target_id": "hero-3",
+        "maneuver": {},
+        "damage": 2,
+        "morale": {},
+        "trace": {
+          "version": 1,
+          "result": "hit"
+        }
+      },
+      {
+        "path": "R1/T1/movement/unit-34",
+        "type": "movement",
+        "actor_id": "unit-34",
+        "target_id": "unit-12",
+        "outcome": {
+          "category": "blocked",
+          "contact_slot": "front",
+          "engaged": false,
+          "progress": "closer"
+        },
+        "trace": {
+          "rule_keys": [
+            "march"
+          ]
+        }
+      },
+      {
+        "path": "R1/T1/movement/unit-35",
+        "type": "movement",
+        "actor_id": "unit-35",
+        "target_id": "hero-3",
+        "outcome": {
+          "category": "blocked",
+          "contact_slot": "front",
+          "engaged": false,
+          "progress": "closer"
+        },
+        "trace": {
+          "rule_keys": [
+            "march"
+          ]
+        }
+      },
+      {
+        "path": "R1/T2/movement/hero-3",
+        "type": "movement",
+        "actor_id": "hero-3",
+        "target_id": "unit-9",
+        "outcome": {
+          "category": "advanced",
+          "contact_slot": "front",
+          "engaged": false,
+          "progress": "closer"
+        },
+        "trace": {
+          "rule_keys": [
+            "march"
+          ]
+        }
+      },
+      {
+        "path": "R1/T2/movement/unit-14",
+        "type": "movement",
+        "actor_id": "unit-14",
+        "target_id": "unit-10",
+        "outcome": {
+          "category": "blocked",
+          "contact_slot": "front",
+          "engaged": false,
+          "progress": "closer"
+        },
+        "trace": {
+          "rule_keys": [
+            "march"
+          ]
+        }
+      },
+      {
+        "path": "R2/T1/magic/A1",
+        "type": "magic",
+        "actor_id": "hero-2",
+        "target_id": "hero-3",
+        "maneuver": {},
+        "damage": 2,
+        "morale": {},
+        "trace": {
+          "version": 1,
+          "result": "hit"
+        }
+      },
+      {
+        "path": "R2/T1/movement/unit-34",
+        "type": "movement",
+        "actor_id": "unit-34",
+        "target_id": "hero-3",
+        "outcome": {
+          "category": "blocked",
+          "contact_slot": "front",
+          "engaged": false,
+          "progress": "same"
+        },
+        "trace": {
+          "rule_keys": [
+            "march"
+          ]
+        }
+      },
+      {
+        "path": "R2/T1/movement/unit-35",
+        "type": "movement",
+        "actor_id": "unit-35",
+        "target_id": "unit-12",
+        "outcome": {
+          "category": "blocked",
+          "contact_slot": "front",
+          "engaged": false,
+          "progress": "same"
+        },
+        "trace": {
+          "rule_keys": [
+            "march"
+          ]
+        }
+      },
+      {
+        "path": "R2/T2/movement/unit-14",
+        "type": "movement",
+        "actor_id": "unit-14",
+        "target_id": "unit-10",
+        "outcome": {
+          "category": "repositioned",
+          "contact_slot": "front",
+          "engaged": false,
+          "progress": "closer"
+        },
+        "trace": {
+          "rule_keys": [
+            "march"
+          ]
+        }
+      },
+      {
+        "path": "R3/T1/magic/A1",
+        "type": "magic",
+        "actor_id": "hero-2",
+        "target_id": "unit-14",
+        "maneuver": {},
+        "damage": 2,
+        "morale": {},
+        "trace": {
+          "version": 1,
+          "result": "hit"
+        }
+      },
+      {
+        "path": "R3/T1/movement/unit-34",
+        "type": "movement",
+        "actor_id": "unit-34",
+        "target_id": "unit-12",
+        "outcome": {
+          "category": "blocked",
+          "contact_slot": "front",
+          "engaged": false,
+          "progress": "same"
+        },
+        "trace": {
+          "rule_keys": [
+            "march"
+          ]
+        }
+      },
+      {
+        "path": "R3/T1/movement/unit-35",
+        "type": "movement",
+        "actor_id": "unit-35",
+        "target_id": "unit-14",
+        "outcome": {
+          "category": "blocked",
+          "contact_slot": "front",
+          "engaged": false,
+          "progress": "same"
+        },
+        "trace": {
+          "rule_keys": [
+            "march"
+          ]
+        }
+      },
+      {
+        "path": "R3/T1/shooting/A1",
+        "type": "shooting",
+        "actor_id": "unit-10",
+        "target_id": "unit-13",
+        "maneuver": {},
+        "damage": 2,
+        "morale": {},
+        "trace": {
+          "version": 1,
+          "rule_keys": [
+            "volley"
+          ],
+          "result": "hit"
+        }
+      },
+      {
+        "path": "R3/T2/movement/unit-14",
+        "type": "movement",
+        "actor_id": "unit-14",
+        "target_id": "unit-10",
+        "outcome": {
+          "category": "advanced",
+          "contact_slot": "front",
+          "engaged": false,
+          "progress": "closer"
+        },
+        "trace": {
+          "rule_keys": [
+            "march"
+          ]
+        }
+      },
+      {
+        "path": "R4/T1/magic/A1",
+        "type": "magic",
+        "actor_id": "hero-2",
+        "target_id": "unit-14",
+        "maneuver": {},
+        "damage": 2,
+        "morale": {},
+        "trace": {
+          "version": 1,
+          "result": "hit"
+        }
+      },
+      {
+        "path": "R4/T1/movement/unit-34",
+        "type": "movement",
+        "actor_id": "unit-34",
+        "target_id": "unit-12",
+        "outcome": {
+          "category": "blocked",
+          "contact_slot": "front",
+          "engaged": false,
+          "progress": "same"
+        },
+        "trace": {
+          "rule_keys": [
+            "march"
+          ]
+        }
+      },
+      {
+        "path": "R4/T1/movement/unit-35",
+        "type": "movement",
+        "actor_id": "unit-35",
+        "target_id": "unit-14",
+        "outcome": {
+          "category": "blocked",
+          "contact_slot": "front",
+          "engaged": false,
+          "progress": "same"
+        },
+        "trace": {
+          "rule_keys": [
+            "march"
+          ]
+        }
+      },
+      {
+        "path": "R4/T1/shooting/A1",
+        "type": "shooting",
+        "actor_id": "unit-10",
+        "target_id": "unit-13",
+        "maneuver": {},
+        "damage": 2,
+        "morale": {},
+        "trace": {
+          "version": 1,
+          "rule_keys": [
+            "volley"
+          ],
+          "result": "hit"
+        }
+      },
+      {
+        "path": "R4/T1/shooting/A2",
+        "type": "shooting",
+        "actor_id": "unit-11",
+        "target_id": "unit-14",
+        "maneuver": {},
+        "damage": 2,
+        "morale": {},
+        "trace": {
+          "version": 1,
+          "rule_keys": [
+            "volley"
+          ],
+          "result": "hit"
+        }
+      },
+      {
+        "path": "R4/T2/movement/unit-14",
+        "type": "movement",
+        "actor_id": "unit-14",
+        "target_id": "unit-10",
+        "outcome": {
+          "category": "advanced",
+          "contact_slot": "front",
+          "engaged": false,
+          "progress": "same"
+        },
+        "trace": {
+          "rule_keys": [
+            "march"
+          ]
+        }
+      },
+      {
+        "path": "R4/T2/shooting/A1",
+        "type": "shooting",
+        "actor_id": "unit-12",
+        "target_id": "unit-9",
+        "maneuver": {},
+        "damage": 5,
+        "morale": {},
+        "trace": {
+          "version": 1,
+          "rule_keys": [
+            "blast",
+            "machine"
+          ],
+          "result": "hit"
+        }
+      },
+      {
+        "path": "R4/T2/shooting/A2",
+        "type": "morale",
+        "actor_id": "unit-9",
+        "maneuver": {},
+        "damage": 0,
+        "morale": {
+          "roll": 3,
+          "threshold": 8,
+          "passed": true
+        },
+        "trace": {
+          "version": 1,
+          "result": "passed"
+        }
+      },
+      {
+        "path": "R5/T1/magic/A1",
+        "type": "magic",
+        "actor_id": "hero-2",
+        "target_id": "unit-14",
+        "maneuver": {},
+        "damage": 2,
+        "morale": {},
+        "trace": {
+          "version": 1,
+          "result": "hit"
+        }
+      },
+      {
+        "path": "R5/T1/movement/unit-34",
+        "type": "movement",
+        "actor_id": "unit-34",
+        "target_id": "unit-12",
+        "outcome": {
+          "category": "blocked",
+          "contact_slot": "front",
+          "engaged": false,
+          "progress": "same"
+        },
+        "trace": {
+          "rule_keys": [
+            "march"
+          ]
+        }
+      },
+      {
+        "path": "R5/T1/movement/unit-35",
+        "type": "movement",
+        "actor_id": "unit-35",
+        "target_id": "unit-14",
+        "outcome": {
+          "category": "blocked",
+          "contact_slot": "front",
+          "engaged": false,
+          "progress": "same"
+        },
+        "trace": {
+          "rule_keys": [
+            "march"
+          ]
+        }
+      },
+      {
+        "path": "R5/T1/shooting/A1",
+        "type": "shooting",
+        "actor_id": "unit-9",
+        "target_id": "unit-12",
+        "maneuver": {},
+        "damage": 5,
+        "morale": {},
+        "trace": {
+          "version": 1,
+          "rule_keys": [
+            "blast",
+            "machine"
+          ],
+          "result": "hit"
+        }
+      },
+      {
+        "path": "R5/T1/shooting/A2",
+        "type": "shooting",
+        "actor_id": "unit-11",
+        "target_id": "unit-14",
+        "maneuver": {},
+        "damage": 2,
+        "morale": {},
+        "trace": {
+          "version": 1,
+          "rule_keys": [
+            "volley"
+          ],
+          "result": "hit"
+        }
+      },
+      {
+        "path": "R5/T1/shooting/A3",
+        "type": "morale",
+        "actor_id": "unit-12",
+        "maneuver": {},
+        "damage": 0,
+        "morale": {
+          "roll": 8,
+          "threshold": 5,
+          "passed": false
+        },
+        "trace": {
+          "version": 1,
+          "result": "routing"
+        }
+      },
+      {
+        "path": "R5/T1/shooting/A4",
+        "type": "morale",
+        "actor_id": "unit-14",
+        "maneuver": {},
+        "damage": 0,
+        "morale": {
+          "roll": 5,
+          "threshold": 8,
+          "passed": true
+        },
+        "trace": {
+          "version": 1,
+          "result": "passed"
+        }
+      },
+      {
+        "path": "R5/T2/start/A1",
+        "type": "morale",
+        "actor_id": "unit-12",
+        "maneuver": {},
+        "damage": 0,
+        "morale": {
+          "roll": 7,
+          "threshold": 5,
+          "passed": false
+        },
+        "trace": {
+          "version": 1,
+          "result": "routing"
+        }
+      },
+      {
+        "path": "R6/T1/magic/A1",
+        "type": "magic",
+        "actor_id": "hero-2",
+        "target_id": "unit-14",
+        "maneuver": {},
+        "damage": 2,
+        "morale": {},
+        "trace": {
+          "version": 1,
+          "result": "hit"
+        }
+      },
+      {
+        "path": "R6/T1/magic/A2",
+        "type": "morale",
+        "actor_id": "unit-14",
+        "maneuver": {},
+        "damage": 0,
+        "morale": {
+          "roll": 10,
+          "threshold": 8,
+          "passed": false
+        },
+        "trace": {
+          "version": 1,
+          "result": "routing"
+        }
+      },
+      {
+        "path": "R6/T1/movement/unit-34",
+        "type": "movement",
+        "actor_id": "unit-34",
+        "target_id": "unit-14",
+        "outcome": {
+          "category": "blocked",
+          "engaged": false,
+          "progress": "same"
+        },
+        "trace": {}
+      },
+      {
+        "path": "R6/T1/movement/unit-35",
+        "type": "movement",
+        "actor_id": "unit-35",
+        "target_id": "unit-12",
+        "outcome": {
+          "category": "advanced",
+          "contact_slot": "flank",
+          "engaged": false,
+          "progress": "closer"
+        },
+        "trace": {
+          "rule_keys": [
+            "march"
+          ]
+        }
+      },
+      {
+        "path": "R6/T1/shooting/A1",
+        "type": "shooting",
+        "actor_id": "unit-9",
+        "target_id": "unit-12",
+        "maneuver": {},
+        "damage": 5,
+        "morale": {},
+        "trace": {
+          "version": 1,
+          "rule_keys": [
+            "blast",
+            "machine"
+          ],
+          "result": "hit"
+        }
+      },
+      {
+        "path": "R6/T1/shooting/A2",
+        "type": "shooting",
+        "actor_id": "unit-11",
+        "target_id": "unit-14",
+        "maneuver": {},
+        "damage": 2,
+        "morale": {},
+        "trace": {
+          "version": 1,
+          "rule_keys": [
+            "volley"
+          ],
+          "result": "hit"
+        }
+      },
+      {
+        "path": "R6/T2/shooting/A1",
+        "type": "shooting",
+        "actor_id": "unit-15",
+        "target_id": "unit-9",
+        "maneuver": {},
+        "damage": 2,
+        "morale": {},
+        "trace": {
+          "version": 1,
+          "rule_keys": [
+            "skirmisher",
+            "volley"
+          ],
+          "result": "hit"
+        }
+      },
+      {
+        "path": "R6/T2/start/A1",
+        "type": "morale",
+        "actor_id": "unit-14",
+        "maneuver": {},
+        "damage": 0,
+        "morale": {
+          "roll": 6,
+          "threshold": 8,
+          "passed": true
+        },
+        "trace": {
+          "version": 1,
+          "result": "rallied"
+        }
+      }
+    ]
+  }
+}

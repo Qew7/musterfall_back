@@ -47,7 +47,7 @@ module Sim
 
         if @compare
           stored = symbolize(@matchup.result_payload)
-          payload[:compare] = compare_results(stored, fresh) if stored.present?
+          payload[:compare] = compare_results(stored, fresh, mode: compare_mode) if stored.present?
         end
 
         payload
@@ -55,16 +55,25 @@ module Sim
 
       private
 
-      def compare_results(stored, fresh)
+      def compare_results(stored, fresh, mode: :all)
+        semantic = SemanticDiff.call(stored, fresh)
         {
           winner_changed: stored[:winner_id] != fresh[:winner_id],
           stored_winner_id: stored[:winner_id],
           fresh_winner_id: fresh[:winner_id],
           stored_summary: stored[:summary],
           fresh_summary: fresh[:summary],
-          movement: diff_movement_actions(stored, fresh),
-          identical: stored.deep_stringify_keys == fresh.deep_stringify_keys
+          movement: mode == :semantic ? nil : diff_movement_actions(stored, fresh),
+          semantic: semantic,
+          semantic_identical: semantic[:identical],
+          identical: mode == :semantic ? semantic[:identical] : stored.deep_stringify_keys == fresh.deep_stringify_keys
         }
+      end
+
+      def compare_mode
+        return :all if @compare == true
+
+        @compare.to_s == "semantic" ? :semantic : :all
       end
 
       def diff_movement_actions(stored, fresh)

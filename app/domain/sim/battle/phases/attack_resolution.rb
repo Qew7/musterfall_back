@@ -162,6 +162,12 @@ module Sim
             target_state_before: before,
             target_state_after: after,
             charge: nil,
+            trace: Trace.build(
+              rule_keys: Trace.attack_rule_keys(host, attack_type, profile: profile),
+              trigger: attack_type,
+              result: "hit",
+              target_ids: victims.map { |entry| entry[:target][:entity_id] }
+            ),
             snapshot: State.snapshot_battlefield([ acting_side, target_side ])
           }
           action[:summary] = player_line
@@ -212,6 +218,12 @@ module Sim
                 target_state_before: before,
                 target_state_after: after,
                 charge: melee_charge(attacker, target, "melee", vector),
+                trace: Trace.build(
+                  rule_keys: Trace.attack_rule_keys(attacker, "melee", profile: entry[:profile]),
+                  trigger: "melee_strike",
+                  result: "hit",
+                  target_ids: [ target[:entity_id] ]
+                ),
                 snapshot: State.snapshot_battlefield([ acting_side, target_side ])
               }
               action[:summary] = player_line

@@ -24,10 +24,10 @@ namespace :battle do
     end
   end
 
-  desc "Replay a stored matchup with the same seed (MATCHUP_ID or BATTLE_ID; COMPARE=1 to diff movement)"
+  desc "Replay a stored matchup (COMPARE=1 or COMPARE=semantic)"
   task replay: :environment do
     matchup = resolve_matchup!
-    compare = ActiveModel::Type::Boolean.new.cast(ENV["COMPARE"])
+    compare = ENV["COMPARE"].to_s == "semantic" ? :semantic : ActiveModel::Type::Boolean.new.cast(ENV["COMPARE"])
     payload = Sim::Battle::Replay.call(matchup: matchup, compare: compare)
 
     out_path = ENV["OUT"].presence || default_replay_path(matchup.id)
@@ -43,6 +43,37 @@ namespace :battle do
     elsif compare
       warn "COMPARE requested but stored result_payload is empty (status=#{matchup.status})"
     end
+  end
+
+  desc "Export a RoundMatchup into the checked-in scenario corpus (MATCHUP_ID; OUT optional)"
+  task export_scenario: :environment do
+    abort "Set MATCHUP_ID" unless ENV["MATCHUP_ID"].present?
+
+    matchup = RoundMatchup.find(ENV["MATCHUP_ID"])
+    payload = Sim::Battle::ScenarioCorpus.export(matchup)
+    out_path = ENV["OUT"].presence || Rails.root.join(
+      "test/fixtures/battle_scenarios/matchup_#{matchup.id}.json"
+    ).to_s
+    FileUtils.mkdir_p(File.dirname(out_path))
+    File.write(out_path, JSON.pretty_generate(deep_stringify(payload)))
+    puts "Exported matchup #{matchup.id} to #{out_path}"
+  end
+
+  desc "Replay every checked-in battle scenario and report semantic drift"
+  task replay_corpus: :environment do
+    pattern = Rails.root.join("test/fixtures/battle_scenarios/*.{json,yml,yaml}")
+    paths = Dir.glob(pattern).sort
+    abort "No battle scenarios found at #{pattern}" if paths.empty?
+
+    failures = []
+    paths.each do |path|
+      entry = Sim::Battle::ScenarioCorpus.load(path)
+      replay = Sim::Battle::ScenarioCorpus.run(entry)
+      identical = replay[:semantic].deep_stringify_keys == replay[:expected].deep_stringify_keys
+      puts "#{identical ? 'OK' : 'CHANGED'} #{entry[:id]} seed=#{entry[:seed]}"
+      failures << entry[:id] unless identical
+    end
+    abort "Semantic drift in: #{failures.join(', ')}" if failures.any?
   end
 
   def resolve_matchup!
@@ -68,6 +99,10 @@ namespace :battle do
 
     movement = compare[:movement] || {}
     puts "Compare: winner_changed=#{compare[:winner_changed]}"
+    puts "  semantic_identical=#{compare[:semantic_identical]}"
+    if (first = compare.dig(:semantic, :first_divergence))
+      puts "  first semantic divergence: #{first[:path]}"
+    end
     puts "  stored: #{compare[:stored_summary]}"
     puts "  fresh:  #{compare[:fresh_summary]}"
     puts "  movement actions: stored=#{movement[:stored_count]} fresh=#{movement[:fresh_count]} changed=#{movement[:changed]}"

@@ -562,6 +562,12 @@ module Sim
             to: to,
             wheel: wheel && wheel[:cost].to_f > 0.05 ? { x: wheel[:x], y: wheel[:y], facing: wheel[:facing], delta: wheel[:delta], cost: wheel[:cost], direction: wheel_direction(wheel) } : nil,
             maneuver: maneuver,
+            trace: Trace.build(
+              rule_keys: Trace.movement_rule_keys(combatant, maneuver),
+              trigger: "movement_plan",
+              result: maneuver && maneuver[:kind] || "hold",
+              target_ids: [ maneuver && maneuver[:target_id] ]
+            ),
             snapshot: State.snapshot_battlefield([ acting_side, target_side ])
           }
         end

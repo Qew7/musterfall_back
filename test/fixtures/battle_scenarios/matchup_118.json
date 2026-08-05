@@ -1,0 +1,1244 @@
+{
+  "version": 1,
+  "id": "matchup-118",
+  "source": {
+    "matchup_id": 118,
+    "game_id": 29,
+    "campaign_round": 1
+  },
+  "seed": 1613179752,
+  "map_seed": 1613179438,
+  "tags": [
+    "melee",
+    "morale",
+    "movement",
+    "shooting"
+  ],
+  "attacker": {
+    "id": "player-5",
+    "name": "Бот 4",
+    "is_bot": true,
+    "roster": [
+      {
+        "id": "hero-5",
+        "kind": "hero",
+        "name": "Вэйстокер",
+        "state": {
+          "is_routing": false,
+          "attached_to": null,
+          "attached_slot": null,
+          "current_health": 2
+        },
+        "owner_id": "player-5",
+        "components": {
+          "hero": {
+            "mounted": false
+          },
+          "combat": {
+            "melee": 2,
+            "skill": 5,
+            "spell": 0,
+            "morale": 8,
+            "ranged": 5,
+            "attacks": 2,
+            "movement": 3,
+            "armor_type": "light",
+            "initiative": 5,
+            "spell_range": 0,
+            "weapon_type": "ranged",
+            "shooting_range": 9,
+            "spell_template": "single",
+            "missile_attacks": 1,
+            "shooting_template": "volley",
+            "requires_line_of_sight": true
+          },
+          "health": {
+            "max": 2,
+            "model_health": 2
+          },
+          "economy": {
+            "cost": 0
+          },
+          "identity": {
+            "archetype": "character",
+            "faction_id": "wildwood"
+          },
+          "abilities": [
+            "leader",
+            "muster",
+            "ranged"
+          ],
+          "formation": {
+            "x": 8,
+            "y": 4,
+            "row": "front",
+            "lane": "left",
+            "depth": 1,
+            "files": 1,
+            "ranks": 1,
+            "width": 1,
+            "facing": 0.0,
+            "models": 1,
+            "frontage": 1,
+            "max_files": 5,
+            "model_class": "infantry",
+            "model_depth": 1,
+            "model_width": 1
+          },
+          "progression": {
+            "level": 1,
+            "experience": 0,
+            "pending_draft": [],
+            "spent_experience": 0,
+            "picked_upgrade_ids": []
+          }
+        },
+        "template_id": "waystalker"
+      },
+      {
+        "id": "unit-19",
+        "kind": "unit",
+        "name": "Танцоры войны",
+        "state": {
+          "is_routing": false,
+          "current_health": 8,
+          "attached_hero_ids": []
+        },
+        "owner_id": "player-5",
+        "components": {
+          "combat": {
+            "melee": 5,
+            "skill": 4,
+            "spell": 0,
+            "morale": 5,
+            "ranged": 0,
+            "attacks": 1,
+            "movement": 4,
+            "armor_type": "light",
+            "initiative": 3,
+            "spell_range": 0,
+            "weapon_type": "slash",
+            "shooting_range": 0,
+            "spell_template": "single",
+            "missile_attacks": 1,
+            "shooting_template": "single",
+            "requires_line_of_sight": true
+          },
+          "health": {
+            "max": 8,
+            "model_health": 1
+          },
+          "economy": {
+            "cost": 9
+          },
+          "identity": {
+            "archetype": "formation",
+            "faction_id": "wildwood"
+          },
+          "abilities": [
+            "dodge",
+            "skirmisher"
+          ],
+          "formation": {
+            "x": 8,
+            "y": 12,
+            "row": "front",
+            "lane": "center",
+            "depth": 2,
+            "files": 4,
+            "ranks": 2,
+            "width": 4,
+            "facing": 0.0,
+            "models": 8,
+            "frontage": 4,
+            "max_files": 5,
+            "model_class": "infantry",
+            "model_depth": 1,
+            "model_width": 1
+          }
+        },
+        "template_id": "wardancers"
+      },
+      {
+        "id": "unit-20",
+        "kind": "unit",
+        "name": "Древочеловек",
+        "state": {
+          "is_routing": false,
+          "current_health": 12,
+          "attached_hero_ids": []
+        },
+        "owner_id": "player-5",
+        "components": {
+          "combat": {
+            "melee": 6,
+            "skill": 5,
+            "spell": 0,
+            "morale": 6,
+            "ranged": 2,
+            "attacks": 2,
+            "movement": 3,
+            "armor_type": "heavy",
+            "initiative": 4,
+            "spell_range": 0,
+            "weapon_type": "blunt",
+            "shooting_range": 9,
+            "spell_template": "single",
+            "missile_attacks": 1,
+            "shooting_template": "single",
+            "requires_line_of_sight": true
+          },
+          "health": {
+            "max": 12,
+            "model_health": 4
+          },
+          "economy": {
+            "cost": 14
+          },
+          "identity": {
+            "archetype": "formation",
+            "faction_id": "wildwood"
+          },
+          "abilities": [
+            "fear",
+            "monster"
+          ],
+          "formation": {
+            "x": 8,
+            "y": 20,
+            "row": "front",
+            "lane": "right",
+            "depth": 4,
+            "files": 2,
+            "ranks": 2,
+            "width": 4,
+            "facing": 0.0,
+            "models": 3,
+            "frontage": 2,
+            "max_files": 5,
+            "model_class": "monster",
+            "model_depth": 2,
+            "model_width": 2
+          }
+        },
+        "template_id": "treeman"
+      },
+      {
+        "id": "unit-21",
+        "kind": "unit",
+        "name": "Танцоры войны",
+        "state": {
+          "is_routing": false,
+          "current_health": 8,
+          "attached_hero_ids": []
+        },
+        "owner_id": "player-5",
+        "components": {
+          "combat": {
+            "melee": 5,
+            "skill": 4,
+            "spell": 0,
+            "morale": 5,
+            "ranged": 0,
+            "attacks": 1,
+            "movement": 4,
+            "armor_type": "light",
+            "initiative": 3,
+            "spell_range": 0,
+            "weapon_type": "slash",
+            "shooting_range": 0,
+            "spell_template": "single",
+            "missile_attacks": 1,
+            "shooting_template": "single",
+            "requires_line_of_sight": true
+          },
+          "health": {
+            "max": 8,
+            "model_health": 1
+          },
+          "economy": {
+            "cost": 9
+          },
+          "identity": {
+            "archetype": "formation",
+            "faction_id": "wildwood"
+          },
+          "abilities": [
+            "dodge",
+            "skirmisher"
+          ],
+          "formation": {
+            "x": 4,
+            "y": 4,
+            "row": "support",
+            "lane": "left",
+            "depth": 2,
+            "files": 4,
+            "ranks": 2,
+            "width": 4,
+            "facing": 0.0,
+            "models": 8,
+            "frontage": 4,
+            "max_files": 5,
+            "model_class": "infantry",
+            "model_depth": 1,
+            "model_width": 1
+          }
+        },
+        "template_id": "wardancers"
+      }
+    ],
+    "status": "active",
+    "treasury": 4,
+    "victories": 0,
+    "faction_id": "wildwood",
+    "round_notes": []
+  },
+  "defender": {
+    "id": "player-6",
+    "name": "Бот 5",
+    "is_bot": true,
+    "roster": [
+      {
+        "id": "hero-6",
+        "kind": "hero",
+        "name": "Вэйстокер",
+        "state": {
+          "is_routing": false,
+          "attached_to": null,
+          "attached_slot": null,
+          "current_health": 2
+        },
+        "owner_id": "player-6",
+        "components": {
+          "hero": {
+            "mounted": false
+          },
+          "combat": {
+            "melee": 2,
+            "skill": 5,
+            "spell": 0,
+            "morale": 8,
+            "ranged": 5,
+            "attacks": 2,
+            "movement": 3,
+            "armor_type": "light",
+            "initiative": 5,
+            "spell_range": 0,
+            "weapon_type": "ranged",
+            "shooting_range": 9,
+            "spell_template": "single",
+            "missile_attacks": 1,
+            "shooting_template": "volley",
+            "requires_line_of_sight": true
+          },
+          "health": {
+            "max": 2,
+            "model_health": 2
+          },
+          "economy": {
+            "cost": 0
+          },
+          "identity": {
+            "archetype": "character",
+            "faction_id": "wildwood"
+          },
+          "abilities": [
+            "leader",
+            "muster",
+            "ranged"
+          ],
+          "formation": {
+            "x": 8,
+            "y": 4,
+            "row": "front",
+            "lane": "left",
+            "depth": 1,
+            "files": 1,
+            "ranks": 1,
+            "width": 1,
+            "facing": 0.0,
+            "models": 1,
+            "frontage": 1,
+            "max_files": 5,
+            "model_class": "infantry",
+            "model_depth": 1,
+            "model_width": 1
+          },
+          "progression": {
+            "level": 1,
+            "experience": 0,
+            "pending_draft": [],
+            "spent_experience": 0,
+            "picked_upgrade_ids": []
+          }
+        },
+        "template_id": "waystalker"
+      },
+      {
+        "id": "unit-22",
+        "kind": "unit",
+        "name": "Танцоры войны",
+        "state": {
+          "is_routing": false,
+          "current_health": 8,
+          "attached_hero_ids": []
+        },
+        "owner_id": "player-6",
+        "components": {
+          "combat": {
+            "melee": 5,
+            "skill": 4,
+            "spell": 0,
+            "morale": 5,
+            "ranged": 0,
+            "attacks": 1,
+            "movement": 4,
+            "armor_type": "light",
+            "initiative": 3,
+            "spell_range": 0,
+            "weapon_type": "slash",
+            "shooting_range": 0,
+            "spell_template": "single",
+            "missile_attacks": 1,
+            "shooting_template": "single",
+            "requires_line_of_sight": true
+          },
+          "health": {
+            "max": 8,
+            "model_health": 1
+          },
+          "economy": {
+            "cost": 9
+          },
+          "identity": {
+            "archetype": "formation",
+            "faction_id": "wildwood"
+          },
+          "abilities": [
+            "dodge",
+            "skirmisher"
+          ],
+          "formation": {
+            "x": 8,
+            "y": 12,
+            "row": "front",
+            "lane": "center",
+            "depth": 2,
+            "files": 4,
+            "ranks": 2,
+            "width": 4,
+            "facing": 0.0,
+            "models": 8,
+            "frontage": 4,
+            "max_files": 5,
+            "model_class": "infantry",
+            "model_depth": 1,
+            "model_width": 1
+          }
+        },
+        "template_id": "wardancers"
+      },
+      {
+        "id": "unit-23",
+        "kind": "unit",
+        "name": "Великий ястреб рощи",
+        "state": {
+          "is_routing": false,
+          "current_health": 5,
+          "attached_hero_ids": []
+        },
+        "owner_id": "player-6",
+        "components": {
+          "combat": {
+            "melee": 5,
+            "skill": 4,
+            "spell": 0,
+            "morale": 5,
+            "ranged": 0,
+            "attacks": 2,
+            "movement": 20,
+            "armor_type": "medium",
+            "initiative": 5,
+            "spell_range": 0,
+            "weapon_type": "puncture",
+            "shooting_range": 0,
+            "spell_template": "single",
+            "missile_attacks": 1,
+            "shooting_template": "single",
+            "requires_line_of_sight": true
+          },
+          "health": {
+            "max": 5,
+            "model_health": 5
+          },
+          "economy": {
+            "cost": 12
+          },
+          "identity": {
+            "archetype": "formation",
+            "faction_id": "wildwood"
+          },
+          "abilities": [
+            "fast",
+            "flying",
+            "forestborn",
+            "monster"
+          ],
+          "formation": {
+            "x": 8,
+            "y": 20,
+            "row": "front",
+            "lane": "right",
+            "depth": 2,
+            "files": 1,
+            "ranks": 1,
+            "width": 2,
+            "facing": 0.0,
+            "models": 1,
+            "frontage": 2,
+            "max_files": 5,
+            "model_class": "monster",
+            "model_depth": 2,
+            "model_width": 2
+          }
+        },
+        "template_id": "grove_hawk"
+      },
+      {
+        "id": "unit-24",
+        "kind": "unit",
+        "name": "Древочеловек",
+        "state": {
+          "is_routing": false,
+          "current_health": 12,
+          "attached_hero_ids": []
+        },
+        "owner_id": "player-6",
+        "components": {
+          "combat": {
+            "melee": 6,
+            "skill": 5,
+            "spell": 0,
+            "morale": 6,
+            "ranged": 2,
+            "attacks": 2,
+            "movement": 3,
+            "armor_type": "heavy",
+            "initiative": 4,
+            "spell_range": 0,
+            "weapon_type": "blunt",
+            "shooting_range": 9,
+            "spell_template": "single",
+            "missile_attacks": 1,
+            "shooting_template": "single",
+            "requires_line_of_sight": true
+          },
+          "health": {
+            "max": 12,
+            "model_health": 4
+          },
+          "economy": {
+            "cost": 14
+          },
+          "identity": {
+            "archetype": "formation",
+            "faction_id": "wildwood"
+          },
+          "abilities": [
+            "fear",
+            "monster"
+          ],
+          "formation": {
+            "x": 4,
+            "y": 4,
+            "row": "support",
+            "lane": "left",
+            "depth": 4,
+            "files": 2,
+            "ranks": 2,
+            "width": 4,
+            "facing": 0.0,
+            "models": 3,
+            "frontage": 2,
+            "max_files": 5,
+            "model_class": "monster",
+            "model_depth": 2,
+            "model_width": 2
+          }
+        },
+        "template_id": "treeman"
+      }
+    ],
+    "status": "active",
+    "treasury": 1,
+    "victories": 0,
+    "faction_id": "wildwood",
+    "round_notes": []
+  },
+  "expected": {
+    "version": 2,
+    "mode": "outcome",
+    "winner_id": "player-5",
+    "rounds": 6,
+    "side_health": {
+      "left": 21.0,
+      "right": 7.0
+    },
+    "action_counts": {
+      "melee": 5,
+      "morale": 2,
+      "movement": 28,
+      "shooting": 8
+    },
+    "contacts": [
+      {
+        "actor_id": "unit-21"
+      },
+      {
+        "actor_id": "unit-24",
+        "target_id": "unit-20",
+        "slot": "front"
+      }
+    ],
+    "rule_effects": {
+      "flying": 2,
+      "march": 13,
+      "skirmisher": 1,
+      "volley": 2
+    },
+    "actions": [
+      {
+        "path": "R1/T1/movement/unit-19",
+        "type": "movement",
+        "actor_id": "unit-19",
+        "target_id": "unit-22",
+        "outcome": {
+          "category": "advanced",
+          "contact_slot": "front",
+          "engaged": false,
+          "progress": "closer"
+        },
+        "trace": {
+          "rule_keys": [
+            "march"
+          ]
+        }
+      },
+      {
+        "path": "R1/T1/movement/unit-20",
+        "type": "movement",
+        "actor_id": "unit-20",
+        "target_id": "hero-6",
+        "outcome": {
+          "category": "advanced",
+          "contact_slot": "front",
+          "engaged": false,
+          "progress": "closer"
+        },
+        "trace": {
+          "rule_keys": [
+            "march"
+          ]
+        }
+      },
+      {
+        "path": "R1/T1/movement/unit-21",
+        "type": "movement",
+        "actor_id": "unit-21",
+        "target_id": "unit-23",
+        "outcome": {
+          "category": "blocked",
+          "contact_slot": "front",
+          "engaged": false,
+          "progress": "closer"
+        },
+        "trace": {
+          "rule_keys": [
+            "march"
+          ]
+        }
+      },
+      {
+        "path": "R1/T1/shooting/A1",
+        "type": "shooting",
+        "actor_id": "unit-20",
+        "target_id": "unit-23",
+        "maneuver": {},
+        "damage": 1,
+        "morale": {},
+        "trace": {
+          "version": 1,
+          "result": "hit"
+        }
+      },
+      {
+        "path": "R1/T2/movement/unit-22",
+        "type": "movement",
+        "actor_id": "unit-22",
+        "target_id": "unit-19",
+        "outcome": {
+          "category": "advanced",
+          "contact_slot": "front",
+          "engaged": false,
+          "progress": "closer"
+        },
+        "trace": {
+          "rule_keys": [
+            "march"
+          ]
+        }
+      },
+      {
+        "path": "R1/T2/movement/unit-23",
+        "type": "movement",
+        "actor_id": "unit-23",
+        "target_id": "unit-19",
+        "outcome": {
+          "category": "flew",
+          "contact_slot": "rear",
+          "engaged": false,
+          "progress": "closer"
+        },
+        "trace": {
+          "rule_keys": [
+            "flying"
+          ]
+        }
+      },
+      {
+        "path": "R1/T2/movement/unit-24",
+        "type": "movement",
+        "actor_id": "unit-24",
+        "target_id": "unit-20",
+        "outcome": {
+          "category": "blocked",
+          "contact_slot": "front",
+          "engaged": false,
+          "progress": "closer"
+        },
+        "trace": {
+          "rule_keys": [
+            "march"
+          ]
+        }
+      },
+      {
+        "path": "R2/T1/movement/unit-19",
+        "type": "movement",
+        "actor_id": "unit-19",
+        "target_id": "unit-22",
+        "outcome": {
+          "category": "advanced",
+          "contact_slot": "front",
+          "engaged": false,
+          "progress": "closer"
+        },
+        "trace": {}
+      },
+      {
+        "path": "R2/T1/movement/unit-20",
+        "type": "movement",
+        "actor_id": "unit-20",
+        "target_id": "unit-22",
+        "outcome": {
+          "category": "advanced",
+          "contact_slot": "flank",
+          "engaged": false,
+          "progress": "closer"
+        },
+        "trace": {}
+      },
+      {
+        "path": "R2/T1/movement/unit-21",
+        "type": "movement",
+        "actor_id": "unit-21",
+        "target_id": "unit-23",
+        "outcome": {
+          "category": "advanced",
+          "contact_slot": "rear",
+          "engaged": false,
+          "progress": "same"
+        },
+        "trace": {}
+      },
+      {
+        "path": "R2/T1/shooting/A1",
+        "type": "shooting",
+        "actor_id": "hero-5",
+        "target_id": "unit-23",
+        "maneuver": {},
+        "damage": 3,
+        "morale": {},
+        "trace": {
+          "version": 1,
+          "rule_keys": [
+            "volley"
+          ],
+          "result": "hit"
+        }
+      },
+      {
+        "path": "R2/T1/shooting/A2",
+        "type": "shooting",
+        "actor_id": "unit-20",
+        "target_id": "hero-6",
+        "maneuver": {},
+        "damage": 1,
+        "morale": {},
+        "trace": {
+          "version": 1,
+          "result": "hit"
+        }
+      },
+      {
+        "path": "R2/T2/movement/unit-22",
+        "type": "movement",
+        "actor_id": "unit-22",
+        "target_id": "hero-5",
+        "outcome": {
+          "category": "advanced",
+          "contact_slot": "front",
+          "engaged": false,
+          "progress": "same"
+        },
+        "trace": {}
+      },
+      {
+        "path": "R2/T2/movement/unit-23",
+        "type": "movement",
+        "actor_id": "unit-23",
+        "target_id": "hero-5",
+        "outcome": {
+          "category": "flew",
+          "contact_slot": "rear",
+          "engaged": false,
+          "progress": "closer"
+        },
+        "trace": {
+          "rule_keys": [
+            "flying"
+          ]
+        }
+      },
+      {
+        "path": "R2/T2/movement/unit-24",
+        "type": "movement",
+        "actor_id": "unit-24",
+        "target_id": "unit-20",
+        "outcome": {
+          "category": "blocked",
+          "contact_slot": "front",
+          "engaged": false,
+          "progress": "same"
+        },
+        "trace": {
+          "rule_keys": [
+            "march"
+          ]
+        }
+      },
+      {
+        "path": "R2/T2/shooting/A1",
+        "type": "shooting",
+        "actor_id": "hero-6",
+        "target_id": "unit-19",
+        "maneuver": {},
+        "damage": 2,
+        "morale": {},
+        "trace": {
+          "version": 1,
+          "rule_keys": [
+            "volley"
+          ],
+          "result": "hit"
+        }
+      },
+      {
+        "path": "R2/T2/shooting/A2",
+        "type": "morale",
+        "actor_id": "unit-19",
+        "maneuver": {},
+        "damage": 0,
+        "morale": {
+          "roll": 11,
+          "threshold": 4,
+          "passed": false
+        },
+        "trace": {
+          "version": 1,
+          "result": "routing"
+        }
+      },
+      {
+        "path": "R3/T1/movement/unit-19",
+        "type": "movement",
+        "actor_id": "unit-19",
+        "target_id": "unit-23",
+        "outcome": {
+          "category": "advanced",
+          "contact_slot": "rear",
+          "engaged": false,
+          "progress": "closer"
+        },
+        "trace": {}
+      },
+      {
+        "path": "R3/T1/movement/unit-20",
+        "type": "movement",
+        "actor_id": "unit-20",
+        "target_id": "unit-22",
+        "outcome": {
+          "category": "advanced",
+          "contact_slot": "flank",
+          "engaged": false,
+          "progress": "closer"
+        },
+        "trace": {
+          "rule_keys": [
+            "march"
+          ]
+        }
+      },
+      {
+        "path": "R3/T1/movement/unit-21",
+        "type": "movement",
+        "actor_id": "unit-21",
+        "target_id": "unit-23",
+        "outcome": {
+          "category": "contacted",
+          "contact_slot": "front",
+          "engaged": true,
+          "progress": "closer"
+        },
+        "trace": {}
+      },
+      {
+        "path": "R3/T1/shooting/A1",
+        "type": "shooting",
+        "actor_id": "unit-20",
+        "target_id": "hero-6",
+        "maneuver": {},
+        "damage": 1,
+        "morale": {},
+        "trace": {
+          "version": 1,
+          "result": "hit"
+        }
+      },
+      {
+        "path": "R3/T1/start/A1",
+        "type": "morale",
+        "actor_id": "unit-19",
+        "maneuver": {},
+        "damage": 0,
+        "morale": {
+          "roll": 2,
+          "threshold": 4,
+          "passed": true
+        },
+        "trace": {
+          "version": 1,
+          "result": "rallied"
+        }
+      },
+      {
+        "path": "R3/T2/melee/A1",
+        "type": "melee",
+        "actor_id": "unit-23",
+        "target_id": "unit-21",
+        "maneuver": {},
+        "damage": 3,
+        "morale": {},
+        "trace": {
+          "version": 1,
+          "result": "hit"
+        }
+      },
+      {
+        "path": "R3/T2/melee/A2",
+        "type": "melee",
+        "actor_id": "unit-23",
+        "target_id": "unit-21",
+        "maneuver": {},
+        "damage": 3,
+        "morale": {},
+        "trace": {
+          "version": 1,
+          "result": "hit"
+        }
+      },
+      {
+        "path": "R3/T2/melee/A3",
+        "type": "melee",
+        "actor_id": "unit-21",
+        "target_id": "unit-23",
+        "maneuver": {},
+        "damage": 7,
+        "morale": {},
+        "trace": {
+          "version": 1,
+          "rule_keys": [
+            "skirmisher"
+          ],
+          "result": "hit"
+        }
+      },
+      {
+        "path": "R3/T2/movement/unit-24",
+        "type": "movement",
+        "actor_id": "unit-24",
+        "target_id": "unit-20",
+        "outcome": {
+          "category": "repositioned",
+          "contact_slot": "front",
+          "engaged": false,
+          "progress": "closer"
+        },
+        "trace": {
+          "rule_keys": [
+            "march"
+          ]
+        }
+      },
+      {
+        "path": "R3/T2/shooting/A1",
+        "type": "shooting",
+        "actor_id": "unit-24",
+        "target_id": "unit-19",
+        "maneuver": {},
+        "damage": 1,
+        "morale": {},
+        "trace": {
+          "version": 1,
+          "result": "hit"
+        }
+      },
+      {
+        "path": "R4/T1/movement/unit-19",
+        "type": "movement",
+        "actor_id": "unit-19",
+        "target_id": "unit-22",
+        "outcome": {
+          "category": "advanced",
+          "contact_slot": "flank",
+          "engaged": false,
+          "progress": "same"
+        },
+        "trace": {
+          "rule_keys": [
+            "march"
+          ]
+        }
+      },
+      {
+        "path": "R4/T1/movement/unit-20",
+        "type": "movement",
+        "actor_id": "unit-20",
+        "target_id": "unit-24",
+        "outcome": {
+          "category": "advanced",
+          "contact_slot": "front",
+          "engaged": false,
+          "progress": "same"
+        },
+        "trace": {}
+      },
+      {
+        "path": "R4/T1/movement/unit-21",
+        "type": "movement",
+        "actor_id": "unit-21",
+        "target_id": "unit-22",
+        "outcome": {
+          "category": "advanced",
+          "contact_slot": "front",
+          "engaged": false,
+          "progress": "closer"
+        },
+        "trace": {
+          "rule_keys": [
+            "march"
+          ]
+        }
+      },
+      {
+        "path": "R4/T2/movement/unit-24",
+        "type": "movement",
+        "actor_id": "unit-24",
+        "target_id": "unit-19",
+        "outcome": {
+          "category": "advanced",
+          "contact_slot": "rear",
+          "engaged": false,
+          "progress": "closer"
+        },
+        "trace": {}
+      },
+      {
+        "path": "R5/T1/movement/unit-19",
+        "type": "movement",
+        "actor_id": "unit-19",
+        "target_id": "unit-22",
+        "outcome": {
+          "category": "advanced",
+          "contact_slot": "rear",
+          "engaged": false,
+          "progress": "same"
+        },
+        "trace": {
+          "rule_keys": [
+            "march"
+          ]
+        }
+      },
+      {
+        "path": "R5/T1/movement/unit-20",
+        "type": "movement",
+        "actor_id": "unit-20",
+        "target_id": "unit-22",
+        "outcome": {
+          "category": "advanced",
+          "contact_slot": "flank",
+          "engaged": false,
+          "progress": "closer"
+        },
+        "trace": {}
+      },
+      {
+        "path": "R5/T1/movement/unit-21",
+        "type": "movement",
+        "actor_id": "unit-21",
+        "target_id": "unit-24",
+        "outcome": {
+          "category": "advanced",
+          "contact_slot": "front",
+          "engaged": false,
+          "progress": "closer"
+        },
+        "trace": {
+          "rule_keys": [
+            "march"
+          ]
+        }
+      },
+      {
+        "path": "R5/T1/shooting/A1",
+        "type": "shooting",
+        "actor_id": "unit-20",
+        "target_id": "unit-24",
+        "maneuver": {},
+        "damage": 1,
+        "morale": {},
+        "trace": {
+          "version": 1,
+          "result": "hit"
+        }
+      },
+      {
+        "path": "R5/T2/melee/A1",
+        "type": "melee",
+        "actor_id": "unit-20",
+        "target_id": "unit-24",
+        "maneuver": {},
+        "damage": 7,
+        "morale": {},
+        "trace": {
+          "version": 1,
+          "result": "hit"
+        }
+      },
+      {
+        "path": "R5/T2/melee/A2",
+        "type": "melee",
+        "actor_id": "unit-20",
+        "target_id": "unit-24",
+        "maneuver": {},
+        "damage": 7,
+        "morale": {},
+        "trace": {
+          "version": 1,
+          "result": "hit"
+        }
+      },
+      {
+        "path": "R5/T2/movement/unit-24",
+        "type": "movement",
+        "actor_id": "unit-24",
+        "target_id": "unit-20",
+        "outcome": {
+          "category": "contacted",
+          "contact_slot": "front",
+          "engaged": true,
+          "progress": "closer"
+        },
+        "trace": {}
+      },
+      {
+        "path": "R6/T1/movement/hero-5",
+        "type": "movement",
+        "actor_id": "hero-5",
+        "target_id": "unit-22",
+        "outcome": {
+          "category": "repositioned",
+          "engaged": false,
+          "progress": "closer"
+        },
+        "trace": {
+          "rule_keys": [
+            "march"
+          ]
+        }
+      },
+      {
+        "path": "R6/T1/movement/unit-19",
+        "type": "movement",
+        "actor_id": "unit-19",
+        "target_id": "unit-22",
+        "outcome": {
+          "category": "blocked",
+          "engaged": false,
+          "progress": "same"
+        },
+        "trace": {}
+      },
+      {
+        "path": "R6/T1/movement/unit-20",
+        "type": "movement",
+        "actor_id": "unit-20",
+        "target_id": "unit-22",
+        "outcome": {
+          "category": "advanced",
+          "contact_slot": "rear",
+          "engaged": false,
+          "progress": "same"
+        },
+        "trace": {}
+      },
+      {
+        "path": "R6/T1/movement/unit-21",
+        "type": "movement",
+        "actor_id": "unit-21",
+        "target_id": "unit-22",
+        "outcome": {
+          "category": "blocked",
+          "engaged": false,
+          "progress": "same"
+        },
+        "trace": {}
+      },
+      {
+        "path": "R6/T1/shooting/A1",
+        "type": "shooting",
+        "actor_id": "unit-20",
+        "target_id": "unit-22",
+        "maneuver": {},
+        "damage": 1,
+        "morale": {},
+        "trace": {
+          "version": 1,
+          "result": "hit"
+        }
+      }
+    ]
+  }
+}
