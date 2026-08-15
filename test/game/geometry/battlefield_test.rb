@@ -41,7 +41,8 @@ class SimGeometryBattlefieldTest < ActiveSupport::TestCase
     unit = { x: 10, y: 10, facing: 0, base_width: 4, base_depth: 2 }
     delta = 45.0
     pivot = Sim::Geometry::Battlefield.wheel_pivot(unit, delta)
-    outer = Sim::Geometry::Battlefield.wheel_outer_corner(unit, delta)
+    corners = Sim::Geometry::Battlefield.unit_corners(unit)
+    outer = delta.negative? ? corners[1] : corners[0]
     radius = Sim::Geometry::Battlefield.distance_between(pivot, outer)
     arc = (delta.abs * Math::PI / 180.0) * radius
     cost = Sim::Geometry::Battlefield.wheel_cost(unit, 0, delta)

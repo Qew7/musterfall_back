@@ -1,0 +1,7 @@
+# Rails definitions leftovers cannot see as calls. Test classes are
+# instantiated by Minitest, not by name.
+keep:
+  - ApplicationMailer
+  - Backend
+exclude_paths:
+  - test

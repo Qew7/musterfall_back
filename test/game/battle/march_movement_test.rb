@@ -1,14 +1,14 @@
 require "test_helper"
 
 class SimBattleMarchMovementTest < ActiveSupport::TestCase
-  test "infantry doubles movement budget when tray is clear of enemies" do
+  test "infantry keeps a normal MV budget when the tray is clear to march" do
     infantry = unit(movement: 4, abilities: [])
     enemy = unit(entity_id: "enemy-1", x: 30.0, y: 12.0, movement: 4)
 
     budget = Sim::Battle::Decisions::Movement.budget_for(infantry, enemies: [ enemy ])
     meta = Sim::Battle::Decisions::Movement.budget_meta(infantry, enemies: [ enemy ])
 
-    assert_in_delta 8.0, budget, 0.001
+    assert_in_delta 4.0, budget, 0.001
     assert_equal "active", meta[:march]
     assert_in_delta 2.0, meta[:march_multiplier], 0.001
   end
@@ -36,6 +36,26 @@ class SimBattleMarchMovementTest < ActiveSupport::TestCase
 
     assert_in_delta 2.0, Sim::Battle::Decisions::Movement.budget_for(cannon, enemies: [ enemy ]), 0.001
     assert_empty Sim::Battle::Decisions::Movement.budget_meta(cannon, enemies: [ enemy ])
+  end
+
+  test "march pathing travels double MV straight when the tray is clear" do
+    infantry = BattleScenarios.combatant(x: 8.0, y: 12.0, facing: 0.0, movement: 4.0)
+    enemy = BattleScenarios.enemy(x: 32.0, y: 12.0, facing: 180.0)
+    meta = Sim::Battle::Decisions::Movement.budget_meta(infantry, enemies: [ enemy ])
+    plan = Sim::Battle::Pathing.plan_approach(
+      origin: infantry,
+      goal_point: enemy,
+      budget: 4.0,
+      obstacles: [ infantry, enemy ],
+      contact_id: enemy[:entity_id],
+      goal_unit: enemy,
+      bypass: false,
+      march_allowed: meta[:march].to_s == "active"
+    )
+
+    assert_equal "active", meta[:march]
+    assert_equal :march, plan[:maneuver]
+    assert_in_delta 8.0, plan[:pose][:x] - infantry[:x], 0.2
   end
 
   test "routing enemies still block march clearance" do

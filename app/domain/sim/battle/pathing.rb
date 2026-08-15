@@ -4,123 +4,53 @@ module Sim
       CONTACT = Geometry::Battlefield::CONFIG[:melee_contact_tolerance]
       CONTACT_SNAP = Geometry::Battlefield::CONFIG[:contact_snap]
       ENGAGE = CONTACT + CONTACT_SNAP
-      BYPASS_HEADING_OFFSETS = [ 45, -45, 90, -90 ].freeze
-      # Heroes / lone models may slip around a friend when already on a flank/rear line.
-      SMALL_FOOTPRINT_AREA = 2.0
+      ALIGNED_MARCH_DOT = 0.999
+      ObstacleKernel = Struct.new(:id, :x, :y, :hw, :hd, :c, :s, :radius, :source)
 
       module_function
 
-      # Units + impassable terrain OBBs for collision / bypass.
+      # Units + impassable terrain OBBs for collision.
       def merge_obstacles(unit_obstacles, terrain = [])
         Array(unit_obstacles) + Geometry::Battlefield.impassable_obstacles(terrain)
       end
 
-      # Wheel + march toward a goal.
-      # Enemy blockers: always eligible for bypass. Ally blockers: only when allow_ally_bypass
-      # (flank/rear geometry or a small footprint) — otherwise hold the column, no orbit.
-      # Set bypass: false for cheap reposition probes (direct line only).
-      # terrain: map features (difficult cost ×2 for ground; impassable should already be in obstacles).
-      def plan_approach(origin:, goal_point:, budget:, obstacles:, contact_id: nil, goal_unit: nil, bypass: true, allow_ally_bypass: false, approach_mode: :direct, terrain: [], flying: false)
-        direct_heading = Geometry::Battlefield.heading_to(origin, goal_point)
-        direct = simulate_approach(
+      # Pull a taut OBB thread to the claimed contact face, then follow it with
+      # wheel / turn / advance / march. Extra kwargs are accepted for callers.
+      def plan_approach(origin:, goal_point:, budget:, obstacles:, contact_id: nil, goal_unit: nil, bypass: true, allow_ally_bypass: false, approach_mode: :direct, terrain: [], flying: false, march_allowed: false, contact_slot: nil)
+        world = Obstacles.coerce(obstacles)
+        anchor = Thread.anchor(
           origin: origin,
-          heading: direct_heading,
-          budget: budget,
           goal_point: goal_point,
           goal_unit: goal_unit,
-          obstacles: obstacles,
+          contact_id: contact_id,
+          contact_slot: contact_slot,
+          approach_mode: approach_mode
+        )
+        if contact_id && goal_unit
+          face = Geometry::Battlefield.heading_to(origin, anchor)
+          pose = origin.merge(x: anchor[:x], y: anchor[:y], facing: face)
+          unless world.except(origin[:entity_id], contact_id).clear?(pose, contact_id: contact_id)
+            anchor = world.contact_pose(origin, goal_unit, contact_id: contact_id) || anchor
+          end
+        end
+        thread = Thread.pull(
+          mover: origin,
+          goal: anchor,
+          world: world,
+          contact_id: contact_id
+        )
+        Follow.along(
+          origin: origin,
+          thread: thread,
+          budget: budget,
+          goal_unit: goal_unit,
+          world: world,
+          obstacles: world,
           contact_id: contact_id,
           terrain: terrain,
-          flying: flying
+          flying: flying,
+          march_allowed: march_allowed
         )
-        base = direct.merge(avoided: false, heading: direct_heading, blocked_by_ally: false)
-        return base unless bypass
-        return base unless worth_bypassing?(direct, origin)
-
-        ally_blocked = ally_blocker?(origin, direct[:blocker])
-        if ally_blocked && !ally_bypass_allowed?(origin, goal_unit, allow_ally_bypass)
-          return base.merge(blocked_by_ally: true)
-        end
-
-        candidates = [ base ]
-        bypass_headings_for(origin, direct_heading, direct[:blocker]).each do |heading|
-          plan = simulate_approach(
-            origin: origin,
-            heading: heading,
-            budget: budget,
-            goal_point: goal_point,
-            goal_unit: goal_unit,
-            obstacles: obstacles,
-            contact_id: contact_id,
-            terrain: terrain,
-            flying: flying
-          )
-          next unless plan[:pose]
-          next if ally_blocked && ally_blocker?(origin, plan[:blocker]) && !meaningful_progress?(origin, plan[:pose])
-
-          candidates << plan.merge(avoided: true, heading: heading, blocked_by_ally: false)
-        end
-
-        if direct[:blocker]
-          flank_points(origin, direct[:blocker]).each do |point|
-            heading = Geometry::Battlefield.heading_to(origin, point)
-            plan = simulate_approach(
-              origin: origin,
-              heading: heading,
-              budget: budget,
-              goal_point: point,
-              goal_unit: nil,
-              obstacles: obstacles,
-              contact_id: nil,
-              terrain: terrain,
-              flying: flying
-            )
-            next unless plan[:pose]
-
-            candidates << plan.merge(avoided: true, heading: heading, blocked_by_ally: false)
-          end
-        end
-
-        if ally_blocked && goal_unit
-          contact_slot_points(origin, goal_unit, Geometry::Battlefield.classify_attack_vector(origin, goal_unit)).each do |point|
-            heading = Geometry::Battlefield.heading_to(origin, point)
-            plan = simulate_approach(
-              origin: origin,
-              heading: heading,
-              budget: budget,
-              goal_point: point,
-              goal_unit: goal_unit,
-              obstacles: obstacles,
-              contact_id: contact_id,
-              terrain: terrain,
-              flying: flying
-            )
-            next unless plan[:pose]
-
-            candidates << plan.merge(avoided: true, heading: heading, blocked_by_ally: false)
-          end
-        end
-
-        best = pick_best_approach(candidates, origin, goal_point, goal_unit, approach_mode: approach_mode)
-        return best.merge(blocked_by_ally: true) if ally_blocked && !best[:avoided]
-
-        best
-      end
-
-      def ally_bypass_allowed?(origin, goal_unit, allow_ally_bypass)
-        return true if allow_ally_bypass
-        return false unless goal_unit
-
-        vector = Geometry::Battlefield.classify_attack_vector(origin, goal_unit)
-        return true if vector == "flank" || vector == "rear"
-
-        small_footprint?(origin)
-      end
-
-      def small_footprint?(unit)
-        width = (unit[:base_width] || unit[:width] || 1).to_f
-        depth = (unit[:base_depth] || unit[:depth] || 1).to_f
-        (width * depth) <= SMALL_FOOTPRINT_AREA
       end
 
       # Waypoints off a defender's flank/rear face for slot-aware charges.
@@ -168,9 +98,11 @@ module Sim
         ally_id_list = Array(ally_ids).compact
         edges = ordered_edges(origin)
         candidates = []
+        world = Obstacles.coerce(obstacles)
+        kernels = world.kernels
 
         if preferred_heading
-          preferred = simulate_retreat(origin, preferred_heading, distance, obstacles)
+          preferred = simulate_retreat(origin, preferred_heading, distance, world, kernels: kernels)
           candidates << preferred.merge(
             edge: "away",
             avoided: false,
@@ -180,7 +112,7 @@ module Sim
         end
 
         edges.each do |edge|
-          plan = simulate_retreat(origin, edge[:heading], distance, obstacles)
+          plan = simulate_retreat(origin, edge[:heading], distance, obstacles, kernels: kernels)
           next unless plan[:pose]
 
           candidates << plan.merge(
@@ -205,107 +137,16 @@ module Sim
         combatants.select { |entry| entry[:current_health].to_i > 0 }
       end
 
-      def first_blocker(projected, obstacles, contact_id: nil, origin: nil)
-        px = projected[:x].to_f
-        py = projected[:y].to_f
-        pr = rough_footprint_radius(projected) + CONTACT
+      def first_blocker(projected, obstacles, contact_id: nil, origin: nil, kernels: nil)
+        Obstacles.coerce(obstacles, kernels).first_blocker(projected, contact_id: contact_id)
+      end
 
-        obstacles.find do |entry|
-          next false if entry[:entity_id] == projected[:entity_id]
-          next false if entry[:current_health].to_i <= 0
-          next false if entry[:x].nil? || entry[:y].nil?
-
-          # Cheap center reject before expensive OBB distance.
-          dx = px - entry[:x].to_f
-          dy = py - entry[:y].to_f
-          reach = pr + rough_footprint_radius(entry)
-          next false if ((dx * dx) + (dy * dy)) > (reach * reach)
-
-          other = entry.merge(facing: entry[:facing].to_f)
-          dist = Geometry::Battlefield.distance_between_units(projected, other)
-          if contact_id && entry[:entity_id] == contact_id
-            Geometry::Battlefield.rectangles_overlap?(projected, other)
-          else
-            dist < CONTACT
-          end
-        end
+      def obstacle_kernels(obstacles)
+        Obstacles.coerce(obstacles).kernels
       end
 
       def terrain_obstacle?(entry)
         entry && (entry[:obstacle_kind] == :terrain || entry[:obstacle_kind] == "terrain")
-      end
-
-      def rough_footprint_radius(unit)
-        hw = (unit[:base_width] || unit[:width] || 1).to_f * 0.5
-        hd = (unit[:base_depth] || unit[:depth] || 1).to_f * 0.5
-        Math.hypot(hw, hd)
-      end
-
-      def simulate_approach(origin:, heading:, budget:, goal_point:, goal_unit:, obstacles:, contact_id:, terrain: [], flying: false)
-        wheeled_plan = simulate_wheeled_approach(
-          origin: origin,
-          heading: heading,
-          budget: budget,
-          goal_point: goal_point,
-          goal_unit: goal_unit,
-          obstacles: obstacles,
-          contact_id: contact_id,
-          terrain: terrain,
-          flying: flying
-        )
-        return wheeled_plan if meaningful_progress?(origin, wheeled_plan[:pose])
-
-        # Tiny corrective wheels on wide formations often clip allies behind the unit.
-        # Fall back to a straight march on the current facing so columns can still advance.
-        straight_plan = simulate_straight_march(
-          origin: origin,
-          budget: budget,
-          goal_point: goal_point,
-          goal_unit: goal_unit,
-          obstacles: obstacles,
-          contact_id: contact_id,
-          terrain: terrain,
-          flying: flying
-        )
-        return straight_plan if meaningful_progress?(origin, straight_plan[:pose])
-
-        wheeled_plan[:pose] ? wheeled_plan : straight_plan
-      end
-
-      def simulate_wheeled_approach(origin:, heading:, budget:, goal_point:, goal_unit:, obstacles:, contact_id:, terrain: [], flying: false)
-        wheel = Geometry::Battlefield.apply_wheel(origin, heading, budget)
-        wheeled = origin.merge(x: wheel[:x], y: wheel[:y], facing: wheel[:facing])
-        remaining = wheel[:remaining]
-        desired = approach_desired(wheeled, remaining, wheel, goal_point, goal_unit, contact_id, heading)
-        clearance = furthest_clear_pose(
-          origin, wheel, desired, obstacles,
-          contact_id: contact_id,
-          budget: budget,
-          terrain: terrain,
-          flying: flying
-        )
-        clearance.merge(wheel: wheel, desired: desired)
-      end
-
-      def simulate_straight_march(origin:, budget:, goal_point:, goal_unit:, obstacles:, contact_id:, terrain: [], flying: false)
-        idle_wheel = {
-          x: origin[:x].to_f,
-          y: origin[:y].to_f,
-          facing: Geometry::Battlefield.normalize_facing(origin[:facing]),
-          cost: 0.0,
-          remaining: budget.to_f,
-          completed: true,
-          delta: 0.0
-        }
-        desired = approach_desired(origin, budget.to_f, idle_wheel, goal_point, goal_unit, contact_id, origin[:facing])
-        clearance = furthest_clear_pose(
-          origin, idle_wheel, desired, obstacles,
-          contact_id: contact_id,
-          budget: budget,
-          terrain: terrain,
-          flying: flying
-        )
-        clearance.merge(wheel: idle_wheel, desired: desired)
       end
 
       def meaningful_progress?(origin, pose)
@@ -330,17 +171,21 @@ module Sim
           return Geometry::Battlefield.move_along_facing(wheeled, remaining)
         end
 
-        # Non-contact (reposition): stop at the goal instead of burning leftover MV past it.
-        # That leftover is needed for a final face-toward-target wheel.
-        if goal_point && Geometry::Battlefield.shortest_facing_delta(wheeled[:facing], heading).abs < 5.0
-          dist = Geometry::Battlefield.distance_between(wheeled, goal_point)
-          return Geometry::Battlefield.move_along_facing(wheeled, [ remaining, dist ].min)
+        if goal_point
+          vec = Geometry::Battlefield.facing_vector(wheeled[:facing])
+          along = ((goal_point[:x].to_f - wheeled[:x].to_f) * vec[:x]) +
+            ((goal_point[:y].to_f - wheeled[:y].to_f) * vec[:y])
+          return wheeled if along <= 0.05
+
+          return Geometry::Battlefield.move_along_facing(wheeled, [ remaining, along ].min)
         end
 
         Geometry::Battlefield.move_along_facing(wheeled, remaining)
       end
 
-      def simulate_retreat(origin, heading, distance, obstacles)
+      def simulate_retreat(origin, heading, distance, obstacles, kernels: nil)
+        world = Obstacles.coerce(obstacles, kernels)
+        kernels = world.kernels
         # March along heading and face that way — no crab-walk with a mismatched footprint.
         run_facing = Geometry::Battlefield.normalize_facing(heading)
         desired = Geometry::Battlefield.move_along_facing(origin.merge(facing: run_facing), distance)
@@ -356,7 +201,7 @@ module Sim
             y: origin[:y] + ((desired[:y] - origin[:y]) * t),
             facing: run_facing
           )
-          hit = first_blocker(pose, obstacles, contact_id: nil, origin: origin)
+          hit = first_blocker(pose, obstacles, contact_id: nil, origin: origin, kernels: kernels)
           if hit
             blocker = hit
             break
@@ -369,46 +214,71 @@ module Sim
         { pose: last_clear, desired: desired, truncated: truncated, blocker: blocker, wheel: nil }
       end
 
-      def furthest_clear_pose(origin, wheel, destination, obstacles, contact_id:, budget: nil, terrain: [], flying: false)
-        samples = []
-        if wheel[:delta].to_f.abs > 0.05
-          steps = [ [ 8, (wheel[:delta].abs / 10).ceil ].max, 20 ].min
-          steps.times do |index|
-            progress = (index + 1).to_f / steps
-            pose = Geometry::Battlefield.wheel_pose(origin, wheel[:delta] * progress)
-            samples << origin.merge(x: pose[:x], y: pose[:y], facing: pose[:facing])
+      def furthest_clear_pose(origin, pivot, destination, obstacles, contact_id:, budget: nil, terrain: [], flying: false, kernels: nil)
+        world = Obstacles.coerce(obstacles, kernels)
+        kernels = world.kernels
+        obstacles = world
+        turning = pivot[:kind].to_s == "turn"
+        wheel_samples = []
+        last_clear = nil
+        cost_spent = 0.0
+        prev = origin.merge(x: origin[:x].to_f, y: origin[:y].to_f, facing: origin[:facing].to_f)
+
+        if turning
+          turned = Geometry::Battlefield.merge_footprint(origin, pivot)
+          hit = first_blocker(turned, obstacles, contact_id: contact_id, origin: origin, kernels: kernels)
+          if hit
+            return { pose: nil, truncated: true, blocker: hit, cost_spent: pivot[:cost].to_f }
+          end
+
+          wheeled = turned
+          last_clear = turned
+          cost_spent = pivot[:cost].to_f
+          prev = turned
+        else
+          if pivot[:delta].to_f.abs > 0.05
+            steps = [ [ 8, (pivot[:delta].abs / 10).ceil ].max, 20 ].min
+            steps.times do |index|
+              progress = (index + 1).to_f / steps
+              pose = Geometry::Battlefield.wheel_pose(origin, pivot[:delta] * progress)
+              wheel_samples << origin.merge(x: pose[:x], y: pose[:y], facing: pose[:facing])
+            end
+          end
+
+          wheeled = if wheel_samples.any?
+            wheel_samples.last
+          else
+            origin.merge(x: pivot[:x], y: pivot[:y], facing: pivot[:facing])
           end
         end
 
-        wheeled = if samples.any?
-          samples.last
-        else
-          origin.merge(x: wheel[:x], y: wheel[:y], facing: wheel[:facing])
-        end
-
+        march_samples = []
         march_distance = Geometry::Battlefield.distance_between(wheeled, destination)
         facing_delta = Geometry::Battlefield.shortest_facing_delta(wheeled[:facing], destination[:facing]).abs
         if march_distance > 0.05 || facing_delta > 0.05
           steps = [ [ 8, (march_distance / 0.25).ceil ].max, 24 ].min
           steps.times do |index|
             t = (index + 1).to_f / steps
-            samples << wheeled.merge(
+            march_samples << wheeled.merge(
               x: wheeled[:x] + ((destination[:x] - wheeled[:x]) * t),
               y: wheeled[:y] + ((destination[:y] - wheeled[:y]) * t),
               facing: destination[:facing]
             )
           end
-        elsif samples.empty?
-          samples << wheeled.merge(x: destination[:x], y: destination[:y], facing: destination[:facing])
+        elsif wheel_samples.empty?
+          march_samples << wheeled.merge(x: destination[:x], y: destination[:y], facing: destination[:facing])
         end
 
-        last_clear = nil
+        march_collision = march_samples.empty? ||
+          !aligned_translation?(wheeled, destination) ||
+          !translation_clear?(wheeled, wheeled, destination, kernels, contact_id)
+        samples = wheel_samples + march_samples
+        wheel_count = wheel_samples.length
+
         blocker = nil
-        cost_spent = 0.0
-        prev = origin.merge(x: origin[:x].to_f, y: origin[:y].to_f, facing: origin[:facing].to_f)
         budget_limit = budget.nil? ? nil : budget.to_f + 0.05
 
-        samples.each do |pose|
+        samples.each_with_index do |pose, index|
           segment = Geometry::Battlefield.distance_between(prev, pose)
           multiplier = Geometry::Battlefield.move_cost_multiplier_at(pose, terrain, flying: flying)
           cost_spent += segment * multiplier
@@ -416,10 +286,12 @@ module Sim
             break
           end
 
-          hit = first_blocker(pose, obstacles, contact_id: contact_id, origin: origin)
-          if hit
-            blocker = hit
-            break
+          if index < wheel_count || march_collision
+            hit = first_blocker(pose, obstacles, contact_id: contact_id, origin: origin, kernels: kernels)
+            if hit
+              blocker = hit
+              break
+            end
           end
 
           last_clear = pose
@@ -438,15 +310,21 @@ module Sim
           truncated = true
         end
 
-        { pose: last_clear, truncated: !!truncated, blocker: blocker }
+        { pose: last_clear, truncated: !!truncated, blocker: blocker, cost_spent: cost_spent }
       end
 
-      def worth_bypassing?(plan, origin)
-        return true if plan[:blocker] && !meaningful_progress?(origin, plan[:pose])
-        return false unless plan[:truncated] && plan[:blocker]
-        return true unless plan[:pose]
+      def aligned_translation?(from, to)
+        dx = to[:x].to_f - from[:x].to_f
+        dy = to[:y].to_f - from[:y].to_f
+        length = Math.hypot(dx, dy)
+        return true if length <= 0.05
 
-        Geometry::Battlefield.distance_between(origin, plan[:pose]) < (origin[:movement] || 3).to_f * 0.85
+        c, s = Geometry::Obb.trig(to[:facing])
+        ((dx * c) + (dy * s)) >= (length * ALIGNED_MARCH_DOT)
+      end
+
+      def translation_clear?(mover, from, to, kernels, contact_id)
+        Obstacles.coerce(nil, kernels).translation_clear?(mover, from, to, contact_id: contact_id)
       end
 
       def ally_blocker?(origin, blocker)
@@ -454,73 +332,6 @@ module Sim
         return false if terrain_obstacle?(blocker)
 
         !origin[:side_index].nil? && origin[:side_index] == blocker[:side_index]
-      end
-
-      def bypass_headings_for(origin, direct_heading, blocker)
-        headings = BYPASS_HEADING_OFFSETS.map { |offset| Geometry::Battlefield.normalize_facing(direct_heading + offset) }
-        if blocker
-          flank_points(origin, blocker).each do |point|
-            headings << Geometry::Battlefield.heading_to(origin, point)
-          end
-        end
-        headings.uniq
-      end
-
-      def flank_points(origin, blocker)
-        dims = Geometry::Battlefield.unit_dimensions(origin)
-        other = Geometry::Battlefield.unit_dimensions(blocker)
-        clearance = dims[:half_width] + other[:half_width] + CONTACT + 0.35
-        dx = blocker[:x].to_f - origin[:x].to_f
-        dy = blocker[:y].to_f - origin[:y].to_f
-        length = Math.hypot(dx, dy)
-        return [] if length < 0.001
-
-        nx = -dy / length
-        ny = dx / length
-        [
-          Geometry::Battlefield.clamp_battlefield_position(x: blocker[:x] + (nx * clearance), y: blocker[:y] + (ny * clearance), facing: 0),
-          Geometry::Battlefield.clamp_battlefield_position(x: blocker[:x] - (nx * clearance), y: blocker[:y] - (ny * clearance), facing: 0)
-        ]
-      end
-
-      def pick_best_approach(candidates, origin, goal_point, goal_unit, approach_mode: :direct)
-        viable = candidates.select { |plan| meaningful_progress?(origin, plan[:pose]) }
-        return (candidates.find { |plan| !plan[:avoided] } || candidates.first).merge(avoided: false) if viable.empty?
-
-        best = viable.min_by { |plan| approach_score(plan[:pose], origin, goal_point, goal_unit, approach_mode: approach_mode) }
-        direct = candidates.find { |plan| !plan[:avoided] } || candidates.first
-        # Prefer the straight path when not worse — but only for direct assaults.
-        # Orbit/wrap score toward the slot waypoint and facing angle; do not snap back to center.
-        if approach_mode == :direct &&
-            meaningful_progress?(origin, direct[:pose]) &&
-            score_at_least?(
-              approach_score(best[:pose], origin, goal_point, goal_unit, approach_mode: approach_mode),
-              approach_score(direct[:pose], origin, goal_point, goal_unit, approach_mode: approach_mode)
-            )
-          return direct
-        end
-
-        best
-      end
-
-      def approach_score(pose, origin, goal_point, goal_unit, approach_mode: :direct)
-        if approach_mode == :orbit_flank || approach_mode == :wrap_rear
-          goal_distance = Geometry::Battlefield.distance_between(pose, goal_point)
-          # Prefer poses farther around the defender face (flank/rear cone).
-          angle_term = if goal_unit
-            -Geometry::Battlefield.angle_between(goal_unit[:facing], goal_unit, pose).to_f
-          else
-            0.0
-          end
-          return [ goal_distance, angle_term, -Geometry::Battlefield.distance_between(origin, pose) ]
-        end
-
-        goal_distance = if goal_unit
-          Geometry::Battlefield.distance_between_units(pose, goal_unit)
-        else
-          Geometry::Battlefield.distance_between(pose, goal_point)
-        end
-        [ goal_distance, -Geometry::Battlefield.distance_between(origin, pose) ]
       end
 
       def pick_best_retreat(candidates, origin, preferred_heading: nil)
@@ -547,10 +358,6 @@ module Sim
           min_edge_distance(pose),
           -Geometry::Battlefield.distance_between(origin, pose)
         ]
-      end
-
-      def score_at_least?(left, right)
-        (left <=> right) >= 0
       end
 
       def min_edge_distance(pose)

@@ -9,16 +9,6 @@ class RoundMatchup < ApplicationRecord
   validates :position, uniqueness: { scope: [ :game_id, :campaign_round ] }
 
   scope :for_round, ->(game, round) { where(game_id: game.id, campaign_round: round) }
-  scope :terminal, -> { where(status: %w[completed failed]) }
-  scope :incomplete, -> { where(status: %w[pending running]) }
-
-  def pending?
-    status == "pending"
-  end
-
-  def running?
-    status == "running"
-  end
 
   def completed?
     status == "completed"

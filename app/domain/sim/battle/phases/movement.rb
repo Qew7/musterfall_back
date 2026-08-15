@@ -197,7 +197,13 @@ module Sim
             next if destination_blocked?(aligned, [], align_obstacles, contact_id: soft_id)
 
             intent[:paid_destination] = intent[:destination].dup
-            intent[:destination] = { x: aligned[:x], y: aligned[:y], facing: aligned[:facing] }
+            intent[:destination] = Geometry::Battlefield.footprint_destination(
+              Geometry::Battlefield.merge_footprint(aligned, intent[:destination]).merge(
+                x: aligned[:x],
+                y: aligned[:y],
+                facing: aligned[:facing]
+              )
+            )
             intent[:free_align] = true
           end
         end
@@ -208,6 +214,7 @@ module Sim
 
             destination = intent[:destination]
             combatant = intent[:combatant]
+            Geometry::Battlefield.apply_footprint!(combatant, destination)
             combatant[:x] = destination[:x]
             combatant[:y] = destination[:y]
             combatant[:facing] = destination[:facing]
@@ -255,17 +262,16 @@ module Sim
               )
               occupied << freeze_obstacle(combatant)
             else
-              intent[:destination] = { x: pose[:x], y: pose[:y], facing: pose[:facing] }
+              intent[:destination] = Geometry::Battlefield.footprint_destination(pose)
               occupied << pose
             end
           end
         end
 
         def destination_pose(intent)
-          intent[:combatant].merge(
-            x: intent[:destination][:x],
-            y: intent[:destination][:y],
-            facing: intent[:destination][:facing]
+          Geometry::Battlefield.merge_footprint(
+            intent[:combatant],
+            intent[:destination]
           )
         end
 
@@ -297,6 +303,7 @@ module Sim
               y: origin[:y].to_f + ((desired[:y].to_f - origin[:y].to_f) * t),
               facing: desired[:facing]
             )
+            pose = Geometry::Battlefield.merge_footprint(pose, desired)
             next if destination_blocked?(pose, static_obstacles, accepted, contact_id: contact_id)
 
             best = pose
@@ -343,7 +350,7 @@ module Sim
                 from,
                 "#{combatant[:name]} ждёт прохода у #{blocker_name}.",
                 wheel: nil,
-                maneuver: approach_maneuver(plan, nearest, budget, wheel: nil, march_spent: 0.0, desired: combatant, kind_override: "blocked_by_ally"),
+                maneuver: approach_maneuver(plan, nearest, budget, wheel: nil, turn: nil, advance_spent: 0.0, march_spent: 0.0, desired: combatant, kind_override: "blocked_by_ally"),
                 origin_pose: origin_pose
               )
               next
@@ -354,11 +361,27 @@ module Sim
             # MV accounting uses the paid landing; free align after contact costs no movement.
             paid = intent[:paid_destination] || destination
             planned_wheel = plan[:wheel]
+            planned_turn = plan[:turn]
             applied_wheel = wheel_for_applied_move(origin_pose, paid, planned_wheel)
-            march_spent = Geometry::Battlefield.distance_between(
-              applied_wheel ? { x: applied_wheel[:x], y: applied_wheel[:y] } : origin_pose,
+            applied_turn = turn_for_applied_move(origin_pose, paid, planned_turn)
+            pivot = applied_turn || applied_wheel
+            travel = Geometry::Battlefield.distance_between(
+              pivot ? { x: pivot[:x], y: pivot[:y] } : origin_pose,
               paid
             )
+            wheel_cost = applied_wheel ? applied_wheel[:cost].to_f : 0.0
+            turn_cost = applied_turn ? applied_turn[:cost].to_f : 0.0
+            if plan[:maneuver] == :march
+              rate = (plan[:march_multiplier] || Geometry::Battlefield::CONFIG[:march_multiplier]).to_f
+              march_spent = travel / rate
+              advance_spent = 0.0
+            else
+              march_spent = 0.0
+              advance_spent = travel
+              if budget && (wheel_cost + turn_cost + advance_spent) > budget.to_f
+                advance_spent = [ budget.to_f - wheel_cost - turn_cost, 0.0 ].max
+              end
+            end
             desired = plan[:desired] || paid
             summary =
               if intent[:kind] == "reposition"
@@ -371,6 +394,8 @@ module Sim
               nearest,
               budget,
               wheel: applied_wheel,
+              turn: applied_turn,
+              advance_spent: advance_spent,
               march_spent: march_spent,
               desired: desired,
               kind_override: intent[:kind] == "reposition" ? "reposition" : nil
@@ -391,6 +416,7 @@ module Sim
               from,
               summary,
               wheel: applied_wheel,
+              turn: applied_turn,
               maneuver: maneuver,
               origin_pose: origin_pose
             )
@@ -403,7 +429,7 @@ module Sim
         def movement_obstacles(acting_side, target_side, mover_ids, terrain = [])
           allies = Pathing.active_units(acting_side[:combatants]).reject { |entry| mover_ids.include?(entry[:entity_id]) }
           enemies = Pathing.active_units(target_side[:combatants])
-          Pathing.merge_obstacles((allies + enemies).map { |entry| freeze_obstacle(entry) }, terrain)
+          Pathing::Obstacles.merge((allies + enemies).map { |entry| freeze_obstacle(entry) }, terrain)
         end
 
         def freeze_obstacle(entry)
@@ -428,6 +454,11 @@ module Sim
             "#{combatant[:name]} пикирует на #{nearest[:name]}#{note}."
           elsif plan[:leap]
             "#{combatant[:name]} перелетает к #{nearest[:name]}#{note}."
+          elsif plan[:turn] && plan[:turn][:cost].to_f > 0.05
+            flank = plan[:turn][:delta].to_f.positive? ? "правый" : "левый"
+            "#{combatant[:name]} разворачивается на #{flank} фланг и сближается с #{nearest[:name]}#{note}."
+          elsif plan[:maneuver] == :march
+            "#{combatant[:name]} марширует к #{nearest[:name]}#{note}."
           else
             "#{combatant[:name]} сближается с #{nearest[:name]}#{note}."
           end
@@ -468,7 +499,7 @@ module Sim
           plan[:blocker][:entity_id] == nearest[:entity_id]
         end
 
-        def approach_maneuver(plan, nearest, budget, wheel:, march_spent:, desired:, kind_override: nil)
+        def approach_maneuver(plan, nearest, budget, wheel:, turn:, advance_spent:, march_spent:, desired:, kind_override: nil)
           contact_blocker = blocker_is_target?(plan, nearest)
           kind = kind_override || if plan[:leap]
             plan[:charge] ? "flyer_charge" : "flyer_leap"
@@ -479,7 +510,7 @@ module Sim
           elsif contact_blocker && plan[:truncated]
             "contact_align"
           else
-            maneuver_kind(wheel, march_spent)
+            maneuver_kind(plan, wheel, turn, advance_spent, march_spent)
           end
 
           {
@@ -490,6 +521,8 @@ module Sim
             desired_facing: plan[:heading],
             mv_budget: budget,
             mv_spent_wheel: wheel ? wheel[:cost].to_f : 0.0,
+            mv_spent_turn: turn ? turn[:cost].to_f : 0.0,
+            mv_spent_advance: advance_spent.to_f,
             mv_spent_march: march_spent.to_f,
             desired: { x: desired[:x], y: desired[:y], facing: desired[:facing] },
             truncated_by_collision: !!plan[:truncated],
@@ -499,7 +532,9 @@ module Sim
             blocker_id: plan.dig(:blocker, :entity_id),
             blocker_name: plan.dig(:blocker, :name),
             blocker_is_target: contact_blocker,
-            wheel_direction: wheel_direction(wheel)
+            wheel_direction: wheel_direction(wheel),
+            turn_direction: turn_direction(turn),
+            steps: Array(plan[:steps])
           }
         end
 
@@ -519,12 +554,21 @@ module Sim
           }
         end
 
-        def maneuver_kind(wheel, march_spent)
-          wheeled = wheel && wheel[:cost].to_f > 0.05
-          marched = march_spent.to_f > 0.05
-          return "wheel_and_march" if wheeled && marched
-          return "wheel" if wheeled
-          return "march" if marched
+        def turn_for_applied_move(origin, destination, planned_turn)
+          return nil unless planned_turn && planned_turn[:cost].to_f > 0.05
+
+          applied_delta = Geometry::Battlefield.shortest_facing_delta(origin[:facing], destination[:facing])
+          return nil unless Geometry::Battlefield.turn_delta?(applied_delta)
+
+          planned_turn
+        end
+
+        def maneuver_kind(plan, wheel, turn, advance_spent, march_spent)
+          return "turn" if turn && turn[:cost].to_f > 0.05
+          return "march" if plan[:maneuver] == :march || march_spent.to_f > 0.05
+          return plan[:maneuver].to_s if plan[:maneuver]
+          return "wheel" if wheel && wheel[:cost].to_f > 0.05
+          return "advance" if advance_spent.to_f > 0.05
 
           "hold"
         end
@@ -536,7 +580,14 @@ module Sim
           delta.positive? ? "right" : "left"
         end
 
-        def push_move!(phase, acting_side, target_side, combatant, before, after, from, summary, wheel: nil, maneuver: nil, origin_pose: nil)
+        def turn_direction(turn)
+          delta = turn && turn[:delta].to_f
+          return nil if delta.nil? || delta.abs < 0.05
+
+          delta.positive? ? "right" : "left"
+        end
+
+        def push_move!(phase, acting_side, target_side, combatant, before, after, from, summary, wheel: nil, turn: nil, maneuver: nil, origin_pose: nil)
           to = position_of(combatant)
           AttackResolution.add_event(phase, summary)
           details = build_movement_details(
@@ -546,6 +597,7 @@ module Sim
             from: from,
             to: to,
             wheel: wheel,
+            turn: turn,
             maneuver: maneuver,
             origin_pose: origin_pose || combatant
           )
@@ -561,6 +613,7 @@ module Sim
             from: from,
             to: to,
             wheel: wheel && wheel[:cost].to_f > 0.05 ? { x: wheel[:x], y: wheel[:y], facing: wheel[:facing], delta: wheel[:delta], cost: wheel[:cost], direction: wheel_direction(wheel) } : nil,
+            turn: turn && turn[:cost].to_f > 0.05 ? { x: turn[:x], y: turn[:y], facing: turn[:facing], delta: turn[:delta], cost: turn[:cost], direction: turn_direction(turn) } : nil,
             maneuver: maneuver,
             trace: Trace.build(
               rule_keys: Trace.movement_rule_keys(combatant, maneuver),
@@ -572,7 +625,7 @@ module Sim
           }
         end
 
-        def build_movement_details(combatant:, before:, after:, from:, to:, wheel:, maneuver:, origin_pose:)
+        def build_movement_details(combatant:, before:, after:, from:, to:, wheel:, turn:, maneuver:, origin_pose:)
           facing_delta = Geometry::Battlefield.shortest_facing_delta(from[:facing], to[:facing])
           traveled = Geometry::Battlefield.distance_between(from, to)
           lines = [
@@ -600,7 +653,10 @@ module Sim
               lines << "blocker=#{maneuver[:blocker_name]}(#{maneuver[:blocker_id]}) blocker_is_target=#{maneuver[:blocker_is_target]}"
             end
             if maneuver[:mv_budget]
-              lines << "MV budget=#{format("%.2f", maneuver[:mv_budget].to_f)} wheel=#{format("%.2f", maneuver[:mv_spent_wheel].to_f)} march=#{format("%.2f", maneuver[:mv_spent_march].to_f)} dir=#{maneuver[:wheel_direction] || "-"}"
+              lines << "MV budget=#{format("%.2f", maneuver[:mv_budget].to_f)} wheel=#{format("%.2f", maneuver[:mv_spent_wheel].to_f)} turn=#{format("%.2f", maneuver[:mv_spent_turn].to_f)} advance=#{format("%.2f", maneuver[:mv_spent_advance].to_f)} march=#{format("%.2f", maneuver[:mv_spent_march].to_f)} dir=#{maneuver[:wheel_direction] || maneuver[:turn_direction] || "-"}"
+            end
+            Array(maneuver[:steps]).each do |step|
+              lines << "step kind=#{step[:kind]} cost=#{format("%.2f", step[:cost].to_f)}"
             end
             if maneuver[:march] == "active"
               lines << "march=active clearance=#{format("%.1f", maneuver[:march_clearance].to_f)} multiplier=#{format("%.1f", maneuver[:march_multiplier].to_f)}"
@@ -611,6 +667,9 @@ module Sim
 
           if wheel && wheel[:cost].to_f > 0.05
             lines << "wheel Δ=#{format("%+.1f", wheel[:delta].to_f)}° cost=#{format("%.2f", wheel[:cost].to_f)} pose=(#{format_point(wheel[:x])}, #{format_point(wheel[:y])}) f#{format("%.1f", wheel[:facing].to_f)}°"
+          end
+          if turn && turn[:cost].to_f > 0.05
+            lines << "turn Δ=#{format("%+.1f", turn[:delta].to_f)}° cost=#{format("%.2f", turn[:cost].to_f)} facing=#{format("%.1f", turn[:facing].to_f)}°"
           end
 
           lines

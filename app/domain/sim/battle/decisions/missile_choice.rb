@@ -33,7 +33,7 @@ module Sim
           magic[:expected] >= shooting[:expected] ? magic : shooting
         end
 
-        def has_missile_option?(actor, enemies, all_combatants, round_number, terrain: [])
+        def has_missile_option?(actor, enemies, all_combatants, round_number, terrain: []) # leftovers:keep
           !choose_action(actor, enemies, all_combatants, round_number, terrain: terrain).nil?
         end
 
@@ -129,22 +129,6 @@ module Sim
           return false if target[:current_health].to_i <= 0
 
           Targeting.can_target_missile?(actor, target, attack_type, all_combatants, terrain: terrain)
-        end
-
-        # Host has no legal cast/shot from current pose (any ranged contributor).
-        def host_needs_reposition?(host, enemies, all_combatants, round_number)
-          return false unless Roles.missile_seeker?(host)
-          return false if host[:current_health].to_i <= 0 || host[:is_routing]
-
-          ranged = host.dig(:contributors, :ranged) || []
-          actors = ranged.filter_map do |contributor|
-            next unless contributor[:ranged].to_i > 0 || contributor[:spell].to_i > 0
-
-            build_actor(host, contributor)
-          end
-          return false if actors.empty?
-
-          actors.none? { |actor| has_missile_option?(actor, enemies, all_combatants, round_number) }
         end
       end
     end

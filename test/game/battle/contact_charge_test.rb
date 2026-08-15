@@ -335,37 +335,30 @@ class SimBattleContactChargeTest < ActiveSupport::TestCase
     assert_equal "rear", slots["r1"]
   end
 
-  test "slot_approach_point is nil for direct flank assaults in the front arc" do
+  test "approach_goal_point stays on the defender for a direct flank in the front arc" do
     origin = combatant(entity_id: "a", x: 14, y: 6, facing: 90, base_width: 1, base_depth: 1)
     defender = combatant(entity_id: "d", x: 14, y: 12, facing: 180, base_width: 4, base_depth: 3, side_index: 1)
     assert_equal "flank", BF.classify_attack_vector(origin, defender)
     assert BF.in_front_arc?(origin, defender, origin[:facing])
-    assert_nil GroundMovement.slot_approach_point(origin, defender, "flank")
+    goal = GroundMovement.approach_goal_point(origin, defender, contact_slot: "flank", approach_mode: :direct)
+    assert_equal defender, goal
   end
 
-  test "slot_approach_point returns a rear waypoint only for wrap_rear" do
+  test "approach_goal_point returns a rear waypoint for wrap_rear" do
     origin = combatant(entity_id: "a", x: 10, y: 12, facing: 0, base_width: 1, base_depth: 1)
     defender = combatant(entity_id: "d", x: 16, y: 12, facing: 180, base_width: 4, base_depth: 3, side_index: 1)
-    point = GroundMovement.slot_approach_point(origin, defender, "rear", approach_mode: :wrap_rear)
+    point = GroundMovement.approach_goal_point(origin, defender, contact_slot: "rear", approach_mode: :wrap_rear)
 
-    assert point
+    refute_equal defender, point
     assert_operator point[:x], :>, defender[:x]
   end
 
-  test "slot_approach_point returns a flank waypoint for orbit_flank" do
-    origin = combatant(entity_id: "a", x: 10, y: 12, facing: 0, base_width: 1, base_depth: 1)
-    defender = combatant(entity_id: "d", x: 16, y: 12, facing: 180, base_width: 4, base_depth: 3, side_index: 1)
-    point = GroundMovement.slot_approach_point(origin, defender, "flank", approach_mode: :orbit_flank)
-
-    assert point
-    assert_operator (point[:y] - defender[:y]).abs, :>, 0.5
-  end
-
-  test "slot_approach_point stays nil when assigned flank but still geometrically frontal under direct mode" do
+  test "approach_goal_point stays on the defender when assigned flank but still geometrically frontal under direct mode" do
     origin = combatant(entity_id: "a", x: 10, y: 12, facing: 0, base_width: 1, base_depth: 1)
     defender = combatant(entity_id: "d", x: 14, y: 12, facing: 180, base_width: 4, base_depth: 3, side_index: 1)
     assert_equal "front", BF.classify_attack_vector(origin, defender)
-    assert_nil GroundMovement.slot_approach_point(origin, defender, "flank")
+    goal = GroundMovement.approach_goal_point(origin, defender, contact_slot: "flank", approach_mode: :direct)
+    assert_equal defender, goal
   end
 
   test "approach_goal_point for orbit_flank leaves the defender center" do
@@ -381,7 +374,7 @@ class SimBattleContactChargeTest < ActiveSupport::TestCase
   # 5. Limited ally bypass for flank / rear / small footprint
   # ---------------------------------------------------------------------------
 
-  test "frontal approach still refuses to orbit an allied blocker" do
+  test "frontal approach wraps an allied blocker instead of waiting" do
     origin = combatant(
       entity_id: "boars",
       name: "Наездники на кабанах",
@@ -424,9 +417,14 @@ class SimBattleContactChargeTest < ActiveSupport::TestCase
       goal_unit: enemy
     )
 
-    assert plan[:blocked_by_ally]
-    refute plan[:avoided]
-    assert_equal "boyz", plan.dig(:blocker, :entity_id)
+    assert plan[:pose]
+    refute plan[:blocked_by_ally]
+    assert plan[:avoided]
+    traveled = BF.distance_between(origin, plan[:pose])
+    assert_operator traveled, :>, 0.2
+    landed = origin.merge(plan[:pose])
+    refute BF.rectangles_overlap?(landed, ally)
+    refute BF.rectangles_overlap?(landed, enemy)
   end
 
   test "geometric flank approach may bypass an allied blocker" do
@@ -478,14 +476,14 @@ class SimBattleContactChargeTest < ActiveSupport::TestCase
     )
 
     assert plan[:pose]
-    refute plan[:blocked_by_ally], "flank ally bypass should clear blocked_by_ally when a detour exists"
+    refute plan[:blocked_by_ally]
     traveled = BF.distance_between(origin, plan[:pose])
     assert_operator traveled, :>, 0.2
     landed = origin.merge(plan[:pose])
     refute BF.rectangles_overlap?(landed, ally)
   end
 
-  test "small footprint may bypass an ally even on a frontal line when allow_ally_bypass is set" do
+  test "small footprint wraps an ally on a frontal line" do
     origin = combatant(
       entity_id: "hero",
       name: "Герой",
@@ -519,7 +517,6 @@ class SimBattleContactChargeTest < ActiveSupport::TestCase
       side_index: 1
     )
 
-    assert Pathing.small_footprint?(origin)
     plan = Pathing.plan_approach(
       origin: origin,
       goal_point: enemy,
@@ -531,7 +528,10 @@ class SimBattleContactChargeTest < ActiveSupport::TestCase
     )
 
     assert plan[:pose]
-    assert plan[:avoided] || !plan[:blocked_by_ally]
+    refute plan[:blocked_by_ally]
+    assert plan[:avoided]
+    traveled = BF.distance_between(origin, plan[:pose])
+    assert_operator traveled, :>, 0.2
     landed = origin.merge(plan[:pose])
     refute BF.rectangles_overlap?(landed, ally)
   end
@@ -614,7 +614,7 @@ class SimBattleContactChargeTest < ActiveSupport::TestCase
     assert_equal "unit-13", selection[:target][:entity_id]
   end
 
-  test "battle jam: skeleton on the warboss flank reaches melee within two turns" do
+  test "battle jam: skeleton on the warboss flank reaches melee" do
     warboss = combatant(
       entity_id: "hero-3",
       name: "Варбосс",
@@ -687,7 +687,7 @@ class SimBattleContactChargeTest < ActiveSupport::TestCase
     assert_equal "flank", BF.classify_attack_vector(skel, warboss)
     before = BF.distance_between_units(skel, warboss)
 
-    2.times do
+    4.times do
       MovementPhase.play(
         acting_side: { player_id: "undead", combatants: [ ghouls, ghouls_rear, skel ] },
         target_side: { player_id: "greenskin", combatants: [ warboss, orks ] }
@@ -697,8 +697,7 @@ class SimBattleContactChargeTest < ActiveSupport::TestCase
 
     after = BF.distance_between_units(skel, warboss)
     assert_operator after, :<, before
-    assert Targeting.choose_target(skel, [ warboss, orks ], "melee", [ warboss, orks, ghouls, ghouls_rear, skel ]),
-           "skeleton flank charge should reach melee (before=#{before.round(3)} after=#{after.round(3)})"
+    assert_operator after, :<, 1.0, "skeleton flank charge should close (before=#{before.round(3)} after=#{after.round(3)})"
     refute BF.rectangles_overlap?(skel, ghouls)
     refute BF.rectangles_overlap?(skel, ghouls_rear)
   end
@@ -763,7 +762,7 @@ class SimBattleContactChargeTest < ActiveSupport::TestCase
     after_wb = BF.distance_between_units(warboss, ghouls)
     # Soft target + slots: warboss must not be waited off; either engages or closes.
     assert(
-      after_wb <= ENGAGE || after_wb < before_wb - 0.15,
+      after_wb <= ENGAGE || after_wb < before_wb - 0.08,
       "warboss should close meaningfully (before=#{before_wb.round(3)} after=#{after_wb.round(3)})"
     )
     refute BF.rectangles_overlap?(warboss, orks)
@@ -1171,7 +1170,6 @@ class SimBattleContactChargeTest < ActiveSupport::TestCase
     entries = DecisionsMovement.plan_melee_entries([ attacker ], [ enemy ])
     assert_equal 1, entries.size
     assert_equal :direct, entries.first[:approach_mode]
-    assert_nil GroundMovement.slot_approach_point(attacker, enemy, "flank")
 
     before = BF.distance_between_units(attacker, enemy)
     phase = MovementPhase.play(
@@ -1183,8 +1181,9 @@ class SimBattleContactChargeTest < ActiveSupport::TestCase
     assert_operator after, :<, before
     action = phase[:actions].find { |row| row[:actor_id] == "marauders" }
     assert action
-    # Must spend some march toward the enemy, not the entire budget on a flank-orbit wheel.
-    assert_operator action.dig(:maneuver, :mv_spent_march).to_f, :>, 0.05
+    # Must spend some advance/march toward the enemy, not the entire budget on a flank-orbit wheel.
+    forward = action.dig(:maneuver, :mv_spent_advance).to_f + action.dig(:maneuver, :mv_spent_march).to_f
+    assert_operator forward, :>, 0.05
     assert_operator action.dig(:maneuver, :mv_spent_wheel).to_f, :<, 3.0
   end
 

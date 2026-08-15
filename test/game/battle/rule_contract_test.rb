@@ -53,7 +53,7 @@ class SimBattleRuleContractTest < ActiveSupport::TestCase
     machine = BattleScenarios.combatant(movement: 2.0, abilities: [ "machine" ])
     enemy = BattleScenarios.enemy(x: 32.0)
 
-    assert_in_delta 8.0,
+    assert_in_delta 4.0,
                     Sim::Battle::Decisions::Movement.budget_for(infantry, enemies: [ enemy ]),
                     0.001
     assert_in_delta 10.0,

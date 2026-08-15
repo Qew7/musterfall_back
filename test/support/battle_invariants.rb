@@ -55,10 +55,12 @@ module BattleInvariants
     return true if budget.nil?
 
     wheel = action.dig(:maneuver, :mv_spent_wheel).to_f
+    turn = action.dig(:maneuver, :mv_spent_turn).to_f
+    advance = action.dig(:maneuver, :mv_spent_advance).to_f
     march = action.dig(:maneuver, :mv_spent_march).to_f
-    fail!("negative movement cost") if wheel < -EPSILON || march < -EPSILON
-    if wheel + march > budget.to_f + EPSILON
-      fail!("movement cost #{wheel + march} exceeds budget #{budget}")
+    fail!("negative movement cost") if [ wheel, turn, advance, march ].any? { |cost| cost < -EPSILON }
+    if wheel + turn + advance + march > budget.to_f + EPSILON
+      fail!("movement cost #{wheel + turn + advance + march} exceeds budget #{budget}")
     end
     true
   end
@@ -86,6 +88,21 @@ module BattleInvariants
     if unit.key?(:models_remaining) && unit[:models_remaining].to_i.negative?
       fail!("#{label(unit)} has negative models_remaining")
     end
+  end
+
+  def verify_pathing_plan!(origin, plan, obstacles: [], budget: nil, contact_id: nil)
+    fail!("pathing plan missing pose") unless plan && plan[:pose]
+
+    landed = Sim::Geometry::Battlefield.merge_footprint(origin, plan[:pose])
+    Array(obstacles).each do |obstacle|
+      next if obstacle[:entity_id] == origin[:entity_id]
+      next if contact_id && obstacle[:entity_id] == contact_id
+
+      next unless Sim::Geometry::Battlefield.rectangles_overlap?(landed, obstacle)
+
+      fail!("#{label(origin)} overlaps #{label(obstacle)}")
+    end
+    true
   end
 
   def verify_point!(point, context)

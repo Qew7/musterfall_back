@@ -5,6 +5,7 @@ require_relative "support/sim_helpers"
 require_relative "support/battle_scenarios"
 require_relative "support/battle_scenario_runner"
 require_relative "support/battle_invariants"
+require_relative "support/pathing_audit"
 
 if Faction.count.zero?
   load Rails.root.join("db/seeds.rb")

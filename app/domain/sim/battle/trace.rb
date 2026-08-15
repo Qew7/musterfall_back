@@ -29,7 +29,7 @@ module Sim
 
       def movement_rule_keys(combatant, maneuver)
         keys = rule_keys_for(combatant, :movement)
-        keys << "march" if maneuver && maneuver[:march].to_s == "active"
+        keys << "march" if maneuver && (maneuver[:kind].to_s == "march" || maneuver[:march].to_s == "active")
         keys << "flying" if maneuver && maneuver[:kind].to_s.start_with?("flyer_")
         keys.uniq
       end

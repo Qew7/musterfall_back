@@ -31,6 +31,7 @@ module Sim
           return nil if budget <= 0.05
 
           mode = primary_mode(combatant, enemies, all, round_number)
+          march_meta = Decisions::Movement.budget_meta(combatant, enemies: enemies)
 
           candidate_goals(combatant, allies, enemies, all, round_number, mode, terrain: terrain).each do |goal|
             plan = Pathing.plan_approach(
@@ -42,7 +43,8 @@ module Sim
               goal_unit: nil,
               bypass: false,
               terrain: terrain,
-              flying: Decisions::Movement.flying?(combatant)
+              flying: Decisions::Movement.flying?(combatant),
+              march_allowed: march_meta[:march].to_s == "active"
             )
             pose = plan[:pose]
             next unless pose && meaningful?(combatant, pose)
@@ -55,7 +57,7 @@ module Sim
             next unless improves?(combatant, candidate, allies, enemies, all, mode)
 
             # First improving pose for the primary need is enough — no combinatorial search.
-            return intent_for(combatant, candidate, plan, budget, enemies, all, march_meta: Decisions::Movement.budget_meta(combatant, enemies: enemies))
+            return intent_for(combatant, candidate, plan, budget, enemies, all, march_meta: march_meta)
           end
 
           return nil if mode == :escape_charge
@@ -239,19 +241,6 @@ module Sim
           end
         end
 
-        def good_enough?(origin, candidate, enemies, all, mode)
-          case mode
-          when :escape_charge
-            in_charge_danger?(origin, enemies) && !in_charge_danger?(candidate, enemies)
-          when :leave_shot
-            missile_threat_count(candidate, enemies) < missile_threat_count(origin, enemies)
-          when :open_los
-            cheap_opens_shot?(candidate, enemies, replace_unit(all, candidate))
-          else
-            false
-          end
-        end
-
         def snapshot_metrics(pose_unit, enemies, all)
           {
             charge: in_charge_danger?(pose_unit, enemies) ? 0 : 1,
@@ -392,12 +381,6 @@ module Sim
         def meaningful?(origin, destination)
           Geometry::Battlefield.distance_between(origin, destination) > 0.05 ||
             Geometry::Battlefield.shortest_facing_delta(origin[:facing], destination[:facing]).abs > 0.05
-        end
-
-        def in_enemy_contact?(pose_unit, enemies)
-          Roles.standing(enemies).any? do |enemy|
-            Geometry::Battlefield.distance_between_units(pose_unit, enemy) <= CONTACT
-          end
         end
       end
     end

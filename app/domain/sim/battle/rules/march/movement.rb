@@ -11,11 +11,8 @@ module Sim
             !abilities.include?("flying") && !abilities.include?("machine")
           end
 
-          def movement_multiplier(combatant, ctx)
-            return 1.0 unless applies?(combatant)
-            return 1.0 unless tray_clear?(combatant, ctx[:enemies])
-
-            CONFIG[:march_multiplier].to_f
+          def movement_multiplier(_combatant, _ctx)
+            1.0
           end
 
           def movement_budget_meta(combatant, ctx)
@@ -38,14 +35,6 @@ module Sim
                 march_multiplier: CONFIG[:march_multiplier].to_f
               }
             end
-          end
-
-          def tray_clear?(combatant, enemies)
-            Geometry::Battlefield.tray_clear_of_enemies?(
-              combatant,
-              enemies,
-              clearance: CONFIG[:march_clearance_inches]
-            )
           end
 
           def nearest_blocker(combatant, enemies, clearance:)

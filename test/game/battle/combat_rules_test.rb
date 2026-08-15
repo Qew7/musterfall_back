@@ -217,8 +217,8 @@ class SimBattleCombatRulesTest < ActiveSupport::TestCase
     )
 
     assert_empty phase[:actions].select { |row| row[:type] == "fear_check" }
-    refute FearMelee.blocked?(left)
-    refute FearMelee.blocked?(right)
+    assert FearMelee.allow_attack?(left)
+    assert FearMelee.allow_attack?(right)
   end
 
   test "seeds wire breath shooting on bone dragon" do

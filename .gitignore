@@ -31,3 +31,10 @@
 # Ignore key files for decrypting credentials and more.
 /config/*.key
 
+# OBB native kernel build artifacts
+/ext/**/*.o
+/ext/**/*.so
+/ext/**/*.bundle
+/ext/**/Makefile
+/ext/**/mkmf.log
+

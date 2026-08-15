@@ -24,15 +24,6 @@ module Sim
 
         entries[rand(entries.length)]
       end
-
-      def shuffle(entries)
-        list = entries.dup
-        (list.length - 1).downto(1) do |index|
-          swap = rand(index + 1)
-          list[index], list[swap] = list[swap], list[index]
-        end
-        list
-      end
     end
   end
 end

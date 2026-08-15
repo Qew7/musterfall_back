@@ -154,9 +154,10 @@ module Sim
             preferred_heading = if newly_routing
               Decisions::Flee.flee_facing_for(combatant, engaged_enemies, enemies)
             end
-            blockers = Pathing.merge_obstacles(
-              (Array(allies) + Array(enemies)).reject { |entry| entry[:entity_id] == combatant[:entity_id] },
-              Array(terrain)
+            blockers = Pathing::Obstacles.around(
+              combatant,
+              units: Array(allies) + Array(enemies),
+              terrain: Array(terrain)
             )
             retreat = Decisions::Flee.retreat_toward_edge(
               combatant,

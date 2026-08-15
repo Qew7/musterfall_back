@@ -25,9 +25,4 @@ class SimRngSeededTest < ActiveSupport::TestCase
     entries = %w[a b c]
     assert_includes entries, Sim::Rng::Seeded.new(9).pick(entries)
   end
-
-  test "shuffle preserves membership" do
-    entries = [ 1, 2, 3, 4, 5 ]
-    assert_equal entries.sort, Sim::Rng::Seeded.new(3).shuffle(entries).sort
-  end
 end

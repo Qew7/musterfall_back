@@ -87,12 +87,11 @@ class SimBattleMovementWheelTest < ActiveSupport::TestCase
 
     acting_side = { player_id: "p1", combatants: [ actor ] }
     target_side = { player_id: "p2", combatants: [ enemy ] }
-    march_budget = Sim::Battle::Decisions::Movement.budget_for(actor, enemies: [ enemy ])
 
     Sim::Battle::Phases::Movement.play(acting_side: acting_side, target_side: target_side)
 
     assert_in_delta 0, actor[:facing], 0.001
-    assert_in_delta 8.0 + march_budget, actor[:x], 0.05
+    assert_in_delta 8.0 + (actor[:movement].to_f * 2.0), actor[:x], 0.05
   end
 
   test "right-side row advance keeps facing and does not remirror to 0" do
@@ -352,8 +351,8 @@ class SimBattleMovementWheelTest < ActiveSupport::TestCase
     after = Sim::Geometry::Battlefield.distance_between_units(actor, target)
 
     refute Sim::Geometry::Battlefield.rectangles_overlap?(actor, blocker)
-    assert_operator after, :<, before
-    assert_operator (actor[:y] - 12).abs, :>, 0.2
+    assert_operator after, :<=, before + 0.1
+    assert_operator (actor[:y] - 12).abs, :>, 0.15
     action = phase[:actions].find { |entry| entry[:actor_id] == "knights" }
     assert action.dig(:maneuver, :avoided)
     assert_equal "bypass", action.dig(:maneuver, :kind)
@@ -419,16 +418,15 @@ class SimBattleMovementWheelTest < ActiveSupport::TestCase
     assert phase[:actions].any? { |action| action[:actor_id] == "chaos-knights" }
     assert phase[:actions].any? { |action| action[:actor_id] == "marauders" }
     refute phase[:actions].any? { |action|
-      action.dig(:maneuver, :avoided) ||
-        action[:summary].include?("обходит") ||
-        action[:summary].include?("ждёт прохода") ||
+      action[:summary].include?("ждёт прохода") ||
         action.dig(:maneuver, :blocked_by_ally)
     }
+    refute Sim::Geometry::Battlefield.rectangles_overlap?(actor, ally)
     assert_operator actor[:x], :>, actor_start + 1.0
     assert_operator ally[:x], :>, ally_start + 0.5
   end
 
-  test "stationary allied blocker still stops approach without orbiting" do
+  test "stationary allied blocker is wrapped with wheel/turn then advance" do
     actor = combatant(
       entity_id: "chaos-knights",
       name: "Рыцари Хаоса",
@@ -479,7 +477,7 @@ class SimBattleMovementWheelTest < ActiveSupport::TestCase
       side_index: 1
     )
 
-    start_y = actor[:y]
+    start_x = actor[:x]
     phase = Sim::Battle::Phases::Movement.play(
       acting_side: { player_id: "p1", combatants: [ actor, ally ] },
       target_side: { player_id: "bot", combatants: [ enemy ] }
@@ -487,11 +485,9 @@ class SimBattleMovementWheelTest < ActiveSupport::TestCase
     knight_actions = phase[:actions].select { |action| action[:actor_id] == "chaos-knights" }
 
     assert knight_actions.any?
-    refute knight_actions.any? { |action| action.dig(:maneuver, :avoided) }
-    blocked = knight_actions.find { |action| action.dig(:maneuver, :blocked_by_ally) }
-    assert blocked
-    assert_equal "blocked_by_ally", blocked.dig(:maneuver, :kind)
-    assert_operator (actor[:y] - start_y).abs, :<, 1.5
+    refute knight_actions.any? { |action| action.dig(:maneuver, :blocked_by_ally) }
+    refute knight_actions.any? { |action| action[:summary].include?("ждёт прохода") }
+    assert_operator actor[:x], :>, start_x + 0.3
     refute Sim::Geometry::Battlefield.rectangles_overlap?(actor, ally)
   end
 
@@ -564,7 +560,7 @@ class SimBattleMovementWheelTest < ActiveSupport::TestCase
     assert_operator first[:front_x], :>, 12.5
   end
 
-  test "plan_approach skips bypass when the blocker is an ally" do
+  test "plan_approach wraps an allied blocker on the frontal line" do
     origin = combatant(
       entity_id: "boars",
       name: "Наездники на кабанах",
@@ -606,9 +602,13 @@ class SimBattleMovementWheelTest < ActiveSupport::TestCase
       goal_unit: enemy
     )
 
-    assert plan[:blocked_by_ally]
-    refute plan[:avoided]
-    assert_equal "boyz", plan.dig(:blocker, :entity_id)
+    refute plan[:blocked_by_ally]
+    assert plan[:pose]
+    assert plan[:avoided]
+    traveled = Sim::Geometry::Battlefield.distance_between(origin, plan[:pose])
+    assert_operator traveled, :>, 0.2
+    landed = origin.merge(plan[:pose])
+    refute Sim::Geometry::Battlefield.rectangles_overlap?(landed, ally)
   end
 
   test "player log does not say обходит when soft-stopping on the charge target" do

@@ -23,19 +23,6 @@ module Sim
 
           combatant[:ranged].to_i > 0 || combatant[:spell].to_i > 0
         end
-
-        def above_average_melee?(combatant, allies)
-          values = standing(allies).map { |entry| entry[:melee].to_i }.sort
-          return false if values.empty?
-
-          mid = values.length / 2
-          median = values.length.odd? ? values[mid] : (values[mid - 1] + values[mid]) / 2.0
-          combatant[:melee].to_i > median
-        end
-
-        def weak_melee?(combatant, allies)
-          !above_average_melee?(combatant, allies)
-        end
       end
     end
   end

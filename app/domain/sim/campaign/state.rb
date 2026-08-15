@@ -33,41 +33,6 @@ module Sim
         }
       end
 
-      def self.from_api_hash(payload, version: 0)
-        players = Array(payload["players"] || payload[:players]).map { |player| deep_symbolize(player) }
-        new(
-          round: (payload["round"] || payload[:round] || 1).to_i,
-          winner_id: payload["winnerId"] || payload[:winner_id] || payload[:winnerId],
-          last_round_report: deep_symbolize(payload["lastRoundReport"] || payload[:last_round_report] || payload[:lastRoundReport]),
-          players: players.map { |player| normalize_player(player) },
-          id_sequence: infer_id_sequence(players),
-          version: version
-        )
-      end
-
-      def self.normalize_player(player)
-        player = player.transform_keys(&:to_sym)
-        player[:roster] = Array(player[:roster]).map { |entity| normalize_entity(entity) }
-        player[:round_notes] = Array(player[:round_notes] || player[:roundNotes])
-        player[:is_bot] = player.key?(:is_bot) ? player[:is_bot] : player[:isBot]
-        player[:faction_id] = player[:faction_id] || player[:factionId]
-        player
-      end
-
-      def self.normalize_entity(entity)
-        entity = deep_symbolize(entity)
-        entity[:components] = deep_symbolize(entity[:components] || {})
-        entity[:state] = deep_symbolize(entity[:state] || {})
-        entity
-      end
-
-      def self.infer_id_sequence(players)
-        players.flat_map { |player| Array(player[:roster] || player["roster"]) }.map do |entity|
-          id = entity[:id] || entity["id"]
-          id.to_s[/\d+/].to_i
-        end.max.to_i
-      end
-
       def self.deep_symbolize(value)
         case value
         when Hash

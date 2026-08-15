@@ -10,18 +10,11 @@ module Sim
         end
 
         def unit_corners(unit)
-          dims = unit_dimensions(unit)
-          forward = facing_vector(unit[:facing])
-          right = right_vector(unit[:facing])
-          hw = dims[:half_width]
-          hd = dims[:half_depth]
-
-          [
-            { x: unit[:x] + (forward[:x] * hd) - (right[:x] * hw), y: unit[:y] + (forward[:y] * hd) - (right[:y] * hw) },
-            { x: unit[:x] + (forward[:x] * hd) + (right[:x] * hw), y: unit[:y] + (forward[:y] * hd) + (right[:y] * hw) },
-            { x: unit[:x] - (forward[:x] * hd) + (right[:x] * hw), y: unit[:y] - (forward[:y] * hd) + (right[:y] * hw) },
-            { x: unit[:x] - (forward[:x] * hd) - (right[:x] * hw), y: unit[:y] - (forward[:y] * hd) - (right[:y] * hw) }
-          ]
+          x, y, hw, hd, c, s = Sim::Geometry::Obb.kernel(unit)
+          4.times.map do |index|
+            cx, cy = Sim::Geometry::Obb.corner(x, y, hw, hd, c, s, index)
+            { x: cx, y: cy }
+          end
         end
 
         def front_center(unit)
@@ -31,14 +24,11 @@ module Sim
         end
 
         def point_in_local_unit_space(point, unit)
-          forward = facing_vector(unit[:facing])
-          right = right_vector(unit[:facing])
-          dx = point[:x] - unit[:x]
-          dy = point[:y] - unit[:y]
-          {
-            lateral: (dx * right[:x]) + (dy * right[:y]),
-            longitudinal: (dx * forward[:x]) + (dy * forward[:y])
-          }
+          c, s = Sim::Geometry::Obb.trig(unit[:facing])
+          lat, lng = Sim::Geometry::Obb.local_xy(
+            point[:x].to_f, point[:y].to_f, unit[:x].to_f, unit[:y].to_f, c, s
+          )
+          { lateral: lat, longitudinal: lng }
         end
 
         def point_inside_unit?(point, unit)
@@ -48,16 +38,13 @@ module Sim
         end
 
         def closest_point_on_unit(point, unit)
-          dims = unit_dimensions(unit)
-          forward = facing_vector(unit[:facing])
-          right = right_vector(unit[:facing])
-          local = point_in_local_unit_space(point, unit)
-          clamped_lateral = local[:lateral].clamp(-dims[:half_width], dims[:half_width])
-          clamped_longitudinal = local[:longitudinal].clamp(-dims[:half_depth], dims[:half_depth])
-          {
-            x: unit[:x] + (right[:x] * clamped_lateral) + (forward[:x] * clamped_longitudinal),
-            y: unit[:y] + (right[:y] * clamped_lateral) + (forward[:y] * clamped_longitudinal)
-          }
+          c, s = Sim::Geometry::Obb.trig(unit[:facing])
+          hw, hd = Sim::Geometry::Obb.half_sizes(unit)
+          x, y = Sim::Geometry::Obb.closest_point(
+            point[:x].to_f, point[:y].to_f,
+            unit[:x].to_f, unit[:y].to_f, hw, hd, c, s
+          )
+          { x: x, y: y }
         end
 
         def distance_point_to_segment(point, segment_start, segment_end)
@@ -90,38 +77,12 @@ module Sim
           end.min_by(&:first)&.last
         end
 
-        def tray_clear_of_enemies?(unit, enemies, clearance:)
-          nearest_enemy_within_tray_clearance(unit, enemies, clearance: clearance).nil?
-        end
-
         def distance_between_units(left, right)
-          return 0 if rectangles_overlap?(left, right)
-
-          min_distance = Float::INFINITY
-          unit_corners(left).each do |corner|
-            unit_edges(right).each do |start_point, end_point|
-              min_distance = [ min_distance, distance_point_to_segment(corner, start_point, end_point) ].min
-            end
-          end
-          unit_corners(right).each do |corner|
-            unit_edges(left).each do |start_point, end_point|
-              min_distance = [ min_distance, distance_point_to_segment(corner, start_point, end_point) ].min
-            end
-          end
-          min_distance
+          Sim::Geometry::Obb.distance_units(left, right)
         end
 
         def rectangles_overlap?(left, right)
-          axes = separating_axes(left) + separating_axes(right)
-          axes.all? do |axis|
-            left_projection = project_unit_onto_axis(left, axis)
-            right_projection = project_unit_onto_axis(right, axis)
-            left_projection[:max] >= right_projection[:min] && right_projection[:max] >= left_projection[:min]
-          end
-        end
-
-        def separating_axes(unit)
-          [ facing_vector(unit[:facing]), right_vector(unit[:facing]) ]
+          Sim::Geometry::Obb.overlap_units?(left, right)
         end
 
         def project_unit_onto_axis(unit, axis)

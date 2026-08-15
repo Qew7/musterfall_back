@@ -1,10 +1,9 @@
 module Sim
   class Catalog
-    attr_reader :formation_rules, :model_classes, :factions, :units, :heroes, :templates, :abilities, :hero_upgrades
+    attr_reader :formation_rules, :factions, :units, :heroes, :abilities, :hero_upgrades
 
     def initialize(formation_rules:, model_classes:, factions:, units:, heroes:, abilities:, hero_upgrades:)
       @formation_rules = formation_rules
-      @model_classes = model_classes
       @factions = factions
       @units = units
       @heroes = heroes
@@ -14,7 +13,6 @@ module Sim
       @factions_by_id = factions.index_by { |entry| entry[:id] }
       @templates_by_id = @templates.index_by { |entry| entry[:id] }
       @abilities_by_id = abilities.index_by { |entry| entry[:id] }
-      @hero_upgrades_by_id = hero_upgrades.index_by { |entry| entry[:id] }
       freeze
     end
 
@@ -28,10 +26,6 @@ module Sim
 
     def ability(ability_id)
       @abilities_by_id[ability_id]
-    end
-
-    def hero_upgrade(upgrade_id)
-      @hero_upgrades_by_id[upgrade_id]
     end
 
     def unit_templates(faction_id)

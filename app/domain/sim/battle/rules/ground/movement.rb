@@ -167,33 +167,17 @@ module Sim
               obstacles: obstacles,
               contact_id: contact_id,
               goal_unit: chargeable ? nearest : nil,
-              allow_ally_bypass: allow_ally_bypass || Decisions::Movement.orbit_mode?(approach_mode),
               approach_mode: approach_mode,
+              contact_slot: contact_slot,
               terrain: terrain,
-              flying: false
+              flying: false,
+              march_allowed: march_meta[:march].to_s == "active"
             )
             destination = plan[:pose]
             facing_changed = destination && Geometry::Battlefield.shortest_facing_delta(combatant[:facing], destination[:facing]).abs > 0.05
             traveled = destination ? Geometry::Battlefield.distance_between(combatant, destination) : 0.0
             meaningful_move = destination && (facing_changed || traveled > 0.05)
-
-            if !meaningful_move
-              return nil unless plan[:blocked_by_ally] && plan[:blocker]
-
-              return {
-                kind: "approach",
-                combatant: combatant,
-                nearest: nearest,
-                plan: plan,
-                budget: budget,
-                march_meta: march_meta,
-                destination: nil,
-                wait: true,
-                contact_slot: contact_slot,
-                approach_mode: approach_mode,
-                charge_contact_id: contact_id
-              }
-            end
+            return nil unless meaningful_move
 
             {
               kind: "approach",
@@ -225,14 +209,6 @@ module Sim
             defender
           end
 
-          def slot_approach_point(origin, defender, slot, approach_mode: :direct)
-            return nil unless Decisions::Movement.orbit_mode?(approach_mode)
-            return nil if slot.nil? || slot.to_s == "front"
-
-            point = approach_goal_point(origin, defender, contact_slot: slot, approach_mode: approach_mode)
-            point == defender ? nil : point
-          end
-
           def corner_contact_reachable?(origin, defender, budget, terrain: [])
             plan = Pathing.plan_approach(
               origin: origin,
@@ -241,7 +217,6 @@ module Sim
               obstacles: [ defender ],
               contact_id: defender[:entity_id],
               goal_unit: defender,
-              bypass: false,
               terrain: terrain,
               flying: false
             )

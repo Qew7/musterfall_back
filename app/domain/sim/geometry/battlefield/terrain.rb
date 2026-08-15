@@ -2,8 +2,6 @@ module Sim
   module Geometry
     module Battlefield
       module Terrain
-        FEATURE_TYPES = %w[house lake difficult forest].freeze
-
         def feature_footprint(feature)
           {
             entity_id: feature[:id],
@@ -29,14 +27,6 @@ module Sim
 
         def los_blocking_features(features)
           Array(features).select { |entry| entry[:blocks_los] }
-        end
-
-        def difficult_features(features)
-          Array(features).select { |entry| entry[:type].to_s == "difficult" || entry[:move_cost].to_f > 1.0 }
-        end
-
-        def forest_features(features)
-          Array(features).select { |entry| entry[:type].to_s == "forest" }
         end
 
         def unit_midpoint(unit)

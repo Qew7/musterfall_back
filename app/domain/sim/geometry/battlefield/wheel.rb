@@ -24,12 +24,6 @@ module Sim
           delta.negative? ? corners[0] : corners[1]
         end
 
-        # Outer front corner opposite the pivot — the model whose path sets the wheel distance.
-        def wheel_outer_corner(unit, delta)
-          corners = unit_corners(unit)
-          delta.negative? ? corners[1] : corners[0]
-        end
-
         # Rotate unit center around the chosen front corner by delta degrees.
         def wheel_pose(unit, delta)
           return unit.merge(facing: normalize_facing(unit[:facing])) if delta.abs < 0.0001
@@ -87,7 +81,8 @@ module Sim
             cost: cost,
             remaining: [ budget - cost, 0.0 ].max,
             completed: shortest_facing_delta(pose[:facing], desired).abs < 0.05,
-            delta: limited_delta
+            delta: limited_delta,
+            kind: :wheel
           }
         end
       end

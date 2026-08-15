@@ -51,7 +51,7 @@ module Sim
       end
 
       class RuleSet
-        attr_reader :rules
+        attr_reader :rules # leftovers:keep
 
         def initialize(rules)
           @rules = Array(rules)

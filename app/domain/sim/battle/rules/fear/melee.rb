@@ -164,10 +164,6 @@ module Sim
           def allow_attack?(attacker, _ctx = nil)
             !attacker[:fear_cannot_attack]
           end
-
-          def blocked?(combatant)
-            !!combatant[:fear_cannot_attack]
-          end
         end
       end
     end

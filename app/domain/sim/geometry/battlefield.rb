@@ -19,6 +19,7 @@ module Sim
 
       extend Core
       extend Wheel
+      extend Turn
       extend Footprint
       extend Deployment
       extend Contact

@@ -83,13 +83,6 @@ module Sim
         }
       end
 
-      def project_combatant_position(side_index, row, lane, fallback_facing = side_index.zero? ? 0 : 180)
-        Geometry::Battlefield.battle_position(
-          Geometry::Battlefield.default_deployment(row, lane).merge(facing: fallback_facing),
-          side_index
-        )
-      end
-
       def sync_battle!(battle)
         sync_side!(battle[:players][:left], battle[:sides][:left])
         sync_side!(battle[:players][:right], battle[:sides][:right])

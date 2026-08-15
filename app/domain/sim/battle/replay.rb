@@ -114,6 +114,7 @@ module Sim
                   to: action[:to],
                   maneuver: compact_maneuver(action[:maneuver]),
                   wheel: action[:wheel],
+                  turn: action[:turn],
                   charge: action[:charge]
                 }
               end
@@ -125,7 +126,7 @@ module Sim
       def compact_maneuver(maneuver)
         return nil unless maneuver
 
-        maneuver.slice(:kind, :target_id, :contact_slot, :truncated_by_collision, :blocked_by_ally)
+        maneuver.slice(:kind, :target_id, :contact_slot, :truncated_by_collision, :blocked_by_ally, :steps)
       end
 
       def symbolize(value)
