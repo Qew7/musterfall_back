@@ -2,7 +2,7 @@ module Sim
   module Battle
     module Rules
       module Flying
-        # Flyer leap: setup behind furthest foe, charge into contact next turn.
+        # Flyer leap: land behind when the setup fits this turn, else charge a free side.
         module Movement
           SETUP_CLEARANCE = 0.25
 
@@ -24,11 +24,19 @@ module Sim
             ranked.filter_map { |combatant| entries_by_id[combatant[:entity_id]] }
           end
 
+          # Own wave before infantry so landings exist as obstacles, not takeoff ghosts.
+          def plan_waves(movers, enemies, claimed, terrain: [])
+            entries = plan_entries(movers, enemies, claimed, terrain: terrain)
+            return [] if entries.empty?
+
+            [ { entries: entries, allow_ally_bypass: true } ]
+          end
+
           def plan_entry(combatant, enemies, claimed, terrain = [])
             return nil if Decisions::Movement.engaged_with_any?(combatant, enemies)
 
-            choose_charge(combatant, enemies, claimed, terrain) ||
-              choose_setup(combatant, enemies, claimed, terrain) ||
+            choose_setup(combatant, enemies, claimed, terrain) ||
+              choose_charge(combatant, enemies, claimed, terrain) ||
               choose_approach(combatant, enemies, claimed, terrain)
           end
 
@@ -36,26 +44,23 @@ module Sim
             budget = combatant[:movement].to_f
             return nil if budget <= 0.05
 
-            candidates = Decisions::Movement.enemies_in_front_arc(combatant, enemies).select do |enemy|
+            ordered = Pathing.active_units(enemies).select do |enemy|
               next false unless Decisions::Movement.can_charge?(combatant, enemy, terrain)
 
-              Geometry::Battlefield.distance_between_units(combatant, enemy) <= budget
-            end
-            return nil if candidates.empty?
-
-            ordered = candidates.sort_by do |enemy|
+              Geometry::Battlefield.distance_between_units(combatant, enemy) <= budget + Decisions::Movement::ENGAGE
+            end.sort_by do |enemy|
               [
+                Geometry::Battlefield.in_front_arc?(combatant, enemy, combatant[:facing]) ? 0 : 1,
                 enemy[:is_routing] ? 0 : 1,
                 Geometry::Battlefield.distance_between_units(combatant, enemy),
                 enemy[:entity_id].to_s
               ]
             end
+            return nil if ordered.empty?
 
-            # Only commit a same-turn charge when already on flank/rear — otherwise set up behind.
             ordered.each do |enemy|
-              side = Geometry::Battlefield.classify_attack_vector(combatant, enemy)
-              next unless %w[flank rear].include?(side)
-              next if claimed[enemy[:entity_id]].key?(side)
+              side = Decisions::Movement.unclaimed_side(combatant, enemy, claimed)
+              next unless side
 
               return Decisions::Movement.build_entry(combatant, enemy, side, :flyer_charge, chargeable: true)
             end
@@ -80,6 +85,9 @@ module Sim
             end
 
             ordered.each do |enemy|
+              # Already behind: charge this turn instead of leaping to another setup pad.
+              next if %w[flank rear].include?(Geometry::Battlefield.classify_attack_vector(combatant, enemy))
+
               claimed_sides = claimed[enemy[:entity_id]]
               chargeable = Decisions::Movement.can_charge?(combatant, enemy, terrain)
               [
@@ -181,7 +189,7 @@ module Sim
               kind: "approach",
               combatant: combatant,
               nearest: nearest,
-              plan: best[:plan].merge(leap: true, charge: true, heading: best[:destination][:facing]),
+              plan: best[:plan].merge(leap: true, charge: true, kind: "flyer_charge", heading: best[:destination][:facing]),
               budget: budget,
               destination: best[:destination],
               wait: false,
@@ -231,7 +239,7 @@ module Sim
               kind: "approach",
               combatant: combatant,
               nearest: nearest,
-              plan: best[:plan].merge(leap: true, charge: false, heading: best[:destination][:facing]),
+              plan: best[:plan].merge(leap: true, charge: false, kind: "flyer_leap", heading: best[:destination][:facing]),
               budget: budget,
               destination: best[:destination],
               wait: false,
@@ -299,7 +307,7 @@ module Sim
               kind: "approach",
               combatant: combatant,
               nearest: nearest,
-              plan: best[:plan].merge(leap: true, charge: false, heading: best[:destination][:facing]),
+              plan: best[:plan].merge(leap: true, charge: false, kind: "flyer_leap", heading: best[:destination][:facing]),
               budget: budget,
               destination: best[:destination],
               wait: false,

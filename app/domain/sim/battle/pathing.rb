@@ -316,7 +316,7 @@ module Sim
       def aligned_translation?(from, to)
         dx = to[:x].to_f - from[:x].to_f
         dy = to[:y].to_f - from[:y].to_f
-        length = Math.hypot(dx, dy)
+        length = Geometry::Battlefield.distance_between(from, to)
         return true if length <= 0.05
 
         c, s = Geometry::Obb.trig(to[:facing])

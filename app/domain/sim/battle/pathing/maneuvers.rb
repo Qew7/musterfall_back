@@ -9,7 +9,7 @@ module Sim
       module Maneuvers
         module_function
 
-        def follow_segment(origin:, heading:, budget:, goal_point:, goal_unit:, obstacles:, contact_id:, terrain: [], flying: false, kernels: nil, march_allowed: false, finish: nil, **)
+        def follow_segment(origin:, heading:, budget:, goal_point:, goal_unit:, obstacles:, contact_id:, terrain: [], flying: false, kernels: nil, march_allowed: false, finish: nil, allow_turn: true, **)
           space = Obstacles.coerce(obstacles, kernels)
           shared = {
             origin: origin,
@@ -23,7 +23,7 @@ module Sim
             flying: flying,
             kernels: space.kernels
           }
-          if turn_for?(origin, heading, budget, finish, space, contact_id)
+          if allow_turn && turn_for?(origin, heading, budget, finish, space, contact_id)
             Turn.simulate(**shared)
           elsif Wheel.applies?(origin, heading, budget)
             Wheel.simulate(**shared)

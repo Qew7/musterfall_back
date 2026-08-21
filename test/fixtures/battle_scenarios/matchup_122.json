@@ -1024,24 +1024,24 @@
   },
   "expected": {
     "version": 1,
-    "winner_id": "player-8",
+    "winner_id": "player-2",
     "rounds": 6,
     "side_health": {
-      "left": 42.0,
-      "right": 43.0
+      "left": 53.0,
+      "right": 46.0
     },
     "action_counts": {
-      "magic": 1,
-      "morale": 12,
-      "movement": 12,
-      "shooting": 18
+      "magic": 4,
+      "morale": 9,
+      "movement": 20,
+      "shooting": 7
     },
     "contacts": [],
     "rule_effects": {
-      "blast": 2,
-      "machine": 2,
-      "march": 11,
-      "volley": 14
+      "blast": 1,
+      "machine": 1,
+      "march": 17,
+      "volley": 6
     },
     "actions": [
       {
@@ -1079,38 +1079,6 @@
       {
         "path": "R1/T1/movement/A2",
         "type": "movement",
-        "actor_id": "unit-41",
-        "target_id": "unit-29",
-        "from": {
-          "x": 9.0,
-          "y": 7.0,
-          "facing": 0.0
-        },
-        "to": {
-          "x": 8.85,
-          "y": 7.412,
-          "facing": 85.52
-        },
-        "maneuver": {
-          "kind": "bypass",
-          "contact_slot": "front",
-          "approach_mode": "direct",
-          "truncated": true,
-          "avoided": true,
-          "blocked_by_ally": false
-        },
-        "morale": {},
-        "trace": {
-          "version": 1,
-          "rule_keys": [
-            "march"
-          ],
-          "result": "bypass"
-        }
-      },
-      {
-        "path": "R1/T1/movement/A3",
-        "type": "movement",
         "actor_id": "unit-35",
         "target_id": "hero-8",
         "from": {
@@ -1141,10 +1109,10 @@
         }
       },
       {
-        "path": "R1/T1/shooting/A1",
-        "type": "shooting",
+        "path": "R1/T1/magic/A1",
+        "type": "magic",
         "actor_id": "hero-2",
-        "target_id": "unit-30",
+        "target_id": "hero-8",
         "maneuver": {},
         "damage": 3,
         "morale": {},
@@ -1154,7 +1122,7 @@
         }
       },
       {
-        "path": "R1/T1/shooting/A2",
+        "path": "R1/T1/shooting/A1",
         "type": "shooting",
         "actor_id": "unit-9",
         "target_id": "unit-28",
@@ -1171,24 +1139,7 @@
         }
       },
       {
-        "path": "R1/T1/shooting/A3",
-        "type": "morale",
-        "actor_id": "unit-30",
-        "from": {
-          "x": 35.0,
-          "y": 19.0,
-          "facing": 180.0
-        },
-        "maneuver": {},
-        "damage": 0,
-        "morale": {},
-        "trace": {
-          "version": 1,
-          "result": "passed"
-        }
-      },
-      {
-        "path": "R1/T1/shooting/A4",
+        "path": "R1/T1/shooting/A2",
         "type": "morale",
         "actor_id": "unit-28",
         "from": {
@@ -1196,31 +1147,58 @@
           "y": 11.0,
           "facing": 180.0
         },
+        "to": {
+          "x": 31.0,
+          "y": 8.0,
+          "facing": 270.0
+        },
         "maneuver": {},
         "damage": 0,
         "morale": {},
         "trace": {
           "version": 1,
-          "result": "passed"
+          "result": "routing"
+        }
+      },
+      {
+        "path": "R1/T2/start/A1",
+        "type": "morale",
+        "actor_id": "unit-28",
+        "from": {
+          "x": 31.0,
+          "y": 8.0,
+          "facing": 270.0
+        },
+        "to": {
+          "x": 31.0,
+          "y": 11.0,
+          "facing": 90.0
+        },
+        "maneuver": {},
+        "damage": 0,
+        "morale": {},
+        "trace": {
+          "version": 1,
+          "result": "routing"
         }
       },
       {
         "path": "R1/T2/movement/A1",
         "type": "movement",
         "actor_id": "unit-39",
-        "target_id": "unit-9",
+        "target_id": "unit-41",
         "from": {
           "x": 35.0,
           "y": 3.0,
           "facing": 180.0
         },
         "to": {
-          "x": 35.0,
-          "y": 5.0,
-          "facing": 90.0
+          "x": 34.75,
+          "y": 3.0,
+          "facing": 180.0
         },
         "maneuver": {
-          "kind": "turn",
+          "kind": "advance",
           "contact_slot": "front",
           "approach_mode": "direct",
           "truncated": false,
@@ -1233,22 +1211,38 @@
           "rule_keys": [
             "march"
           ],
-          "result": "turn"
+          "result": "advance"
         }
       },
       {
-        "path": "R1/T2/movement/A2",
+        "path": "R1/T2/shooting/A1",
+        "type": "shooting",
+        "actor_id": "unit-29",
+        "target_id": "unit-10",
+        "maneuver": {},
+        "damage": 2,
+        "morale": {},
+        "trace": {
+          "version": 1,
+          "rule_keys": [
+            "volley"
+          ],
+          "result": "hit"
+        }
+      },
+      {
+        "path": "R2/T1/movement/A1",
         "type": "movement",
-        "actor_id": "unit-42",
-        "target_id": "unit-41",
+        "actor_id": "unit-35",
+        "target_id": "unit-28",
         "from": {
-          "x": 38.0,
-          "y": 18.0,
-          "facing": 180.0
+          "x": 4.25,
+          "y": 20.0,
+          "facing": 0.0
         },
         "to": {
-          "x": 38.0,
-          "y": 16.5,
+          "x": 4.25,
+          "y": 18.5,
           "facing": 270.0
         },
         "maneuver": {
@@ -1269,494 +1263,10 @@
         }
       },
       {
-        "path": "R1/T2/shooting/A1",
-        "type": "shooting",
-        "actor_id": "hero-8",
-        "target_id": "unit-41",
-        "maneuver": {},
-        "damage": 2,
-        "morale": {},
-        "trace": {
-          "version": 1,
-          "rule_keys": [
-            "volley"
-          ],
-          "result": "hit"
-        }
-      },
-      {
-        "path": "R1/T2/shooting/A2",
-        "type": "shooting",
-        "actor_id": "unit-29",
-        "target_id": "unit-10",
-        "maneuver": {},
-        "damage": 2,
-        "morale": {},
-        "trace": {
-          "version": 1,
-          "rule_keys": [
-            "volley"
-          ],
-          "result": "hit"
-        }
-      },
-      {
-        "path": "R1/T2/shooting/A3",
-        "type": "shooting",
-        "actor_id": "unit-30",
-        "target_id": "unit-41",
-        "maneuver": {},
-        "damage": 2,
-        "morale": {},
-        "trace": {
-          "version": 1,
-          "rule_keys": [
-            "volley"
-          ],
-          "result": "hit"
-        }
-      },
-      {
-        "path": "R1/T2/shooting/A4",
-        "type": "morale",
-        "actor_id": "unit-41",
-        "from": {
-          "x": 8.889,
-          "y": 7.911,
-          "facing": 85.52
-        },
-        "maneuver": {},
-        "damage": 0,
-        "morale": {},
-        "trace": {
-          "version": 1,
-          "result": "passed"
-        }
-      },
-      {
-        "path": "R2/T1/movement/A1",
-        "type": "movement",
-        "actor_id": "unit-41",
-        "target_id": "hero-8",
-        "from": {
-          "x": 8.889,
-          "y": 7.911,
-          "facing": 85.52
-        },
-        "to": {
-          "x": 10.384,
-          "y": 7.794,
-          "facing": 355.52
-        },
-        "maneuver": {
-          "kind": "bypass",
-          "contact_slot": "flank",
-          "approach_mode": "orbit_flank",
-          "truncated": false,
-          "avoided": true,
-          "blocked_by_ally": false
-        },
-        "morale": {},
-        "trace": {
-          "version": 1,
-          "rule_keys": [
-            "march"
-          ],
-          "result": "bypass"
-        }
-      },
-      {
-        "path": "R2/T1/shooting/A1",
-        "type": "shooting",
-        "actor_id": "hero-2",
-        "target_id": "unit-30",
-        "maneuver": {},
-        "damage": 3,
-        "morale": {},
-        "trace": {
-          "version": 1,
-          "result": "hit"
-        }
-      },
-      {
-        "path": "R2/T1/shooting/A2",
-        "type": "morale",
-        "actor_id": "unit-30",
-        "from": {
-          "x": 34.5,
-          "y": 19.0,
-          "facing": 180.0
-        },
-        "maneuver": {},
-        "damage": 0,
-        "morale": {},
-        "trace": {
-          "version": 1,
-          "result": "passed"
-        }
-      },
-      {
-        "path": "R2/T2/shooting/A1",
-        "type": "shooting",
-        "actor_id": "hero-8",
-        "target_id": "unit-41",
-        "maneuver": {},
-        "damage": 2,
-        "morale": {},
-        "trace": {
-          "version": 1,
-          "rule_keys": [
-            "volley"
-          ],
-          "result": "hit"
-        }
-      },
-      {
-        "path": "R2/T2/shooting/A2",
-        "type": "shooting",
-        "actor_id": "unit-30",
-        "target_id": "unit-41",
-        "maneuver": {},
-        "damage": 2,
-        "morale": {},
-        "trace": {
-          "version": 1,
-          "rule_keys": [
-            "volley"
-          ],
-          "result": "hit"
-        }
-      },
-      {
-        "path": "R2/T2/shooting/A3",
-        "type": "morale",
-        "actor_id": "unit-41",
-        "from": {
-          "x": 11.381,
-          "y": 7.716,
-          "facing": 355.52
-        },
-        "to": {
-          "x": 8.437,
-          "y": 7.139,
-          "facing": 191.07
-        },
-        "maneuver": {},
-        "damage": 0,
-        "morale": {},
-        "trace": {
-          "version": 1,
-          "result": "routing"
-        }
-      },
-      {
-        "path": "R3/T1/start/A1",
-        "type": "morale",
-        "actor_id": "unit-41",
-        "from": {
-          "x": 8.437,
-          "y": 7.139,
-          "facing": 191.07
-        },
-        "to": {
-          "x": 8.437,
-          "y": 7.139,
-          "facing": 191.07
-        },
-        "maneuver": {},
-        "damage": 0,
-        "morale": {},
-        "trace": {
-          "version": 1,
-          "result": "rallied"
-        }
-      },
-      {
-        "path": "R3/T1/magic/A1",
-        "type": "magic",
-        "actor_id": "hero-2",
-        "target_id": "hero-8",
-        "maneuver": {},
-        "damage": 3,
-        "morale": {},
-        "trace": {
-          "version": 1,
-          "result": "hit"
-        }
-      },
-      {
-        "path": "R3/T1/shooting/A1",
-        "type": "shooting",
-        "actor_id": "unit-10",
-        "target_id": "unit-29",
-        "maneuver": {},
-        "damage": 2,
-        "morale": {},
-        "trace": {
-          "version": 1,
-          "rule_keys": [
-            "volley"
-          ],
-          "result": "hit"
-        }
-      },
-      {
-        "path": "R3/T1/shooting/A2",
-        "type": "shooting",
-        "actor_id": "unit-11",
-        "target_id": "unit-30",
-        "maneuver": {},
-        "damage": 3,
-        "morale": {},
-        "trace": {
-          "version": 1,
-          "rule_keys": [
-            "volley"
-          ],
-          "result": "hit"
-        }
-      },
-      {
-        "path": "R3/T1/shooting/A3",
-        "type": "morale",
-        "actor_id": "unit-30",
-        "from": {
-          "x": 34.5,
-          "y": 19.0,
-          "facing": 180.0
-        },
-        "maneuver": {},
-        "damage": 0,
-        "morale": {},
-        "trace": {
-          "version": 1,
-          "result": "passed"
-        }
-      },
-      {
-        "path": "R3/T2/shooting/A1",
-        "type": "shooting",
-        "actor_id": "unit-28",
-        "target_id": "unit-9",
-        "maneuver": {},
-        "damage": 2,
-        "morale": {},
-        "trace": {
-          "version": 1,
-          "rule_keys": [
-            "volley"
-          ],
-          "result": "hit"
-        }
-      },
-      {
-        "path": "R3/T2/shooting/A2",
-        "type": "shooting",
-        "actor_id": "unit-29",
-        "target_id": "unit-10",
-        "maneuver": {},
-        "damage": 2,
-        "morale": {},
-        "trace": {
-          "version": 1,
-          "rule_keys": [
-            "volley"
-          ],
-          "result": "hit"
-        }
-      },
-      {
-        "path": "R3/T2/shooting/A3",
-        "type": "shooting",
-        "actor_id": "unit-30",
-        "target_id": "hero-2",
-        "maneuver": {},
-        "damage": 2,
-        "morale": {},
-        "trace": {
-          "version": 1,
-          "rule_keys": [
-            "volley"
-          ],
-          "result": "hit"
-        }
-      },
-      {
-        "path": "R3/T2/shooting/A4",
-        "type": "morale",
-        "actor_id": "unit-10",
-        "from": {
-          "x": 8.0,
-          "y": 20.0,
-          "facing": 0.0
-        },
-        "to": {
-          "x": 11.0,
-          "y": 20.0,
-          "facing": 0.0
-        },
-        "maneuver": {},
-        "damage": 0,
-        "morale": {},
-        "trace": {
-          "version": 1,
-          "result": "routing"
-        }
-      },
-      {
-        "path": "R4/T1/start/A1",
-        "type": "morale",
-        "actor_id": "unit-10",
-        "from": {
-          "x": 11.0,
-          "y": 20.0,
-          "facing": 0.0
-        },
-        "to": {
-          "x": 11.0,
-          "y": 23.0,
-          "facing": 90.0
-        },
-        "maneuver": {},
-        "damage": 0,
-        "morale": {},
-        "trace": {
-          "version": 1,
-          "result": "routing"
-        }
-      },
-      {
-        "path": "R4/T1/movement/A1",
-        "type": "movement",
-        "actor_id": "unit-35",
-        "target_id": "unit-29",
-        "from": {
-          "x": 4.25,
-          "y": 20.0,
-          "facing": 0.0
-        },
-        "to": {
-          "x": 5.762,
-          "y": 20.124,
-          "facing": 349.51
-        },
-        "maneuver": {
-          "kind": "wheel",
-          "contact_slot": "front",
-          "approach_mode": "direct",
-          "truncated": true,
-          "avoided": false,
-          "blocked_by_ally": false
-        },
-        "morale": {},
-        "trace": {
-          "version": 1,
-          "rule_keys": [
-            "march"
-          ],
-          "result": "wheel"
-        }
-      },
-      {
-        "path": "R4/T2/movement/A1",
-        "type": "movement",
-        "actor_id": "unit-39",
-        "target_id": "unit-10",
-        "from": {
-          "x": 35.0,
-          "y": 5.0,
-          "facing": 90.0
-        },
-        "to": {
-          "x": 37.0,
-          "y": 5.0,
-          "facing": 0.0
-        },
-        "maneuver": {
-          "kind": "bypass",
-          "contact_slot": "rear",
-          "approach_mode": "direct",
-          "truncated": false,
-          "avoided": true,
-          "blocked_by_ally": false
-        },
-        "morale": {},
-        "trace": {
-          "version": 1,
-          "rule_keys": [
-            "march"
-          ],
-          "result": "bypass"
-        }
-      },
-      {
-        "path": "R4/T2/shooting/A1",
-        "type": "shooting",
-        "actor_id": "unit-29",
-        "target_id": "unit-10",
-        "maneuver": {},
-        "damage": 2,
-        "morale": {},
-        "trace": {
-          "version": 1,
-          "rule_keys": [
-            "volley"
-          ],
-          "result": "hit"
-        }
-      },
-      {
-        "path": "R5/T1/start/A1",
-        "type": "morale",
-        "actor_id": "unit-10",
-        "from": {
-          "x": 11.0,
-          "y": 23.5,
-          "facing": 90.0
-        },
-        "to": {
-          "x": 14.5,
-          "y": 23.5,
-          "facing": 0.0
-        },
-        "maneuver": {},
-        "damage": 0,
-        "morale": {},
-        "trace": {
-          "version": 1,
-          "result": "escaped"
-        }
-      },
-      {
-        "path": "R5/T1/movement/A1",
-        "type": "movement",
-        "actor_id": "unit-35",
-        "from": {
-          "x": 5.762,
-          "y": 20.124,
-          "facing": 349.51
-        },
-        "to": {
-          "x": 5.762,
-          "y": 20.124,
-          "facing": 349.51
-        },
-        "maneuver": {
-          "kind": "row_advance",
-          "truncated": false,
-          "avoided": false
-        },
-        "morale": {},
-        "trace": {
-          "version": 1,
-          "result": "row_advance"
-        }
-      },
-      {
-        "path": "R5/T1/movement/A2",
+        "path": "R2/T1/movement/A2",
         "type": "movement",
         "actor_id": "unit-34",
-        "target_id": "unit-28",
+        "target_id": "unit-29",
         "from": {
           "x": 4.25,
           "y": 12.0,
@@ -1764,8 +1274,8 @@
         },
         "to": {
           "x": 4.25,
-          "y": 13.487,
-          "facing": 90.0
+          "y": 10.5,
+          "facing": 270.0
         },
         "maneuver": {
           "kind": "turn",
@@ -1785,19 +1295,114 @@
         }
       },
       {
-        "path": "R5/T1/movement/A3",
-        "type": "movement",
-        "actor_id": "unit-35",
-        "target_id": "unit-29",
+        "path": "R2/T1/magic/A1",
+        "type": "magic",
+        "actor_id": "hero-2",
+        "target_id": "unit-30",
+        "maneuver": {},
+        "damage": 4,
+        "morale": {},
+        "trace": {
+          "version": 1,
+          "result": "hit"
+        }
+      },
+      {
+        "path": "R2/T1/magic/A2",
+        "type": "morale",
+        "actor_id": "unit-30",
         "from": {
-          "x": 5.762,
-          "y": 20.124,
-          "facing": 349.51
+          "x": 35.0,
+          "y": 19.0,
+          "facing": 180.0
         },
         "to": {
-          "x": 8.689,
-          "y": 19.595,
-          "facing": 350.24
+          "x": 32.0,
+          "y": 19.0,
+          "facing": 180.0
+        },
+        "maneuver": {},
+        "damage": 0,
+        "morale": {},
+        "trace": {
+          "version": 1,
+          "result": "routing"
+        }
+      },
+      {
+        "path": "R2/T1/shooting/A1",
+        "type": "shooting",
+        "actor_id": "unit-10",
+        "target_id": "unit-29",
+        "maneuver": {},
+        "damage": 2,
+        "morale": {},
+        "trace": {
+          "version": 1,
+          "rule_keys": [
+            "volley"
+          ],
+          "result": "hit"
+        }
+      },
+      {
+        "path": "R2/T2/start/A1",
+        "type": "morale",
+        "actor_id": "unit-28",
+        "from": {
+          "x": 31.0,
+          "y": 11.0,
+          "facing": 90.0
+        },
+        "to": {
+          "x": 31.0,
+          "y": 11.0,
+          "facing": 90.0
+        },
+        "maneuver": {},
+        "damage": 0,
+        "morale": {},
+        "trace": {
+          "version": 1,
+          "result": "rallied"
+        }
+      },
+      {
+        "path": "R2/T2/start/A2",
+        "type": "morale",
+        "actor_id": "unit-30",
+        "from": {
+          "x": 32.0,
+          "y": 19.0,
+          "facing": 180.0
+        },
+        "to": {
+          "x": 32.0,
+          "y": 19.0,
+          "facing": 180.0
+        },
+        "maneuver": {},
+        "damage": 0,
+        "morale": {},
+        "trace": {
+          "version": 1,
+          "result": "rallied"
+        }
+      },
+      {
+        "path": "R2/T2/movement/A1",
+        "type": "movement",
+        "actor_id": "unit-42",
+        "target_id": "unit-10",
+        "from": {
+          "x": 38.0,
+          "y": 18.0,
+          "facing": 180.0
+        },
+        "to": {
+          "x": 35.17,
+          "y": 18.146,
+          "facing": 175.24
         },
         "maneuver": {
           "kind": "wheel",
@@ -1817,28 +1422,57 @@
         }
       },
       {
-        "path": "R5/T1/shooting/A1",
-        "type": "shooting",
-        "actor_id": "unit-11",
-        "target_id": "unit-28",
-        "maneuver": {},
-        "damage": 2,
+        "path": "R3/T1/movement/A1",
+        "type": "movement",
+        "actor_id": "unit-35",
+        "target_id": "unit-29",
+        "from": {
+          "x": 4.25,
+          "y": 18.5,
+          "facing": 270.0
+        },
+        "to": {
+          "x": 4.227,
+          "y": 15.552,
+          "facing": 268.6
+        },
+        "maneuver": {
+          "kind": "wheel",
+          "contact_slot": "front",
+          "approach_mode": "direct",
+          "truncated": false,
+          "avoided": false,
+          "blocked_by_ally": false
+        },
         "morale": {},
         "trace": {
           "version": 1,
           "rule_keys": [
-            "volley"
+            "march"
           ],
+          "result": "wheel"
+        }
+      },
+      {
+        "path": "R3/T1/magic/A1",
+        "type": "magic",
+        "actor_id": "hero-2",
+        "target_id": "unit-30",
+        "maneuver": {},
+        "damage": 4,
+        "morale": {},
+        "trace": {
+          "version": 1,
           "result": "hit"
         }
       },
       {
-        "path": "R5/T1/shooting/A2",
+        "path": "R3/T1/magic/A2",
         "type": "morale",
-        "actor_id": "unit-28",
+        "actor_id": "unit-30",
         "from": {
-          "x": 30.5,
-          "y": 11.0,
+          "x": 31.5,
+          "y": 19.0,
           "facing": 180.0
         },
         "maneuver": {},
@@ -1850,12 +1484,448 @@
         }
       },
       {
+        "path": "R3/T2/movement/A1",
+        "type": "movement",
+        "actor_id": "unit-39",
+        "target_id": "unit-41",
+        "from": {
+          "x": 34.75,
+          "y": 3.0,
+          "facing": 180.0
+        },
+        "to": {
+          "x": 34.172,
+          "y": 4.166,
+          "facing": 71.67
+        },
+        "maneuver": {
+          "kind": "bypass",
+          "contact_slot": "front",
+          "approach_mode": "direct",
+          "truncated": true,
+          "avoided": true,
+          "blocked_by_ally": false
+        },
+        "morale": {},
+        "trace": {
+          "version": 1,
+          "rule_keys": [
+            "march"
+          ],
+          "result": "bypass"
+        }
+      },
+      {
+        "path": "R3/T2/movement/A2",
+        "type": "movement",
+        "actor_id": "unit-42",
+        "target_id": "unit-10",
+        "from": {
+          "x": 35.17,
+          "y": 18.146,
+          "facing": 175.24
+        },
+        "to": {
+          "x": 33.872,
+          "y": 18.035,
+          "facing": 141.38
+        },
+        "maneuver": {
+          "kind": "bypass",
+          "contact_slot": "front",
+          "approach_mode": "direct",
+          "truncated": true,
+          "avoided": true,
+          "blocked_by_ally": false
+        },
+        "morale": {},
+        "trace": {
+          "version": 1,
+          "rule_keys": [
+            "march"
+          ],
+          "result": "bypass"
+        }
+      },
+      {
+        "path": "R3/T2/shooting/A1",
+        "type": "shooting",
+        "actor_id": "unit-29",
+        "target_id": "unit-10",
+        "maneuver": {},
+        "damage": 2,
+        "morale": {},
+        "trace": {
+          "version": 1,
+          "rule_keys": [
+            "volley"
+          ],
+          "result": "hit"
+        }
+      },
+      {
+        "path": "R3/T2/shooting/A2",
+        "type": "morale",
+        "actor_id": "unit-10",
+        "from": {
+          "x": 8.0,
+          "y": 20.0,
+          "facing": 0.0
+        },
+        "to": {
+          "x": 5.179,
+          "y": 21.022,
+          "facing": 160.09
+        },
+        "maneuver": {},
+        "damage": 0,
+        "morale": {},
+        "trace": {
+          "version": 1,
+          "result": "routing"
+        }
+      },
+      {
+        "path": "R4/T1/start/A1",
+        "type": "morale",
+        "actor_id": "unit-10",
+        "from": {
+          "x": 5.179,
+          "y": 21.022,
+          "facing": 160.09
+        },
+        "to": {
+          "x": 5.179,
+          "y": 25.022,
+          "facing": 90.0
+        },
+        "maneuver": {},
+        "damage": 0,
+        "morale": {},
+        "trace": {
+          "version": 1,
+          "result": "escaped"
+        }
+      },
+      {
+        "path": "R4/T1/movement/A1",
+        "type": "movement",
+        "actor_id": "unit-35",
+        "from": {
+          "x": 4.227,
+          "y": 15.552,
+          "facing": 268.6
+        },
+        "to": {
+          "x": 4.227,
+          "y": 15.552,
+          "facing": 268.6
+        },
+        "maneuver": {
+          "kind": "row_advance",
+          "truncated": false,
+          "avoided": false
+        },
+        "morale": {},
+        "trace": {
+          "version": 1,
+          "result": "row_advance"
+        }
+      },
+      {
+        "path": "R4/T1/movement/A2",
+        "type": "movement",
+        "actor_id": "unit-34",
+        "target_id": "unit-28",
+        "from": {
+          "x": 4.25,
+          "y": 10.5,
+          "facing": 270.0
+        },
+        "to": {
+          "x": 4.409,
+          "y": 10.327,
+          "facing": 265.24
+        },
+        "maneuver": {
+          "kind": "bypass",
+          "contact_slot": "front",
+          "approach_mode": "direct",
+          "truncated": true,
+          "avoided": true,
+          "blocked_by_ally": false
+        },
+        "morale": {},
+        "trace": {
+          "version": 1,
+          "rule_keys": [
+            "march"
+          ],
+          "result": "bypass"
+        }
+      },
+      {
+        "path": "R4/T1/movement/A3",
+        "type": "movement",
+        "actor_id": "unit-35",
+        "target_id": "unit-28",
+        "from": {
+          "x": 4.227,
+          "y": 15.552,
+          "facing": 268.6
+        },
+        "to": {
+          "x": 4.729,
+          "y": 15.656,
+          "facing": 355.15
+        },
+        "maneuver": {
+          "kind": "bypass",
+          "contact_slot": "rear",
+          "approach_mode": "direct",
+          "truncated": true,
+          "avoided": true,
+          "blocked_by_ally": false
+        },
+        "morale": {},
+        "trace": {
+          "version": 1,
+          "rule_keys": [
+            "march"
+          ],
+          "result": "bypass"
+        }
+      },
+      {
+        "path": "R4/T1/magic/A1",
+        "type": "magic",
+        "actor_id": "hero-2",
+        "target_id": "unit-30",
+        "maneuver": {},
+        "damage": 4,
+        "morale": {},
+        "trace": {
+          "version": 1,
+          "result": "hit"
+        }
+      },
+      {
+        "path": "R4/T2/movement/A1",
+        "type": "movement",
+        "actor_id": "unit-42",
+        "from": {
+          "x": 33.872,
+          "y": 18.035,
+          "facing": 141.38
+        },
+        "to": {
+          "x": 33.872,
+          "y": 18.035,
+          "facing": 141.38
+        },
+        "maneuver": {
+          "kind": "row_advance",
+          "truncated": false,
+          "avoided": false
+        },
+        "morale": {},
+        "trace": {
+          "version": 1,
+          "result": "row_advance"
+        }
+      },
+      {
+        "path": "R4/T2/movement/A2",
+        "type": "movement",
+        "actor_id": "unit-42",
+        "target_id": "unit-9",
+        "from": {
+          "x": 33.872,
+          "y": 18.035,
+          "facing": 141.38
+        },
+        "to": {
+          "x": 32.688,
+          "y": 19.167,
+          "facing": 184.35
+        },
+        "maneuver": {
+          "kind": "wheel",
+          "contact_slot": "front",
+          "approach_mode": "direct",
+          "truncated": false,
+          "avoided": false,
+          "blocked_by_ally": false
+        },
+        "morale": {},
+        "trace": {
+          "version": 1,
+          "rule_keys": [
+            "march"
+          ],
+          "result": "wheel"
+        }
+      },
+      {
+        "path": "R4/T2/shooting/A1",
+        "type": "shooting",
+        "actor_id": "unit-29",
+        "target_id": "hero-2",
+        "maneuver": {},
+        "damage": 2,
+        "morale": {},
+        "trace": {
+          "version": 1,
+          "rule_keys": [
+            "volley"
+          ],
+          "result": "hit"
+        }
+      },
+      {
+        "path": "R5/T1/movement/A1",
+        "type": "movement",
+        "actor_id": "unit-41",
+        "target_id": "unit-29",
+        "from": {
+          "x": 9.0,
+          "y": 7.0,
+          "facing": 0.0
+        },
+        "to": {
+          "x": 11.565,
+          "y": 7.26,
+          "facing": 11.04
+        },
+        "maneuver": {
+          "kind": "bypass",
+          "contact_slot": "front",
+          "approach_mode": "direct",
+          "truncated": false,
+          "avoided": true,
+          "blocked_by_ally": false
+        },
+        "morale": {},
+        "trace": {
+          "version": 1,
+          "rule_keys": [
+            "march"
+          ],
+          "result": "bypass"
+        }
+      },
+      {
+        "path": "R5/T1/movement/A2",
+        "type": "movement",
+        "actor_id": "unit-34",
+        "target_id": "unit-28",
+        "from": {
+          "x": 4.409,
+          "y": 10.327,
+          "facing": 265.24
+        },
+        "to": {
+          "x": 3.118,
+          "y": 9.851,
+          "facing": 154.33
+        },
+        "maneuver": {
+          "kind": "bypass",
+          "contact_slot": "front",
+          "approach_mode": "direct",
+          "truncated": false,
+          "avoided": true,
+          "blocked_by_ally": false
+        },
+        "morale": {},
+        "trace": {
+          "version": 1,
+          "rule_keys": [
+            "march"
+          ],
+          "result": "bypass"
+        }
+      },
+      {
+        "path": "R5/T1/shooting/A1",
+        "type": "shooting",
+        "actor_id": "unit-11",
+        "target_id": "unit-31",
+        "maneuver": {},
+        "damage": 2,
+        "morale": {},
+        "trace": {
+          "version": 1,
+          "rule_keys": [
+            "volley"
+          ],
+          "result": "hit"
+        }
+      },
+      {
+        "path": "R5/T2/movement/A1",
+        "type": "movement",
+        "actor_id": "unit-42",
+        "from": {
+          "x": 32.688,
+          "y": 19.167,
+          "facing": 184.35
+        },
+        "to": {
+          "x": 32.688,
+          "y": 19.167,
+          "facing": 184.35
+        },
+        "maneuver": {
+          "kind": "row_advance",
+          "truncated": false,
+          "avoided": false
+        },
+        "morale": {},
+        "trace": {
+          "version": 1,
+          "result": "row_advance"
+        }
+      },
+      {
+        "path": "R5/T2/movement/A2",
+        "type": "movement",
+        "actor_id": "unit-42",
+        "target_id": "unit-41",
+        "from": {
+          "x": 32.688,
+          "y": 19.167,
+          "facing": 184.35
+        },
+        "to": {
+          "x": 30.52,
+          "y": 18.679,
+          "facing": 205.85
+        },
+        "maneuver": {
+          "kind": "wheel",
+          "contact_slot": "front",
+          "approach_mode": "direct",
+          "truncated": false,
+          "avoided": false,
+          "blocked_by_ally": false
+        },
+        "morale": {},
+        "trace": {
+          "version": 1,
+          "rule_keys": [
+            "march"
+          ],
+          "result": "wheel"
+        }
+      },
+      {
         "path": "R5/T2/shooting/A1",
         "type": "shooting",
         "actor_id": "unit-29",
-        "target_id": "unit-35",
+        "target_id": "unit-11",
         "maneuver": {},
-        "damage": 2,
+        "damage": 3,
         "morale": {},
         "trace": {
           "version": 1,
@@ -1867,28 +1937,12 @@
       },
       {
         "path": "R5/T2/shooting/A2",
-        "type": "shooting",
-        "actor_id": "unit-30",
-        "target_id": "unit-41",
-        "maneuver": {},
-        "damage": 2,
-        "morale": {},
-        "trace": {
-          "version": 1,
-          "rule_keys": [
-            "volley"
-          ],
-          "result": "hit"
-        }
-      },
-      {
-        "path": "R5/T2/shooting/A3",
         "type": "morale",
-        "actor_id": "unit-41",
+        "actor_id": "unit-11",
         "from": {
-          "x": 8.437,
-          "y": 7.139,
-          "facing": 191.07
+          "x": 5.0,
+          "y": 4.0,
+          "facing": 0.0
         },
         "maneuver": {},
         "damage": 0,
@@ -1901,17 +1955,49 @@
       {
         "path": "R6/T1/movement/A1",
         "type": "movement",
-        "actor_id": "unit-35",
-        "target_id": "unit-28",
+        "actor_id": "unit-41",
+        "target_id": "unit-29",
         "from": {
-          "x": 9.182,
-          "y": 19.51,
-          "facing": 350.24
+          "x": 11.565,
+          "y": 7.26,
+          "facing": 11.04
         },
         "to": {
-          "x": 11.859,
-          "y": 18.907,
-          "facing": 343.04
+          "x": 14.262,
+          "y": 7.924,
+          "facing": 17.2
+        },
+        "maneuver": {
+          "kind": "bypass",
+          "contact_slot": "front",
+          "approach_mode": "direct",
+          "truncated": false,
+          "avoided": true,
+          "blocked_by_ally": false
+        },
+        "morale": {},
+        "trace": {
+          "version": 1,
+          "rule_keys": [
+            "march"
+          ],
+          "result": "bypass"
+        }
+      },
+      {
+        "path": "R6/T2/movement/A1",
+        "type": "movement",
+        "actor_id": "unit-42",
+        "target_id": "unit-41",
+        "from": {
+          "x": 30.52,
+          "y": 18.679,
+          "facing": 205.85
+        },
+        "to": {
+          "x": 27.947,
+          "y": 17.336,
+          "facing": 208.52
         },
         "maneuver": {
           "kind": "wheel",
@@ -1928,23 +2014,6 @@
             "march"
           ],
           "result": "wheel"
-        }
-      },
-      {
-        "path": "R6/T1/shooting/A1",
-        "type": "shooting",
-        "actor_id": "unit-9",
-        "target_id": "unit-28",
-        "maneuver": {},
-        "damage": 4,
-        "morale": {},
-        "trace": {
-          "version": 1,
-          "rule_keys": [
-            "blast",
-            "machine"
-          ],
-          "result": "hit"
         }
       }
     ]

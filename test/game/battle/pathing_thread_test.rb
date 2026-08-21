@@ -98,20 +98,21 @@ class SimBattlePathingThreadTest < ActiveSupport::TestCase
     refute through, "thread went through the boxed front instead of around"
   end
 
-  test "flank contact_slot anchors the thread off the defender center" do
+  test "thread anchor keeps a precomputed goal instead of re-deriving orbit slots" do
     actor = BattleScenarios.combatant(x: 10.0, y: 6.0, facing: 90.0, base_width: 1.0, base_depth: 1.0)
     enemy = BattleScenarios.enemy(x: 16.0, y: 12.0, facing: 180.0, base_width: 4.0, base_depth: 3.0)
+    given = { x: 20.0, y: 8.0 }
     anchor = Thread.anchor(
       origin: actor,
-      goal_point: enemy,
+      goal_point: given,
       goal_unit: enemy,
       contact_id: enemy[:entity_id],
       contact_slot: "flank",
       approach_mode: :orbit_flank
     )
 
-    assert_operator (anchor[:y] - enemy[:y]).abs, :>, 0.5
-    assert_operator BF.distance_between(anchor, enemy), :>, 1.0
+    assert_in_delta 20.0, anchor[:x], 0.001
+    assert_in_delta 8.0, anchor[:y], 0.001
   end
 
   test "boxed infantry stops short of a lake instead of marching into it" do
@@ -210,6 +211,33 @@ class SimBattlePathingThreadTest < ActiveSupport::TestCase
     leftover = 3.0 - plan[:cost_spent].to_f
     assert leftover <= 0.5 || plan[:avoided],
            "spent #{plan[:cost_spent]} leftover #{leftover} avoided=#{plan[:avoided]} blocker=#{plan[:blocker].inspect}"
+  end
+
+  test "almost-contact approach does not turn into the map edge" do
+    actor = BattleScenarios.combatant(
+      entity_id: "unit-10", x: 23.07, y: 2.1, facing: 149.3,
+      base_width: 4.0, base_depth: 4.0, files: 2, ranks: 2, movement: 3.0
+    )
+    enemy = BattleScenarios.enemy(
+      entity_id: "unit-35", x: 17.87, y: 3.7, facing: 15.9,
+      base_width: 4.0, base_depth: 4.0, files: 4, ranks: 4
+    )
+    world = Pathing::Obstacles.merge([ actor, enemy ], [])
+    gap = BF.distance_between_units(actor, enemy)
+    assert_operator gap, :<, 1.0
+
+    goal = Sim::Battle::Rules::Ground::Movement.approach_goal_point(
+      actor, enemy, contact_slot: "front", approach_mode: :direct
+    )
+    plan = Pathing.plan_approach(
+      origin: actor, goal_point: goal, budget: 3.0,
+      obstacles: world, contact_id: enemy[:entity_id], goal_unit: enemy
+    )
+
+    refute_equal :turn, plan[:maneuver], "turned to #{plan.dig(:pose, :facing)} instead of closing #{gap.round(2)}\""
+    landed = BF.merge_footprint(actor, plan[:pose])
+    assert_operator BF.distance_between_units(landed, enemy), :<=, gap
+    assert_in_delta actor[:facing], landed[:facing], 20.0
   end
 
   test "support block wraps a friend toward the enemy instead of turning to the map edge" do

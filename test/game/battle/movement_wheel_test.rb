@@ -232,7 +232,7 @@ class SimBattleMovementWheelTest < ActiveSupport::TestCase
     )
 
     refute Sim::Geometry::Battlefield.rectangles_overlap?(actor, blocker)
-    assert_operator Sim::Geometry::Battlefield.distance_between_units(actor, blocker), :>=, Sim::Battle::Phases::Movement::CONTACT - 0.05
+    assert_operator Sim::Geometry::Battlefield.distance_between_units(actor, blocker), :>=, 0.35
   end
 
   test "spaced column can march without clipping the ally behind" do
@@ -294,7 +294,7 @@ class SimBattleMovementWheelTest < ActiveSupport::TestCase
     assert_operator front[:x], :<, 28
   end
 
-  test "approach bypasses an intervening enemy blocker toward the target" do
+  test "approach charges an intervening enemy if a free side is in range this turn" do
     actor = combatant(
       entity_id: "knights",
       name: "Рыцари",
@@ -343,19 +343,19 @@ class SimBattleMovementWheelTest < ActiveSupport::TestCase
       lane: "center"
     )
 
-    before = Sim::Geometry::Battlefield.distance_between_units(actor, target)
+    assert Sim::Battle::Decisions::Movement.this_turn_charge?(actor, blocker, enemies: [ blocker, target ])
+
+    before = Sim::Geometry::Battlefield.distance_between_units(actor, blocker)
     phase = Sim::Battle::Phases::Movement.play(
       acting_side: { player_id: "bot", combatants: [ actor ] },
       target_side: { player_id: "p1", combatants: [ blocker, target ] }
     )
-    after = Sim::Geometry::Battlefield.distance_between_units(actor, target)
+    after = Sim::Geometry::Battlefield.distance_between_units(actor, blocker)
 
     refute Sim::Geometry::Battlefield.rectangles_overlap?(actor, blocker)
-    assert_operator after, :<=, before + 0.1
-    assert_operator (actor[:y] - 12).abs, :>, 0.15
+    assert_operator after, :<, before
     action = phase[:actions].find { |entry| entry[:actor_id] == "knights" }
-    assert action.dig(:maneuver, :avoided)
-    assert_equal "bypass", action.dig(:maneuver, :kind)
+    assert_equal "blocker", action.dig(:maneuver, :target_id)
   end
 
   test "co-moving allies do not force each other to wait or orbit" do

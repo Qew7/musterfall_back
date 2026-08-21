@@ -64,7 +64,7 @@ module Sim
 
       def distance(ax, ay, ahw, ahd, ac, as_, bx, by, bhw, bhd, bc, bs)
         if native?
-          return Native.distance(ax, ay, ahw, ahd, ac, as_, bx, by, bhw, bhd, bc, bs)
+          return Native.distance(ax, ay, ahw, ahd, ac, as_, bx, by, bhw, bhd, bc, bs).round(2)
         end
         return 0.0 if overlap?(ax, ay, ahw, ahd, ac, as_, bx, by, bhw, bhd, bc, bs)
 
@@ -79,7 +79,7 @@ module Sim
           d = point_distance(px, py, ax, ay, ahw, ahd, ac, as_)
           min = d if d < min
         end
-        min
+        min.round(2)
       end
 
       def closest_point(px, py, x, y, hw, hd, c, s)
@@ -128,8 +128,8 @@ module Sim
       def radius(axis_x, axis_y, c, s, hw, hd)
         ((axis_x * c) + (axis_y * s)).abs * hd + (((-axis_x) * s) + (axis_y * c)).abs * hw
       end
-end
-end
+    end
+  end
 end
 
 begin

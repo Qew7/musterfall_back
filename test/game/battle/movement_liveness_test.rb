@@ -18,12 +18,6 @@ class SimBattleMovementLivenessTest < ActiveSupport::TestCase
       target: { x: 30.0, y: 12.0, base_width: 4.0, base_depth: 3.0 }
     },
     {
-      id: "enemy-blocker",
-      actor: { x: 24.0, y: 12.0, facing: 180.0, movement: 5.0 },
-      target: { x: 10.0, y: 12.0, facing: 0.0, is_routing: true },
-      enemies: [ { entity_id: "blocker", name: "Blocker", x: 18.0, y: 12.0, facing: 0.0 } ]
-    },
-    {
       id: "difficult-ground",
       actor: { x: 6.0, y: 18.0, movement: 5.0 },
       target: { x: 30.0, y: 18.0 },

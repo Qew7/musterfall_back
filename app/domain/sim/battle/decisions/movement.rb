@@ -67,6 +67,28 @@ module Sim
           Pathing.active_units(enemies).any? { |enemy| engaged?(combatant, enemy) }
         end
 
+        def this_turn_charge?(combatant, enemy, enemies: [])
+          return false unless enemy
+
+          gap = Geometry::Battlefield.distance_between_units(combatant, enemy)
+          gap <= budget_for(combatant, enemies: enemies) + ENGAGE
+        end
+
+        def unclaimed_side(combatant, enemy, claimed)
+          taken = claimed[enemy[:entity_id]]
+          geo = Geometry::Battlefield.classify_attack_vector(combatant, enemy)
+          ([ geo ] + %w[front flank rear]).uniq.find { |side| !taken.key?(side) }
+        end
+
+        def approach_mode_for(side, combatant, enemy)
+          geo = Geometry::Battlefield.classify_attack_vector(combatant, enemy)
+          return :direct if side == geo
+          return :orbit_flank if side == "flank"
+          return :wrap_rear if side == "rear"
+
+          :direct
+        end
+
         def row_advance_target(combatant, allies)
           target_row = ADVANCING[combatant[:row]]
           return nil unless target_row
@@ -82,14 +104,19 @@ module Sim
           target_row
         end
 
-        # Dispatch ground vs flying planners; shared claimed sides across both.
-        def plan_melee_entries(movers, enemies, terrain: [])
+        # Flying wave first (leap landings), then Ground contact / flank waves.
+        def plan_melee_waves(movers, enemies, terrain: [])
           living = Pathing.active_units(enemies)
           claimed = Hash.new { |hash, key| hash[key] = {} }
-          flyers, grounders = movers.partition { |combatant| flying?(combatant) }
+          grouped = movers.group_by { |combatant| planner_for(combatant) }
 
-          Rules::Flying::Movement.plan_entries(flyers, living, claimed, terrain: terrain) +
-            Rules::Ground::Movement.plan_entries(grounders, living, claimed, terrain: terrain)
+          [ Rules::Flying::Movement, Rules::Ground::Movement ].flat_map do |planner|
+            planner.plan_waves(Array(grouped[planner]), living, claimed, terrain: terrain)
+          end
+        end
+
+        def plan_melee_entries(movers, enemies, terrain: []) # leftovers:keep
+          plan_melee_waves(movers, enemies, terrain: terrain).flat_map { |wave| wave[:entries] }
         end
 
         def build_entry(combatant, enemy, side, approach_mode, chargeable: true)
@@ -102,14 +129,6 @@ module Sim
             approach_mode: approach_mode,
             chargeable: chargeable
           }
-        end
-
-        def orbit_mode?(approach_mode)
-          approach_mode == :orbit_flank ||
-            approach_mode == :wrap_rear ||
-            approach_mode == :flyer_setup_rear ||
-            approach_mode == :flyer_setup_flank ||
-            approach_mode == :flyer_approach
         end
 
         def build_approach_intent(combatant:, nearest:, obstacles:, enemies: [], contact_slot: nil, allow_ally_bypass: false, approach_mode: :direct, terrain: [], chargeable: true)
@@ -128,18 +147,6 @@ module Sim
 
         def front_alignment_to(combatant, enemy)
           Geometry::Battlefield.angle_between(enemy[:facing], enemy, combatant).to_f
-        end
-
-        def contact_wave?(entry, enemies: [])
-          return false if orbit_mode?(entry[:approach_mode])
-          return false if entry[:contact_slot] == "rear" || entry[:contact_slot] == "flank"
-          return false if entry[:vector] == "flank" || entry[:vector] == "rear"
-          return false if entry[:chargeable] == false
-          budget = budget_for(entry[:combatant], enemies: enemies)
-          return true if entry[:distance] <= ENGAGE + budget * 0.35
-          return true if entry[:contact_slot] == "front"
-
-          false
         end
 
         def corner_contact_reachable?(origin, defender, budget, terrain: [])

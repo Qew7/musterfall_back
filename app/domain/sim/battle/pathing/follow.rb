@@ -45,7 +45,8 @@ module Sim
               flying: flying,
               kernels: space.kernels,
               march_allowed: can_march,
-              finish: points.last
+              finish: points.last,
+              allow_turn: index.zero?
             )
             break unless plan && plan[:pose]
 
@@ -63,7 +64,16 @@ module Sim
             maneuver = plan[:maneuver]
             multiplier = plan[:march_multiplier] if plan[:march_multiplier]
             reached = Geometry::Battlefield.distance_between(pose, dest) <= 0.2
-            break if plan[:truncated] && !reached
+            next unless plan[:truncated] && !reached
+
+            hit = plan[:blocker]
+            contact_hit = contact_id && hit && hit[:entity_id] == contact_id
+            nxt = points[index + 2]
+            finish = points.last
+            receding = nxt.nil? ||
+              Geometry::Battlefield.distance_between(nxt, finish) >=
+                Geometry::Battlefield.distance_between(pose, finish) - 0.05
+            break if contact_hit || remaining <= 0.5 || spent <= 0.05 || receding
           end
 
           wrapped = Array(thread[:wrapped])

@@ -19,23 +19,9 @@ module Sim
           pack(mover, path, finish, wrap, contact_id, reached ? nil : hit, hit ? [ hit ] : [])
         end
 
-        def anchor(origin:, goal_point:, goal_unit:, contact_id:, contact_slot:, approach_mode:)
-          mode = approach_mode.to_s
-          slot = contact_slot.to_s
-          slot = "flank" if mode == "orbit_flank"
-          slot = "rear" if mode == "wrap_rear"
-
-          if %w[orbit_flank wrap_rear].include?(mode) && %w[flank rear].include?(slot)
-            defender = goal_unit || goal_point
-            if defender
-              points = Pathing.contact_slot_points(origin, defender, slot)
-              return points.min_by { |entry| Geometry::Battlefield.distance_between(origin, entry) } if points.any?
-            end
-          end
-
-          if contact_id && goal_unit
-            return Geometry::Battlefield.charge_destination(origin, goal_unit)
-          end
+        def anchor(origin:, goal_point:, goal_unit:, contact_id:, **)
+          return goal_point if goal_point && goal_unit && !same?(point(goal_point), point(goal_unit))
+          return Geometry::Battlefield.charge_destination(origin, goal_unit) if contact_id && goal_unit
 
           goal_point || goal_unit || origin
         end
@@ -106,7 +92,11 @@ module Sim
               next unless visible
 
               weight = Geometry::Battlefield.distance_between(nodes[i], nodes[j])
-              weight += first_hop_cost(mover, nodes[i], nodes[j], world, contact_id) if i.zero?
+              weight += if i.zero?
+                first_hop_cost(mover, nodes[i], nodes[j], world, contact_id)
+              else
+                corner_turn_cost(mover, nodes[0], nodes[i], nodes[j])
+              end
               edges[i] << [ j, weight ]
               edges[j] << [ i, weight ]
             end
@@ -137,10 +127,15 @@ module Sim
           heading = Geometry::Battlefield.heading_to(mover, vertex)
           delta = Geometry::Battlefield.shortest_facing_delta(mover[:facing], heading)
           return false unless Geometry::Battlefield.turn_delta?(delta)
+
+          progress = Geometry::Battlefield.distance_between(mover, finish) -
+            Geometry::Battlefield.distance_between(vertex, finish)
+          goal_heading = Geometry::Battlefield.heading_to(mover, finish)
+          off_goal = Geometry::Battlefield.shortest_facing_delta(heading, goal_heading).abs >= 60.0
+          return true if off_goal && progress < 0.35
           return false if world.wheel_clear?(mover, heading, contact_id: contact_id)
 
-          Geometry::Battlefield.distance_between(vertex, finish) >
-            Geometry::Battlefield.distance_between(mover, finish) + 0.35
+          progress < -0.35
         end
 
         def first_hop_cost(mover, from, to, world, contact_id)
@@ -152,6 +147,15 @@ module Sim
           else
             Geometry::Battlefield.wheel_cost(mover, mover[:facing], heading)
           end
+        end
+
+        def corner_turn_cost(mover, start, from, to)
+          incoming = Geometry::Battlefield.heading_to(start, from)
+          outgoing = Geometry::Battlefield.heading_to(from, to)
+          delta = Geometry::Battlefield.shortest_facing_delta(incoming, outgoing)
+          return 0.0 unless Geometry::Battlefield.turn_delta?(delta)
+
+          Geometry::Battlefield.turn_cost(mover)
         end
 
         def distances(nodes, edges, source)

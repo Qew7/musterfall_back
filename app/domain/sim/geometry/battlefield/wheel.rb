@@ -11,7 +11,7 @@ module Sim
           width = wheel_frontage(unit)
           return 0.0 if width <= 0
 
-          (delta * Math::PI / 180.0) * width
+          ((delta * Math::PI / 180.0) * width).round(2)
         end
 
         def wheel_frontage(unit)

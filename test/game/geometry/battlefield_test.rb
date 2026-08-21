@@ -1,9 +1,18 @@
 require "test_helper"
 
 class SimGeometryBattlefieldTest < ActiveSupport::TestCase
-  test "normalize facing wraps around" do
-    assert_equal 10, Sim::Geometry::Battlefield.normalize_facing(370)
-    assert_equal 350, Sim::Geometry::Battlefield.normalize_facing(-10)
+  test "front and flank arcs split at half of front_arc_degrees" do
+    origin = { x: 10.0, y: 10.0 }
+    east = { x: 20.0, y: 10.0 }
+    south = { x: 10.0, y: 20.0 }
+    west = { x: 0.0, y: 10.0 }
+
+    assert Sim::Geometry::Battlefield.in_front_arc?(origin, east, 0)
+    refute Sim::Geometry::Battlefield.in_flank_arc?(origin, east, 0)
+    refute Sim::Geometry::Battlefield.in_front_arc?(origin, south, 0)
+    assert Sim::Geometry::Battlefield.in_flank_arc?(origin, south, 0)
+    refute Sim::Geometry::Battlefield.in_front_arc?(origin, west, 0)
+    refute Sim::Geometry::Battlefield.in_flank_arc?(origin, west, 0)
   end
 
   test "classify attack vector" do
@@ -32,9 +41,9 @@ class SimGeometryBattlefieldTest < ActiveSupport::TestCase
 
   test "wheel cost is outer-edge arc length" do
     unit = { facing: 0, base_width: 4, base_depth: 1 }
-    expected_90 = (90 * Math::PI / 180.0) * 4
-    assert_in_delta expected_90, Sim::Geometry::Battlefield.wheel_cost(unit, 0, 90), 0.001
-    assert_in_delta 0.0, Sim::Geometry::Battlefield.wheel_cost(unit, 0, 0), 0.001
+    expected_90 = ((90 * Math::PI / 180.0) * 4).round(2)
+    assert_equal expected_90, Sim::Geometry::Battlefield.wheel_cost(unit, 0, 90)
+    assert_equal 0.0, Sim::Geometry::Battlefield.wheel_cost(unit, 0, 0)
   end
 
   test "wheel cost matches distance travelled by the outer front corner" do
@@ -44,11 +53,16 @@ class SimGeometryBattlefieldTest < ActiveSupport::TestCase
     corners = Sim::Geometry::Battlefield.unit_corners(unit)
     outer = delta.negative? ? corners[1] : corners[0]
     radius = Sim::Geometry::Battlefield.distance_between(pivot, outer)
-    arc = (delta.abs * Math::PI / 180.0) * radius
+    arc = ((delta.abs * Math::PI / 180.0) * radius).round(2)
     cost = Sim::Geometry::Battlefield.wheel_cost(unit, 0, delta)
 
-    assert_in_delta 4.0, radius, 0.001
-    assert_in_delta arc, cost, 0.001
+    assert_equal 4.0, radius
+    assert_equal arc, cost
+  end
+
+  test "distance_between keeps two decimal places" do
+    assert_equal 1.41, Sim::Geometry::Battlefield.distance_between({ x: 0.0, y: 0.0 }, { x: 1.0, y: 1.0 })
+    assert_equal 3.14, Sim::Geometry::Battlefield.distance_between({ x: 0.0, y: 0.0 }, { x: Math::PI, y: 0.0 })
   end
 
   test "apply wheel then remaining MV can march along the new facing" do

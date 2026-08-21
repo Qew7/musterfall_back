@@ -190,27 +190,6 @@ module Sim
           nil
         end
 
-        def furthest_along(mover, from, to, contact_id: nil)
-          return point(from) if same_point?(from, to)
-
-          heading = Geometry::Battlefield.heading_to(from, to)
-          dist = Geometry::Battlefield.distance_between(from, to)
-          steps = [ [ 8, (dist / 0.15).ceil ].max, 48 ].min
-          last = point(from)
-          steps.times do |index|
-            t = (index + 1).to_f / steps
-            pose = mover.merge(
-              x: from[:x] + ((to[:x] - from[:x]) * t),
-              y: from[:y] + ((to[:y] - from[:y]) * t),
-              facing: heading
-            )
-            break if first_blocker(pose, contact_id: contact_id)
-
-            last = point(pose)
-          end
-          last
-        end
-
         # Minkowski vertices of every convex obstacle, in free space, on the board.
         # Legal tray pose in contact with the target: charge dest if free, otherwise
         # the nearest sampled contact ring pose that this world can hold.
@@ -322,12 +301,6 @@ module Sim
           Geometry::Battlefield.unit_corners(pose).all? do |corner|
             corner[:x].between?(0.0, width) && corner[:y].between?(0.0, height)
           end
-        end
-
-        def on_board?(point)
-          width = Geometry::Battlefield::CONFIG[:width] - 1
-          height = Geometry::Battlefield::CONFIG[:height] - 1
-          point[:x].to_f.between?(0.0, width) && point[:y].to_f.between?(0.0, height)
         end
 
         def point(entry)

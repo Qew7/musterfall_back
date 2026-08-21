@@ -19,6 +19,20 @@ module Sim
             entries_by_id = {}
 
             ranked.each do |combatant|
+              choice = choose_immediate_charge(combatant, living, claimed, terrain)
+              next unless choice
+
+              enemy = choice[:nearest]
+              side = choice[:contact_slot]
+              claimed[enemy[:entity_id]][side] = combatant[:entity_id]
+              entries_by_id[combatant[:entity_id]] = Decisions::Movement.build_entry(
+                combatant, enemy, side, choice[:approach_mode], chargeable: true
+              )
+            end
+
+            ranked.each do |combatant|
+              next if entries_by_id.key?(combatant[:entity_id])
+
               choice = choose_natural_side(combatant, living, claimed, terrain)
               next unless choice
 
@@ -26,7 +40,7 @@ module Sim
               side = choice[:contact_slot]
               claimed[enemy[:entity_id]][side] = combatant[:entity_id]
               entries_by_id[combatant[:entity_id]] = Decisions::Movement.build_entry(
-                combatant, enemy, side, :direct, chargeable: choice.fetch(:chargeable, true)
+                combatant, enemy, side, choice[:approach_mode], chargeable: choice.fetch(:chargeable, true)
               )
             end
 
@@ -58,7 +72,74 @@ module Sim
               )
             end
 
-            ranked.filter_map { |combatant| entries_by_id[combatant[:entity_id]] }
+            ranked.each do |combatant|
+              next if entries_by_id.key?(combatant[:entity_id])
+
+              choice = choose_flank_arc_facing(combatant, living, claimed, terrain)
+              next unless choice
+
+              enemy = choice[:nearest]
+              side = choice[:contact_slot]
+              claimed[enemy[:entity_id]][side] = combatant[:entity_id]
+              entries_by_id[combatant[:entity_id]] = Decisions::Movement.build_entry(
+                combatant, enemy, side, choice[:approach_mode], chargeable: choice.fetch(:chargeable, true)
+              )
+            end
+
+            ranked.filter_map { |combatant| entries_by_id[combatant[:entity_id]] }.each do |entry|
+              entry[:contact_wave] = closing_front?(entry, living)
+            end
+          end
+
+          # Nearby front claimers settle first; later waves path around their landings.
+          def plan_waves(movers, enemies, claimed, terrain: [])
+            entries = plan_entries(movers, enemies, claimed, terrain: terrain)
+            contact, later = entries.partition { |entry| contact_wave?(entry) }
+            waves = contact.group_by { |entry| entry[:nearest][:entity_id] }.map do |_id, group|
+              { entries: group, allow_ally_bypass: false }
+            end
+            waves << { entries: later, allow_ally_bypass: true } if later.any?
+            waves
+          end
+
+          def contact_wave?(entry)
+            !!entry[:contact_wave]
+          end
+
+          def orbit_mode?(approach_mode)
+            approach_mode == :orbit_flank || approach_mode == :wrap_rear
+          end
+
+          def closing_front?(entry, enemies)
+            return false unless entry[:contact_slot] == "front" && entry[:vector] == "front"
+            return false if entry[:chargeable] == false
+            return false if orbit_mode?(entry[:approach_mode])
+
+            budget = Decisions::Movement.budget_for(entry[:combatant], enemies: enemies)
+            entry[:distance] <= budget * Decisions::Movement::SETUP_RANGE_MV + Decisions::Movement::ENGAGE
+          end
+
+          def choose_immediate_charge(combatant, enemies, claimed, terrain = [])
+            return nil if Decisions::Movement.engaged_with_any?(combatant, enemies)
+
+            Pathing.active_units(enemies).sort_by do |enemy|
+              [
+                Geometry::Battlefield.in_front_arc?(combatant, enemy, combatant[:facing]) ? 0 : 1,
+                Decisions::Movement.can_charge?(combatant, enemy, terrain) ? 0 : 1,
+                Geometry::Battlefield.distance_between_units(combatant, enemy),
+                enemy[:entity_id].to_s
+              ]
+            end.each do |enemy|
+              next unless Decisions::Movement.can_charge?(combatant, enemy, terrain)
+              next unless Decisions::Movement.this_turn_charge?(combatant, enemy, enemies: enemies)
+
+              side = Decisions::Movement.unclaimed_side(combatant, enemy, claimed)
+              next unless side
+
+              mode = Decisions::Movement.approach_mode_for(side, combatant, enemy)
+              return { nearest: enemy, contact_slot: side, approach_mode: mode, chargeable: true }
+            end
+            nil
           end
 
           def choose_natural_side(combatant, enemies, claimed, terrain = [])
@@ -150,14 +231,45 @@ module Sim
             nil
           end
 
+          # Front arc empty: nearest enemy on a side flank. Follow already Turn/Wheels onto the heading.
+          def choose_flank_arc_facing(combatant, enemies, claimed, terrain = [])
+            return nil if Decisions::Movement.engaged_with_any?(combatant, enemies)
+            return nil if Decisions::Movement.enemies_in_front_arc(combatant, enemies).any?
+
+            Pathing.active_units(enemies).select do |enemy|
+              Geometry::Battlefield.in_flank_arc?(combatant, enemy, combatant[:facing])
+            end.sort_by do |enemy|
+              [
+                Decisions::Movement.can_charge?(combatant, enemy, terrain) ? 0 : 1,
+                enemy[:is_routing] ? 0 : 1,
+                Geometry::Battlefield.distance_between_units(combatant, enemy),
+                enemy[:entity_id].to_s
+              ]
+            end.each do |enemy|
+              side = Decisions::Movement.unclaimed_side(combatant, enemy, claimed)
+              next unless side
+
+              chargeable = Decisions::Movement.can_charge?(combatant, enemy, terrain)
+              return { nearest: enemy, contact_slot: side, approach_mode: :direct, chargeable: chargeable }
+            end
+            nil
+          end
+
           def build_approach_intent(combatant:, nearest:, obstacles:, enemies: [], contact_slot: nil, allow_ally_bypass: false, approach_mode: :direct, terrain: [], chargeable: true)
             return nil unless nearest
             return nil if Decisions::Movement.engaged?(combatant, nearest)
-            return nil unless Geometry::Battlefield.in_front_arc?(combatant, nearest, combatant[:facing]) || Decisions::Movement.orbit_mode?(approach_mode)
+            return nil unless Geometry::Battlefield.in_front_arc?(combatant, nearest, combatant[:facing]) ||
+              Geometry::Battlefield.in_flank_arc?(combatant, nearest, combatant[:facing]) ||
+              orbit_mode?(approach_mode)
 
             budget = Decisions::Movement.budget_for(combatant, enemies: enemies)
             march_meta = Decisions::Movement.budget_meta(combatant, enemies: enemies)
-            goal_point = approach_goal_point(combatant, nearest, contact_slot: contact_slot, approach_mode: approach_mode)
+            goal_point = approach_goal_point(
+              combatant, nearest,
+              contact_slot: contact_slot,
+              approach_mode: approach_mode,
+              chargeable: chargeable
+            )
             # Forest-hidden: march in without soft-contact until sharing the same forest.
             contact_id = chargeable ? nearest[:entity_id] : nil
             plan = Pathing.plan_approach(
@@ -167,8 +279,6 @@ module Sim
               obstacles: obstacles,
               contact_id: contact_id,
               goal_unit: chargeable ? nearest : nil,
-              approach_mode: approach_mode,
-              contact_slot: contact_slot,
               terrain: terrain,
               flying: false,
               march_allowed: march_meta[:march].to_s == "active"
@@ -194,19 +304,26 @@ module Sim
             }
           end
 
-          def approach_goal_point(origin, defender, contact_slot:, approach_mode:)
+          def approach_goal_point(origin, defender, contact_slot:, approach_mode:, chargeable: true)
             slot =
               case approach_mode
               when :orbit_flank then "flank"
               when :wrap_rear then "rear"
               else contact_slot.to_s
               end
-            return defender unless Decisions::Movement.orbit_mode?(approach_mode) && %w[flank rear].include?(slot)
+            if orbit_mode?(approach_mode) && %w[flank rear].include?(slot)
+              points = Pathing.contact_slot_points(origin, defender, slot)
+              return points.min_by { |point| Geometry::Battlefield.distance_between(origin, point) } if points.any?
 
-            points = Pathing.contact_slot_points(origin, defender, slot)
-            return points.min_by { |point| Geometry::Battlefield.distance_between(origin, point) } if points.any?
+              return defender
+            end
+            return defender unless chargeable
 
-            defender
+            # Corner charge_destination at ~CONTACT is a 90° hop into the map edge.
+            gap = Geometry::Battlefield.distance_between_units(origin, defender)
+            return Geometry::Battlefield.move_along_facing(origin, [ gap, 0.5 ].min) if gap <= 1.0
+
+            Geometry::Battlefield.charge_destination(origin, defender)
           end
 
           def corner_contact_reachable?(origin, defender, budget, terrain: [])

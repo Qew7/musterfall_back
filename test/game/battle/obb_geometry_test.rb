@@ -21,6 +21,14 @@ class SimGeometryObbTest < ActiveSupport::TestCase
     assert_in_delta 4.0, BF.distance_between_units(left, right), 0.05
   end
 
+  test "OBB distance keeps two decimal places" do
+    left = BattleScenarios.combatant(x: 8.0, y: 12.0, facing: 0.0, base_width: 2.0, base_depth: 2.0)
+    right = BattleScenarios.combatant(x: 8.0 + Math::PI, y: 12.0, facing: 0.0, base_width: 2.0, base_depth: 2.0)
+    gap = BF.distance_between_units(left, right)
+
+    assert_equal 1.14, gap
+  end
+
   test "closest point on a facing-west tray sits on the front edge" do
     unit = BattleScenarios.combatant(x: 20.0, y: 10.0, facing: 180.0, base_width: 4.0, base_depth: 4.0)
     shore = BF.closest_point_on_unit({ x: 10.0, y: 10.0 }, unit)

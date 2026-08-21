@@ -1,5 +1,6 @@
 module Games
-  # Re-run a stored RoundMatchup in memory (no DB writes) for dev replay testing.
+  # Re-run every RoundMatchup of a round with the same seeds.
+  # Original matchup payloads stay; each replay is a new Battle row.
   class ReplayBattle
     def self.call(game:, matchup_id: nil, round_number: nil, left_player_id: nil, right_player_id: nil)
       new(
@@ -20,14 +21,23 @@ module Games
     end
 
     def call
-      matchup = find_matchup!
-      fresh = Sim::Battle::Replay.call(matchup: matchup, compare: false)[:result]
-      battle = camelize_battle(
-        fresh.merge(matchup_id: matchup.id, seed: matchup.seed)
-      )
-      battle[:terrain] = camelize_terrain(fresh[:terrain])
+      matchups = find_matchups!
+      payloads = matchups.map { |matchup| replay_payload(matchup) }
 
-      Sim::Result.ok(battle: battle)
+      ActiveRecord::Base.transaction do
+        payloads.each do |matchup, fresh|
+          Sim::Persistence::BattleWriter.persist!(
+            @game,
+            fresh,
+            round_number: matchup.campaign_round,
+            as_new: true
+          )
+        end
+      end
+
+      battles = payloads.map { |matchup, fresh| present(matchup, fresh) }
+      focused = focused_battle(battles)
+      Sim::Result.ok(battle: focused, battles: battles)
     rescue ActiveRecord::RecordNotFound
       Sim::Result.failure("matchup not found")
     rescue ArgumentError => error
@@ -36,21 +46,46 @@ module Games
 
     private
 
-    def find_matchup!
+    def find_matchups!
+      scope = @game.round_matchups
       if @matchup_id.present?
-        @game.round_matchups.find(@matchup_id)
-      else
-        raise ArgumentError, "round_number, left_player_id and right_player_id are required" if [
-          @round_number, @left_player_id, @right_player_id
-        ].any?(&:blank?)
+        seed = scope.find(@matchup_id)
+        return scope.where(campaign_round: seed.campaign_round).order(:position).to_a
+      end
 
-        matchup = @game.round_matchups.where(campaign_round: @round_number).find do |row|
-          [ row.attacker_player_key, row.defender_player_key ].sort ==
+      raise ArgumentError, "round_number, left_player_id and right_player_id are required" if [
+        @round_number, @left_player_id, @right_player_id
+      ].any?(&:blank?)
+
+      round_scope = scope.where(campaign_round: @round_number)
+      raise ActiveRecord::RecordNotFound, "RoundMatchup" unless round_scope.find { |row|
+        [ row.attacker_player_key, row.defender_player_key ].sort ==
+          [ @left_player_id, @right_player_id ].sort
+      }
+
+      round_scope.order(:position).to_a
+    end
+
+    def replay_payload(matchup)
+      [ matchup, Sim::Battle::Replay.call(matchup: matchup, compare: false)[:result] ]
+    end
+
+    def present(matchup, fresh)
+      battle = camelize_battle(fresh.merge(matchup_id: matchup.id, seed: matchup.seed))
+      battle[:terrain] = camelize_terrain(fresh[:terrain])
+      battle
+    end
+
+    def focused_battle(battles)
+      if @matchup_id.present?
+        battles.find { |battle| battle["matchupId"].to_s == @matchup_id.to_s } || battles.first
+      elsif @left_player_id.present?
+        battles.find { |battle|
+          [ battle.dig("left", "playerId"), battle.dig("right", "playerId") ].sort ==
             [ @left_player_id, @right_player_id ].sort
-        end
-        raise ActiveRecord::RecordNotFound, "RoundMatchup" unless matchup
-
-        matchup
+        } || battles.first
+      else
+        battles.first
       end
     end
 

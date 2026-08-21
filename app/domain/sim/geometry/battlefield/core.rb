@@ -45,8 +45,15 @@ module Sim
           angle_between(facing, origin, target) <= (arc / 2.0)
         end
 
+        # Side bands between the front cone and the rear cone (rear = angle > 180 - half-arc).
+        def in_flank_arc?(origin, target, facing, arc = CONFIG[:front_arc_degrees])
+          angle = angle_between(facing, origin, target)
+          half = arc / 2.0
+          angle > half && angle <= (180.0 - half)
+        end
+
         def distance_between(left, right)
-          Math.hypot(right[:x] - left[:x], right[:y] - left[:y])
+          Math.hypot(right[:x] - left[:x], right[:y] - left[:y]).round(2)
         end
 
         def heading_to(origin, target)

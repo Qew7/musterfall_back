@@ -3,5 +3,7 @@
 keep:
   - ApplicationMailer
   - Backend
+  - obstacle_kernels
+  - wheel_fits?
 exclude_paths:
   - test

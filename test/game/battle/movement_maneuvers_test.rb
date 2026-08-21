@@ -72,6 +72,42 @@ class SimBattleMovementManeuversTest < ActiveSupport::TestCase
     assert plan[:steps].any? { |step| step[:kind] == "turn" }
   end
 
+  test "a column reforms onto the old flank when the goal is a 90 degree hop and the wheel is clear" do
+    actor = BattleScenarios.combatant(
+      entity_id: "unit-29", x: 4.0, y: 6.0, facing: 90.0, movement: 4.0,
+      base_width: 2.0, base_depth: 4.0, files: 2, ranks: 4, frontage: 2
+    )
+    prince = BattleScenarios.combatant(
+      entity_id: "hero-8", x: 14.19, y: 10.90, facing: 184.4,
+      base_width: 1.0, base_depth: 2.0, files: 1, ranks: 1, current_health: 5
+    )
+    enemy = BattleScenarios.enemy(
+      entity_id: "unit-32", x: 31.18, y: 16.11, facing: 174.9,
+      base_width: 4.0, base_depth: 3.0, files: 4, ranks: 3, current_health: 10
+    )
+    space = Pathing::Obstacles.merge([ actor, prince, enemy ], [])
+    heading = BF.heading_to(actor, { x: 10.70, y: 7.37 })
+    finish = BF.charge_destination(actor, enemy)
+
+    assert space.wheel_clear?(actor, heading, contact_id: enemy[:entity_id])
+    assert Maneuvers::Turn.applies?(actor, BF.heading_to(actor, finish), 4.0)
+    assert Maneuvers.turn_for?(actor, heading, 4.0, finish, space, enemy[:entity_id])
+
+    plan = Pathing.plan_approach(
+      origin: actor, goal_point: enemy, budget: 4.0,
+      obstacles: space, contact_id: enemy[:entity_id], goal_unit: enemy
+    )
+    landed = BF.merge_footprint(actor, plan[:pose])
+
+    assert_equal :turn, plan[:maneuver]
+    assert_in_delta 0.0, landed[:facing], 8.0
+    assert_in_delta 4.0, landed[:base_width], 0.001
+    assert_in_delta 2.0, landed[:base_depth], 0.001
+    assert_equal 4, landed[:files]
+    assert_equal 2, landed[:ranks]
+    assert_operator landed[:x], :>, actor[:x] + 0.5
+  end
+
   test "a 50 degree correction still wheels instead of turning" do
     actor = BattleScenarios.combatant(
       x: 8.0, y: 12.0, facing: 40.0, movement: 3.0,
@@ -94,6 +130,28 @@ class SimBattleMovementManeuversTest < ActiveSupport::TestCase
     assert_equal :wheel, plan[:maneuver]
     assert plan[:wheel]
     assert_operator plan[:wheel][:cost].to_f, :>, 0.05
+  end
+
+  test "a 90 degree heading after the first segment wheels instead of turning" do
+    actor = BattleScenarios.combatant(
+      x: 8.0, y: 12.0, facing: 0.0, movement: 4.0,
+      base_width: 5.0, base_depth: 2.0, files: 5, ranks: 2, frontage: 5
+    )
+    plan = Maneuvers.follow_segment(
+      origin: actor,
+      heading: 90.0,
+      budget: 4.0,
+      goal_point: { x: 8.0, y: 20.0 },
+      goal_unit: nil,
+      obstacles: [ actor ],
+      contact_id: nil,
+      allow_turn: false
+    )
+
+    assert_equal :wheel, plan[:maneuver]
+    refute plan[:turn]
+    assert plan[:steps].any? { |step| step[:kind] == "wheel" }
+    refute plan[:steps].any? { |step| step[:kind] == "turn" }
   end
 
   test "a wrap heading turns when a wheel at this width cannot clear the friend" do

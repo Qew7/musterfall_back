@@ -18,11 +18,6 @@ module Sim
             delta = Geometry::Battlefield.shortest_facing_delta(origin[:facing], heading)
             return false unless Geometry::Battlefield.turn_delta?(delta)
 
-            snapped = Geometry::Battlefield.normalize_facing(
-              origin[:facing].to_f + (delta.positive? ? 90.0 : -90.0)
-            )
-            return false if Geometry::Battlefield.shortest_facing_delta(snapped, heading).abs > 8.0
-
             Geometry::Battlefield.turn_cost(origin) <= budget.to_f + 0.0001
           end
 

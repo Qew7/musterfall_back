@@ -1,22 +1,30 @@
 module Sim
   module Persistence
     class BattleWriter
-      def self.persist!(game, battle_report, round_number:)
-        new(game).persist!(battle_report, round_number: round_number)
+      def self.persist!(game, battle_report, round_number:, as_new: false)
+        new(game).persist!(battle_report, round_number: round_number, as_new: as_new)
       end
 
       def initialize(game)
         @game = game
       end
 
-      def persist!(battle_report, round_number:)
+      def persist!(battle_report, round_number:, as_new: false)
         payload = normalize_report(battle_report, round_number)
-        battle = @game.battles.find_or_initialize_by(
+        identity = {
           round_number: payload[:round_number],
           left_player_id: payload[:left_player_id],
           right_player_id: payload[:right_player_id]
-        )
+        }
+        battle = if as_new
+          @game.battles.new
+        else
+          @game.battles.where(identity).order(:id).first || @game.battles.new(identity)
+        end
         battle.assign_attributes(
+          round_number: payload[:round_number],
+          left_player_id: payload[:left_player_id],
+          right_player_id: payload[:right_player_id],
           left_player_name: payload[:left_player_name],
           right_player_name: payload[:right_player_name],
           winner_id: payload[:winner_id],

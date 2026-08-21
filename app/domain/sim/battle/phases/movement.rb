@@ -50,33 +50,17 @@ module Sim
             )
           end
 
-          # Two-pass melee: front/contact claimers resolve first (per target, so units
-          # charging different enemies act as obstacles for each other), then flank/rear
-          # on the updated board (path around settled allies instead of through them).
-          entries = Decisions::Movement.plan_melee_entries(physical_movers, target_side[:combatants], terrain: terrain)
-          contact_entries = entries.select { |entry| Decisions::Movement.contact_wave?(entry, enemies: target_side[:combatants]) }
-          flank_entries = entries - contact_entries
-
-          # Front claimers that share a target resolve simultaneously; different targets
-          # run sequentially so a block fighting A does not vanish for a flanker charging B.
-          contact_entries.group_by { |entry| entry[:nearest][:entity_id] }.each_value do |group|
+          # Rule planners own wave order (flyers, then ground contact per target, then flanks).
+          Decisions::Movement.plan_melee_waves(physical_movers, target_side[:combatants], terrain: terrain).each do |wave|
             moved += run_melee_wave!(
               phase: phase,
               acting_side: acting_side,
               target_side: target_side,
-              entries: group,
-              allow_ally_bypass: false,
+              entries: wave[:entries],
+              allow_ally_bypass: wave[:allow_ally_bypass],
               terrain: terrain
             )
           end
-          moved += run_melee_wave!(
-            phase: phase,
-            acting_side: acting_side,
-            target_side: target_side,
-            entries: flank_entries,
-            allow_ally_bypass: true,
-            terrain: terrain
-          )
 
           melee_ids = physical_movers.map { |entry| entry[:entity_id] }.to_set
           seeker_units = seekers.reject { |entry| melee_ids.include?(entry[:entity_id]) }
@@ -296,12 +280,14 @@ module Sim
         # Pull the destination back toward the origin until clear of accepted/static poses.
         def shorten_destination(origin, desired, static_obstacles, accepted, contact_id: nil)
           best = nil
+          from_facing = origin[:facing].to_f
+          facing_delta = Geometry::Battlefield.shortest_facing_delta(from_facing, desired[:facing])
           12.times do |index|
             t = 1.0 - ((index + 1) / 12.0)
             pose = origin.merge(
               x: origin[:x].to_f + ((desired[:x].to_f - origin[:x].to_f) * t),
               y: origin[:y].to_f + ((desired[:y].to_f - origin[:y].to_f) * t),
-              facing: desired[:facing]
+              facing: Geometry::Battlefield.normalize_facing(from_facing + (facing_delta * t))
             )
             pose = Geometry::Battlefield.merge_footprint(pose, desired)
             next if destination_blocked?(pose, static_obstacles, accepted, contact_id: contact_id)
@@ -499,19 +485,18 @@ module Sim
           plan[:blocker][:entity_id] == nearest[:entity_id]
         end
 
+        def maneuver_log_kind(plan, contact_blocker, wheel, turn, advance_spent, march_spent)
+          return plan[:kind] if plan[:kind]
+          return "blocked_by_ally" if plan[:blocked_by_ally]
+          return "bypass" if plan[:avoided] && !contact_blocker
+          return "contact_align" if contact_blocker && plan[:truncated]
+
+          maneuver_kind(plan, wheel, turn, advance_spent, march_spent)
+        end
+
         def approach_maneuver(plan, nearest, budget, wheel:, turn:, advance_spent:, march_spent:, desired:, kind_override: nil)
           contact_blocker = blocker_is_target?(plan, nearest)
-          kind = kind_override || if plan[:leap]
-            plan[:charge] ? "flyer_charge" : "flyer_leap"
-          elsif plan[:blocked_by_ally]
-            "blocked_by_ally"
-          elsif plan[:avoided] && !contact_blocker
-            "bypass"
-          elsif contact_blocker && plan[:truncated]
-            "contact_align"
-          else
-            maneuver_kind(plan, wheel, turn, advance_spent, march_spent)
-          end
+          kind = kind_override || maneuver_log_kind(plan, contact_blocker, wheel, turn, advance_spent, march_spent)
 
           {
             kind: kind,
