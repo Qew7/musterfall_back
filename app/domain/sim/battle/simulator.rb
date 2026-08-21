@@ -10,7 +10,9 @@ module Sim
         @player_b = player_b
         @catalog = catalog
         @rng = rng
-        @terrain = terrain || TerrainMap.generate(seed: map_seed || 0)
+        source = Array(terrain || TerrainMap.generate(seed: map_seed || 0))
+        @terrain = source.map(&:dup)
+        @map_terrain = @terrain.map(&:dup)
       end
 
       def call
@@ -24,16 +26,18 @@ module Sim
           battle[:rounds] << Round.play(battle: battle, round_number: round_number, rng: @rng)
         end
 
-        total_a = State.side_health(battle[:sides][:left])
-        total_b = State.side_health(battle[:sides][:right])
-        winner_id = total_a >= total_b ? @player_a[:id] : @player_b[:id]
+        score_a = State.victory_score(battle[:sides][:left], battle[:sides][:right])
+        score_b = State.victory_score(battle[:sides][:right], battle[:sides][:left])
+        winner_id = (score_a <=> score_b) >= 0 ? @player_a[:id] : @player_b[:id]
+        total_a = score_a[0]
+        total_b = score_b[0]
         State.sync_battle!(battle)
 
         {
           battle_id: "#{@player_a[:id]}-#{@player_b[:id]}-r#{@rng.rand(1_000_000_000)}",
           rounds: battle[:rounds],
           initial_snapshot: initial_snapshot,
-          terrain: @terrain,
+          terrain: @map_terrain,
           left: State.snapshot_side(@player_a, battle[:sides][:left], @catalog),
           right: State.snapshot_side(@player_b, battle[:sides][:right], @catalog),
           winner_id: winner_id,

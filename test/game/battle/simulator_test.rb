@@ -29,6 +29,30 @@ class SimBattleSimulatorTest < ActiveSupport::TestCase
     @campaign = Sim::Persistence::CampaignRepository.new.load(game.reload)
   end
 
+  test "victory points use unit cost and ignore leftover routing hp" do
+    left = {
+      combatants: [
+        { cost: 4, starting_models: 4, models_remaining: 4, current_health: 4, is_routing: false }
+      ]
+    }
+    right = {
+      combatants: [
+        { cost: 20, starting_models: 1, models_remaining: 1, current_health: 20, is_routing: true }
+      ]
+    }
+
+    assert_equal 20, Sim::Battle::State.victory_points(right)
+    assert_equal 0, Sim::Battle::State.victory_points(left)
+    assert_equal [ 20, 4 ], Sim::Battle::State.victory_score(left, right)
+    assert_equal [ 0, 0 ], Sim::Battle::State.victory_score(right, left)
+    assert_equal 1, Sim::Battle::State.victory_score(left, right) <=> Sim::Battle::State.victory_score(right, left)
+  end
+
+  test "half models remaining awards half cost" do
+    broken = { cost: 10, starting_models: 10, models_remaining: 5, current_health: 5, is_routing: false }
+    assert_equal 5, Sim::Battle::State.unit_bounty(broken)
+  end
+
   test "simulate battle returns winner phases and syncs health" do
     left = @campaign.find_player("player-1")
     right = @campaign.find_player("player-2")

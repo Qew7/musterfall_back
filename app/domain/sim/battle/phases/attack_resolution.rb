@@ -127,7 +127,7 @@ module Sim
           phase
         end
 
-        def record_missile_hit!(phase:, actor:, host:, profile:, victim:, vector:, strike_damage:, attack_type:, acting_side:, target_side:, blockers:, victims:, models_hit: nil, breath: false)
+        def record_missile_hit!(phase:, actor:, host:, profile:, victim:, vector:, strike_damage:, attack_type:, acting_side:, target_side:, blockers:, victims:, models_hit: nil)
           actor_state = State.snapshot_combatant(host)
           before = State.snapshot_combatant(victim)
           victim[:current_health] = [ 0, victim[:current_health] - strike_damage ].max
@@ -136,12 +136,15 @@ module Sim
 
           distribute_contributor_experience!(actor[:contributor] || profile, strike_damage)
 
-          player_line =
-            if breath
-              Rules::Breath::Shooting.player_summary(actor, victim, models_hit, strike_damage)
-            else
-              missile_player_summary(actor, victim, vector, strike_damage, attack_type)
-            end
+          player_line = ActionResult.text_for(
+            actor: actor.merge(weapon_type: profile[:weapon_type] || actor[:weapon_type]),
+            action: { type: attack_type, magic_school: actor[:magic_school] },
+            before: [ before ],
+            after: [ after ],
+            damage: strike_damage,
+            vector: vector,
+            target_name: victim[:name]
+          )
           add_event(phase, player_line)
           action = {
             type: attack_type,
@@ -158,6 +161,8 @@ module Sim
             requires_line_of_sight: profile[:requires_line_of_sight],
             template: template_descriptor(profile, victim, victims, attack_type),
             affected_ids: victims.map { |entry| entry[:target][:entity_id] },
+            magic_school: actor[:magic_school],
+            spell_keys: Array(actor[:spell_keys]),
             actor_state: actor_state,
             target_state_before: before,
             target_state_after: after,
@@ -181,10 +186,12 @@ module Sim
           entries = melee_entries(attacker, target, vector, round_number)
 
           entries.each do |entry|
-            next if target[:current_health].to_i <= 0 || entry[:damage].to_i <= 0
+            next if attacker[:current_health].to_i <= 0 || target[:current_health].to_i <= 0 || entry[:damage].to_i <= 0
 
             attacks = entry.dig(:profile, :attacks) || attacker[:attacks] || 1
             attacks.times do
+              break if attacker[:current_health].to_i <= 0
+
               unless hit?(entry[:profile], target, "melee", rng)
                 add_event(phase, "#{format_actor(entry[:actor_role], entry[:actor_name])} промахивается по #{target[:name]}.")
                 next
@@ -198,7 +205,18 @@ module Sim
 
               distribute_contributor_experience!(entry[:profile], entry[:damage])
 
-              player_line = "#{format_actor(entry[:actor_role], entry[:actor_name])} бьёт #{target[:name]} (#{describe_vector(vector)}): #{entry[:damage]} урона."
+              player_line = ActionResult.text_for(
+                actor: {
+                  actor_role: entry[:actor_role],
+                  actor_name: entry[:actor_name],
+                  weapon_type: entry.dig(:profile, :weapon_type) || attacker[:weapon_type]
+                },
+                action: { type: "melee" },
+                before: [ before ],
+                after: [ after ],
+                damage: entry[:damage],
+                vector: vector
+              )
               add_event(phase, player_line)
               action = {
                 type: "melee",
@@ -229,16 +247,26 @@ module Sim
               action[:summary] = player_line
               action[:details] = details(action)
               phase[:actions] << action
+              Rules.for(:melee).after_hit!(
+                phase: phase,
+                attacker: attacker,
+                defender: target,
+                action: action,
+                acting_side: acting_side,
+                target_side: target_side,
+                round_number: round_number
+              )
             end
           end
         end
 
-        def damage(attacker, defender, attack_type, vector, round_number)
+        def damage(attacker, defender, attack_type, vector, round_number, weapon_type: nil)
           base = base_power(attacker, attack_type)
           return 0 if base <= 0
 
-          weapon_type = attack_type == "magic" ? SpellCasting.weapon_type(attacker) : attacker[:weapon_type]
+          weapon_type ||= attack_type == "magic" ? SpellCasting.weapon_type(attacker) : attacker[:weapon_type]
           armor_factor = Constants::WEAPON_VS_ARMOR.dig(defender[:armor_type], weapon_type) || 1
+          armor_factor *= SpellEffects.armor_factor(defender)
           rules = Rules.for(Rules.damage_phase_for(attack_type))
           facing_factor = rules.facing_damage_factor(defender, vector)
           facing_factor = default_facing_damage_factor(vector) if facing_factor.nil?
@@ -257,14 +285,17 @@ module Sim
         end
 
         def hit_chance(attacker, defender, attack_type, terrain: [])
-          case attack_type
+          base = case attack_type
           when "melee"
             attacker_skill = attacker[:skill] || 3
             defender_skill = defender[:skill] || 3
-            return 5 / 6.0 if attacker_skill > defender_skill
-            return 3 / 6.0 if attacker_skill < defender_skill
-
-            4 / 6.0
+            if attacker_skill > defender_skill
+              5 / 6.0
+            elsif attacker_skill < defender_skill
+              3 / 6.0
+            else
+              4 / 6.0
+            end
           when "shooting"
             skill = (attacker[:skill] || 3).to_i
             skill -= 1 if Geometry::Battlefield.in_forest?(defender, terrain)
@@ -274,6 +305,8 @@ module Sim
           else
             1.0
           end
+          factor = Rules.for(Rules.damage_phase_for(attack_type)).hit_chance_factor(attacker, defender, attack_type)
+          (base * factor).clamp(0.0, 1.0)
         end
 
         def hit?(attacker, defender, attack_type, rng, terrain: [])
@@ -441,31 +474,6 @@ module Sim
           }
         end
 
-        def summarize(action, phase_type)
-          actor = format_actor(action[:actor_role], action[:actor_name])
-          case phase_type
-          when "shooting"
-            "#{actor} стреляет в #{action[:target_name]} (#{describe_vector(action[:vector])}): #{action[:damage]} урона."
-          when "magic"
-            "#{actor} бьёт магией #{action[:target_name]} (#{describe_vector(action[:vector])}): #{action[:damage]} урона."
-          else
-            "#{actor} бьёт #{action[:target_name]} (#{describe_vector(action[:vector])}): #{action[:damage]} урона."
-          end
-        end
-
-        def missile_player_summary(actor, target, vector, damage, attack_type)
-          summarize(
-            {
-              actor_role: actor[:actor_role],
-              actor_name: actor[:actor_name],
-              target_name: target[:name],
-              vector: vector,
-              damage: damage
-            },
-            attack_type
-          )
-        end
-
         def details(action)
           before = action[:target_state_before]
           after = action[:target_state_after]
@@ -501,10 +509,6 @@ module Sim
           return "нет данных" unless state
 
           "#{state[:name]} HP #{state[:current_health]}/#{state[:max_health]}, моделей #{state[:models_remaining]}, строй #{state[:row]}/#{state[:lane]}, ряды #{state[:ranks]}, файлы #{state[:files]}"
-        end
-
-        def describe_vector(vector)
-          { "rear" => "тыл", "flank" => "фланг" }.fetch(vector, "фронт")
         end
 
         def format_actor(role, name)

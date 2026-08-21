@@ -29,8 +29,69 @@ module Sim
         side[:combatants].sum { |entry| entry[:current_health].to_i }
       end
 
+      def standing_cost(side)
+        Array(side[:combatants]).sum { |entry| fighting?(entry) ? entry[:cost].to_i : 0 }
+      end
+
+      # VP the opponent scores from this side's casualties.
+      def victory_points(side)
+        Array(side[:combatants]).sum { |entry| unit_bounty(entry) }
+      end
+
+      def victory_score(own_side, enemy_side)
+        [ victory_points(enemy_side), standing_cost(own_side) ]
+      end
+
+      def unit_bounty(unit)
+        cost = unit[:cost].to_i
+        return 0 if cost <= 0
+
+        starting = [ unit[:starting_models].to_i, 1 ].max
+        remaining = fighting?(unit) ? unit[:models_remaining].to_i : 0
+        return cost if remaining <= 0
+        return cost / 2 if remaining * 2 <= starting
+
+        0
+      end
+
+      def fighting?(unit)
+        unit[:current_health].to_i > 0 && !unit[:is_routing]
+      end
+
       def apply_faction_passives!(side)
         Rules.for(:round).apply_passives!(side)
+      end
+
+      def resolve_summons_end_round!(side)
+        events = []
+        side[:combatants].each do |combatant|
+          next unless combatant[:summoned] && combatant[:current_health].to_i > 0
+          next unless combatant[:summon_kind] == "chaos_spawn"
+
+          combatant[:current_health] -= 1
+          sync_combatant_footprint!(combatant)
+          events << "#{combatant[:name]} теряет 1 здоровье из-за нестабильной мутации."
+        end
+        side[:combatants].reject! do |combatant|
+          combatant[:summoned] && (combatant[:current_health].to_i <= 0 || combatant[:summon_expires] == :round)
+        end
+        events
+      end
+
+      def tick_summons!(sides)
+        vanished = []
+        Array(sides).each do |side|
+          side[:combatants].reject! do |combatant|
+            next false unless combatant[:summoned] && combatant[:summon_remaining_turns]
+
+            combatant[:summon_remaining_turns] -= 1
+            next false if combatant[:summon_remaining_turns].positive?
+
+            vanished << combatant
+            true
+          end
+        end
+        vanished
       end
 
       def snapshot_side(player, side, catalog)
@@ -64,6 +125,7 @@ module Sim
           model_health: combatant[:model_health],
           models_remaining: combatant[:models_remaining],
           starting_models: combatant[:starting_models],
+          cost: combatant[:cost],
           frontage: combatant[:frontage],
           max_files: combatant[:max_files],
           files: combatant[:files],
@@ -76,10 +138,15 @@ module Sim
           melee: combatant[:melee],
           ranged: combatant[:ranged],
           spell: combatant[:spell],
+          magic_school: combatant[:magic_school],
+          spell_keys: Array(combatant[:spell_keys]),
           is_routing: combatant[:is_routing],
           armor_type: combatant[:armor_type],
           weapon_type: combatant[:weapon_type],
-          attached_heroes: combatant[:attached_heroes] || []
+          attached_heroes: combatant[:attached_heroes] || [],
+          spell_effects: SpellEffects.public_for(combatant),
+          summoned: !!combatant[:summoned],
+          summon_kind: combatant[:summon_kind]
         }
       end
 
@@ -192,6 +259,7 @@ module Sim
             entity_id: entity[:id],
             name: entity[:name],
             kind: entity[:kind],
+            cost: entity.dig(:components, :economy, :cost).to_i + attached_heroes.sum { |hero| hero.dig(:components, :economy, :cost).to_i },
             side_key: side_key,
             side_index: side_index,
             lane: entity.dig(:components, :formation, :lane),
@@ -221,6 +289,8 @@ module Sim
             melee: melee,
             ranged: ranged,
             spell: spell,
+            magic_school: ranged_contributors.filter_map { |entry| entry[:magic_school] }.first,
+            spell_keys: ranged_contributors.flat_map { |entry| Array(entry[:spell_keys]) }.uniq,
             initiative: combat[:initiative],
             current_health: entity[:state][:current_health],
             max_health: entity.dig(:components, :health, :max),
@@ -260,6 +330,7 @@ module Sim
 
       def missile_contributor_from(entity, attached_slot: nil)
         combat = entity[:components][:combat]
+        magic = entity.dig(:components, :hero) || {}
         ranged = combat[:ranged].to_i
         spell = combat[:spell].to_i
         contributor_from(entity, [ ranged, spell ].max).merge(
@@ -272,7 +343,9 @@ module Sim
           requires_line_of_sight: combat[:requires_line_of_sight],
           missile_attacks: combat[:missile_attacks] || 1,
           initiative: combat[:initiative],
-          attached_slot: attached_slot
+          attached_slot: attached_slot,
+          magic_school: magic[:magic_school],
+          spell_keys: Array(magic[:spell_keys])
         )
       end
 
@@ -326,6 +399,8 @@ module Sim
           current_health: entry[:current_health],
           max_health: entry[:max_health],
           models_remaining: entry[:models_remaining],
+          starting_models: entry[:starting_models],
+          cost: entry[:cost],
           x: entry[:x],
           y: entry[:y],
           facing: entry[:facing],
@@ -345,9 +420,14 @@ module Sim
           spell_range: entry[:spell_range],
           shooting_template: entry[:shooting_template],
           spell_template: entry[:spell_template],
+          magic_school: entry[:magic_school],
+          spell_keys: Array(entry[:spell_keys]),
           requires_line_of_sight: entry[:requires_line_of_sight],
           is_routing: entry[:is_routing],
-          attached_heroes: entry[:attached_heroes] || []
+          attached_heroes: entry[:attached_heroes] || [],
+          spell_effects: SpellEffects.public_for(entry),
+          summoned: !!entry[:summoned],
+          summon_kind: entry[:summon_kind]
         }
       end
     end

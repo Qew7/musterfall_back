@@ -154,38 +154,80 @@ class SimBattleMovementManeuversTest < ActiveSupport::TestCase
     refute plan[:steps].any? { |step| step[:kind] == "turn" }
   end
 
-  test "a wrap heading turns when a wheel at this width cannot clear the friend" do
+  test "a wrap heading does not reform when the enemy is ahead" do
     actor = BattleScenarios.combatant(
-      entity_id: "unit-11", x: 35.0, y: 19.0, facing: 180.0,
-      base_width: 4.0, base_depth: 4.0, files: 2, ranks: 2, movement: 3.0
+      entity_id: "unit-12", x: 35.0, y: 19.0, facing: 180.0,
+      base_width: 4.0, base_depth: 2.0, files: 4, ranks: 2, movement: 4.0
     )
-    friend = BattleScenarios.combatant(
-      entity_id: "hero-2", x: 31.0, y: 19.0, facing: 180.0,
-      base_width: 1.0, base_depth: 1.0
-    )
-    enemy = BattleScenarios.enemy(entity_id: "unit-36", x: 8.0, y: 16.0, facing: 0.0)
-    space = Pathing::Obstacles.merge([ actor, friend, enemy ], [])
+    enemy = BattleScenarios.enemy(entity_id: "unit-37", x: 8.0, y: 20.0, facing: 0.0)
+    space = Pathing::Obstacles.merge([ actor, enemy ], [])
     heading = 270.0
 
-    refute space.wheel_clear?(actor, heading, contact_id: enemy[:entity_id])
-    assert Maneuvers.turn_for?(actor, heading, 3.0, enemy, space, enemy[:entity_id])
+    refute Maneuvers.turn_for?(actor, heading, 4.0, enemy, space, enemy[:entity_id])
 
     plan = Maneuvers.follow_segment(
       origin: actor,
       heading: heading,
-      budget: 3.0,
-      goal_point: { x: 34.25, y: 15.75 },
+      budget: 4.0,
+      goal_point: { x: 35.0, y: 17.0 },
       goal_unit: nil,
       obstacles: space,
       contact_id: enemy[:entity_id],
       finish: enemy
     )
 
-    assert_equal :turn, plan[:maneuver]
-    assert plan[:turn]
-    assert plan[:turn][:completed]
-    assert_in_delta 270.0, plan[:pose][:facing], 0.5
-    assert_operator plan[:pose][:y], :<, actor[:y]
+    refute_equal :turn, plan[:maneuver]
+    refute plan[:turn]
+    refute BF.turn_delta?(BF.shortest_facing_delta(actor[:facing], plan[:pose][:facing]))
+  end
+
+  test "follow does not reform onto a side waypoint when the enemy is ahead" do
+    actor = BattleScenarios.combatant(
+      entity_id: "unit-10", x: 31.0, y: 11.0, facing: 180.0,
+      base_width: 4.0, base_depth: 2.0, files: 4, ranks: 2, movement: 3.0
+    )
+    enemy = BattleScenarios.enemy(entity_id: "unit-38", x: 7.0, y: 7.0, facing: 0.0)
+    thread = {
+      points: [
+        { x: 31.0, y: 11.0 },
+        { x: 31.0, y: 9.5 }
+      ],
+      complete: false,
+      wrapped: [ { entity_id: "terrain-4" } ]
+    }
+    plan = Pathing::Follow.along(
+      origin: actor,
+      thread: thread,
+      budget: 3.0,
+      goal_unit: enemy,
+      obstacles: [ actor, enemy ],
+      contact_id: enemy[:entity_id]
+    )
+
+    refute plan[:steps].any? { |step| step[:kind] == "turn" }
+    refute BF.turn_delta?(BF.shortest_facing_delta(actor[:facing], plan[:pose][:facing])),
+           "reformed onto wrap vertex facing=#{plan.dig(:pose, :facing)}"
+  end
+
+  test "follow skips a wrap vertex that doubles back when the enemy is ahead" do
+    actor = BattleScenarios.combatant(
+      entity_id: "unit-10", x: 31.0, y: 11.0, facing: 180.0,
+      base_width: 4.0, base_depth: 2.0, files: 4, ranks: 2, movement: 3.0
+    )
+    enemy = BattleScenarios.enemy(entity_id: "unit-38", x: 7.0, y: 7.0, facing: 0.0)
+    house = BattleScenarios.terrain(
+      id: "terrain-4", type: "house", x: 26.496, y: 7.603, width: 3.421, depth: 2.688
+    )
+    world = Pathing::Obstacles.merge([ actor, enemy ], [ house ])
+    plan = Pathing.plan_approach(
+      origin: actor, goal_point: enemy, budget: 3.0,
+      obstacles: world, contact_id: enemy[:entity_id], goal_unit: enemy, terrain: [ house ]
+    )
+
+    refute_equal :turn, plan[:maneuver], "reformed onto wrap vertex facing=#{plan.dig(:pose, :facing)}"
+    refute BF.turn_delta?(BF.shortest_facing_delta(actor[:facing], plan[:pose][:facing])),
+           "reformed onto wrap vertex facing=#{plan.dig(:pose, :facing)}"
+    refute plan[:steps].any? { |step| step[:kind] == "turn" }
   end
 
   test "movement phase applies the turned footprint to the combatant" do

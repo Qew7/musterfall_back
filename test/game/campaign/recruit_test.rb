@@ -45,4 +45,41 @@ class SimCampaignRecruitTest < ActiveSupport::TestCase
 
     assert result.failure?
   end
+
+  test "wizard requires an available school and receives two seeded unique spells" do
+    wizard = catalog.hero_templates(@campaign.find_player("player-1")[:faction_id]).find { |hero| hero[:abilities].include?("wizard") }
+
+    with_spell_api(
+      schools: %i[pyromancy celestial],
+      spell_keys: %i[fireball inferno cinder_shield]
+    ) do
+      result = Sim::Campaign::Recruit.call(
+        campaign: @campaign,
+        catalog: catalog,
+        player_id: "player-1",
+        template_id: wizard[:id],
+        school_key: "pyromancy",
+        rng: Sim::Rng::Seeded.new(17)
+      )
+
+      assert result.ok?
+      hero = result.value.find_player("player-1")[:roster].last
+      assert_equal "pyromancy", hero.dig(:components, :hero, :magic_school)
+      assert_equal 2, hero.dig(:components, :hero, :spell_keys).uniq.length
+      assert_empty hero.dig(:components, :hero, :spell_keys) - %w[fireball inferno cinder_shield]
+    end
+  end
+
+  test "non-wizard rejects a magic school" do
+    result = Sim::Campaign::Recruit.call(
+      campaign: @campaign,
+      catalog: catalog,
+      player_id: "player-1",
+      template_id: @template[:id],
+      school_key: "pyromancy"
+    )
+
+    assert result.failure?
+    assert_equal "magic school is only valid for wizards", result.error
+  end
 end

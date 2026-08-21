@@ -426,6 +426,98 @@ class SimBattleMovementWheelTest < ActiveSupport::TestCase
     assert_operator ally[:x], :>, ally_start + 0.5
   end
 
+  test "faster co-mover does not sweep through a waiting allied hero" do
+    knights = combatant(
+      entity_id: "unit-22",
+      name: "Черные рыцари",
+      x: 4,
+      y: 4,
+      facing: 0,
+      base_width: 3,
+      base_depth: 4,
+      files: 3,
+      ranks: 2,
+      movement: 7,
+      melee: 6,
+      ranged: 0,
+      spell: 0,
+      row: "support",
+      lane: "left",
+      side_index: 0
+    )
+    lich = combatant(
+      entity_id: "hero-5",
+      name: "Король-лич",
+      x: 8,
+      y: 4,
+      facing: 0,
+      base_width: 1,
+      base_depth: 1,
+      files: 1,
+      ranks: 1,
+      frontage: 1,
+      max_files: 1,
+      movement: 3,
+      melee: 4,
+      ranged: 0,
+      spell: 0,
+      row: "front",
+      lane: "left",
+      side_index: 0
+    )
+    orcs = combatant(
+      entity_id: "unit-25",
+      name: "Орки-бойзы",
+      x: 31,
+      y: 3,
+      facing: 180,
+      base_width: 4,
+      base_depth: 4,
+      movement: 3,
+      melee: 5,
+      row: "front",
+      lane: "right",
+      side_index: 1
+    )
+    goblins = combatant(
+      entity_id: "unit-27",
+      name: "Гоблины-лучники",
+      x: 35,
+      y: 11,
+      facing: 180,
+      base_width: 4,
+      base_depth: 3,
+      movement: 3,
+      melee: 2,
+      ranged: 5,
+      row: "front",
+      lane: "center",
+      side_index: 1
+    )
+    lich_start = lich.dup
+
+    phase = Sim::Battle::Phases::Movement.play(
+      acting_side: { player_id: "p1", combatants: [ knights, lich ] },
+      target_side: { player_id: "bot", combatants: [ orcs, goblins ] }
+    )
+
+    refute Sim::Geometry::Battlefield.rectangles_overlap?(knights, lich)
+    action = phase[:actions].find { |entry| entry[:actor_id] == "unit-22" }
+    assert action, "knights should still move or wait"
+    avoided = action.dig(:maneuver, :pathing_avoided) || action.dig(:maneuver, :avoided)
+    unless avoided || Sim::Geometry::Battlefield.distance_between(lich_start, lich) > 0.05
+      11.times do |index|
+        t = index / 10.0
+        pose = knights.merge(
+          x: 4.0 + ((knights[:x] - 4.0) * t),
+          y: 4.0 + ((knights[:y] - 4.0) * t),
+          facing: knights[:facing]
+        )
+        refute Sim::Geometry::Obb.overlap_units?(pose, lich_start), "knights swept through lich at t=#{t}"
+      end
+    end
+  end
+
   test "stationary allied blocker is wrapped with wheel/turn then advance" do
     actor = combatant(
       entity_id: "chaos-knights",

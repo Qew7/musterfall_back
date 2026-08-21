@@ -21,7 +21,8 @@ class ApiGameCommandsControllerTest < ActionDispatch::IntegrationTest
     post "/api/games/#{game_id}/assign_faction", params: {
       base_version: 0,
       player_id: "player-1",
-      faction_id: faction_id
+      faction_id: faction_id,
+      school_key: starter_school_key(faction_id)
     }, as: :json
 
     assert_response :success
@@ -38,7 +39,8 @@ class ApiGameCommandsControllerTest < ActionDispatch::IntegrationTest
     post "/api/games/#{game_id}/assign_faction", params: {
       base_version: 0,
       player_id: "player-1",
-      faction_id: faction_id
+      faction_id: faction_id,
+      school_key: starter_school_key(faction_id)
     }, as: :json
     assert_response :success
 
@@ -72,7 +74,8 @@ class ApiGameCommandsControllerTest < ActionDispatch::IntegrationTest
     post "/api/games/#{game_id}/assign_faction", params: {
       base_version: 0,
       player_id: "player-1",
-      faction_id: faction_id
+      faction_id: faction_id,
+      school_key: starter_school_key(faction_id)
     }, as: :json
     assert_response :success
     version = JSON.parse(response.body)["version"]

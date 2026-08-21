@@ -17,6 +17,40 @@ class SimBattlePathingThreadTest < ActiveSupport::TestCase
     assert_in_delta 24.0, thread[:points].last[:x], 0.05
   end
 
+  test "a 5x4 tray wraps a lakeshore outside its circumradius so corners do not snag" do
+    actor = BattleScenarios.combatant(
+      entity_id: "unit-16", x: 32.31, y: 11.19, facing: 173.5,
+      base_width: 5.0, base_depth: 4.0, movement: 3.0
+    )
+    enemy = BattleScenarios.enemy(entity_id: "unit-32", x: 1.0, y: 10.0, facing: 0.0)
+    lake = BattleScenarios.terrain(
+      id: "terrain-1", type: "lake", x: 25.922, y: 7.12, width: 3.877, depth: 2.36, impassable: true
+    )
+    world = Pathing::Obstacles.merge([ actor, enemy ], [ lake ])
+    lake_obs = BF.feature_as_obstacle(lake)
+    thread = Thread.pull(mover: actor, goal: enemy, world: world, contact_id: enemy[:entity_id])
+
+    assert_operator thread[:points].length, :>=, 3
+    thread[:points].each_cons(2) do |_from, vertex|
+      heading = BF.heading_to(thread[:points].first, vertex)
+      pose = actor.merge(x: vertex[:x], y: vertex[:y], facing: heading)
+      refute BF.rectangles_overlap?(pose, lake_obs), "thread vertex #{vertex.inspect} overlaps the lake"
+    end
+
+    plan = Pathing.plan_approach(
+      origin: actor, goal_point: enemy, budget: 3.0,
+      obstacles: world, contact_id: enemy[:entity_id], goal_unit: enemy, terrain: [ lake ]
+    )
+    leftover = 3.0 - plan[:cost_spent].to_f
+    landed = BF.merge_footprint(actor, plan[:pose])
+    refute BF.rectangles_overlap?(landed, lake_obs)
+    assert leftover <= 0.6, "leftover #{leftover} unused at the lake"
+    assert plan[:avoided]
+    assert_operator BF.distance_between(actor, plan[:pose]), :>, 0.5
+    wrap_y = thread[:points][1][:y]
+    assert_operator wrap_y, :>, 8.3, "wrap vertex y=#{wrap_y} is not north of the lake"
+  end
+
   test "a blocker on the line pulls the thread around the OBB with clearance" do
     actor = BattleScenarios.combatant(x: 6.0, y: 12.0, facing: 0.0, base_width: 2.0, base_depth: 2.0)
     house = BattleScenarios.terrain(id: "house", x: 16.0, y: 12.0, width: 3.0, depth: 3.0)

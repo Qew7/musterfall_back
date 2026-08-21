@@ -17,7 +17,8 @@ module Sim
           seekers = Decisions::Reposition.seekers(
             acting_side: acting_side,
             target_side: target_side,
-            round_number: round_number
+            round_number: round_number,
+            terrain: terrain
           ).select { |entry| entry[:movement].to_f > 0.05 }
 
           moved = 0
@@ -102,10 +103,52 @@ module Sim
           end
 
           moved += commit_intents!(phase, acting_side, target_side, reposition_intents)
+          apply_terrain_hazards!(phase, acting_side, target_side, terrain)
+          Rules.for(:movement).after_play!(
+            phase: phase,
+            acting_side: acting_side,
+            target_side: target_side,
+            round_number: round_number,
+            terrain: terrain
+          )
 
           AttackResolution.add_event(phase, "Строй удерживает позиции.") if moved.zero?
           phase[:snapshot] = State.snapshot_battlefield([ acting_side, target_side ])
           phase
+        end
+
+        def apply_terrain_hazards!(phase, acting_side, target_side, terrain)
+          moved_ids = phase[:actions].filter_map do |action|
+            next unless action[:type] == "movement"
+            next unless Geometry::Battlefield.distance_between(action[:from], action[:to]) > 0.05
+
+            action[:actor_id]
+          end.uniq
+          acting_side[:combatants].each do |combatant|
+            next unless moved_ids.include?(combatant[:entity_id])
+
+            feature = Array(terrain).find do |entry|
+              entry[:entry_damage].to_i.positive? &&
+                Geometry::Battlefield.unit_midpoint_in_feature?(combatant, entry)
+            end
+            next unless feature
+
+            damage = [ feature[:entry_damage].to_i, combatant[:current_health].to_i ].min
+            combatant[:current_health] -= damage
+            State.sync_combatant_footprint!(combatant)
+            summary = "#{combatant[:name]} получает #{damage} урона от опасной местности."
+            AttackResolution.add_event(phase, summary)
+            phase[:actions] << {
+              type: "terrain_damage",
+              actor_id: feature[:id],
+              target_id: combatant[:entity_id],
+              damage: damage,
+              summary: summary,
+              details: [ "terrain=#{feature[:id]} type=#{feature[:type]}", "damage=#{damage}" ],
+              trace: Trace.build(rule_keys: [ "terrain" ], trigger: "movement_end", result: "damage", target_ids: [ combatant[:entity_id] ]),
+              snapshot: State.snapshot_battlefield([ acting_side, target_side ])
+            }
+          end
         end
 
         def run_melee_wave!(phase:, acting_side:, target_side:, entries:, allow_ally_bypass:, terrain: [])
@@ -140,18 +183,71 @@ module Sim
 
           # Co-movers that never move still occupy their start — treat as hard blockers
           # so others cannot land inside them (idle heroes, wait intents, etc.).
-          wave_movers = entries.map { |entry| entry[:combatant] }
-          stayers = wave_movers.select do |unit|
+          occupied = obstacles + wave_stayers(entries, intents).map { |entry| freeze_obstacle(entry) }
+          resolve_destination_conflicts!(intents, occupied)
+          # Landing conflict can turn a co-mover into a waiter after everyone already
+          # planned through their start. Re-path those sweeps; thread wrap already exists.
+          reroute_around_stayers!(
+            intents,
+            obstacles,
+            stayers: wave_stayers(entries, intents),
+            enemies: target_side[:combatants],
+            terrain: terrain
+          )
+          occupied = obstacles + wave_stayers(entries, intents).map { |entry| freeze_obstacle(entry) }
+          resolve_destination_conflicts!(intents, occupied)
+          apply_free_aligns!(intents, occupied)
+          apply_intents!(intents)
+          commit_intents!(phase, acting_side, target_side, intents)
+        end
+
+        def wave_stayers(entries, intents)
+          entries.map { |entry| entry[:combatant] }.select do |unit|
             intent = intents.find { |row| row[:combatant][:entity_id] == unit[:entity_id] }
             intent.nil? || intent[:wait] || intent[:destination].nil?
           end
-          resolve_destination_conflicts!(
-            intents,
-            obstacles + stayers.map { |entry| freeze_obstacle(entry) }
-          )
-          apply_free_aligns!(intents, obstacles + stayers.map { |entry| freeze_obstacle(entry) })
-          apply_intents!(intents)
-          commit_intents!(phase, acting_side, target_side, intents)
+        end
+
+        def reroute_around_stayers!(intents, obstacles, stayers:, enemies:, terrain:)
+          return if stayers.empty?
+
+          world = obstacles + stayers.map { |entry| freeze_obstacle(entry) }
+          space = Pathing::Obstacles.coerce(world)
+
+          intents.each do |intent|
+            next if intent[:wait] || intent[:destination].nil?
+
+            unit = intent[:combatant]
+            pose = destination_pose(intent)
+            contact_id = charge_contact_id_for(intent)
+            next if space.except(unit[:entity_id]).translation_clear?(unit, unit, pose, contact_id: contact_id)
+
+            fresh = Decisions::Movement.build_approach_intent(
+              combatant: unit,
+              nearest: intent[:nearest],
+              obstacles: world,
+              enemies: enemies,
+              contact_slot: intent[:contact_slot],
+              allow_ally_bypass: false,
+              approach_mode: intent[:approach_mode] || :direct,
+              terrain: terrain,
+              chargeable: !contact_id.nil?
+            )
+            if fresh.nil? || fresh[:wait] || fresh[:destination].nil?
+              intent[:wait] = true
+              intent[:destination] = nil
+              intent[:plan] = (intent[:plan] || {}).merge(
+                blocked_by_ally: true,
+                blocker: stayers.first.slice(:entity_id, :name)
+              )
+            else
+              intent[:plan] = fresh[:plan]
+              intent[:destination] = fresh[:destination]
+              intent[:budget] = fresh[:budget]
+              intent[:march_meta] = fresh[:march_meta]
+              intent[:charge_contact_id] = fresh[:charge_contact_id] if fresh.key?(:charge_contact_id)
+            end
+          end
         end
 
         # After paid approach reaches ENGAGE, freely wheel to press fronts (no slide, no MV cost).

@@ -6,6 +6,13 @@ module Sim
 
         def play_start(acting_side:, target_side:, round_number:, terrain: [], **)
           phase = AttackResolution.create_phase("start", "Фаза начала")
+          Rules.for(:turn).before_play!(
+            phase: phase,
+            acting_side: acting_side,
+            target_side: target_side,
+            round_number: round_number,
+            terrain: terrain
+          )
           routed = acting_side[:combatants].select { |combatant| combatant[:current_health].to_i > 0 && combatant[:is_routing] }
           if routed.empty?
             AttackResolution.add_event(phase, "Бегущих отрядов нет.")

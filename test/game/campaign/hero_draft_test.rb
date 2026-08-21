@@ -7,7 +7,8 @@ class SimCampaignHeroDraftTest < ActiveSupport::TestCase
       campaign: campaign,
       catalog: catalog,
       player_id: "player-1",
-      faction_id: catalog.factions.first[:id]
+      faction_id: catalog.factions.first[:id],
+      school_key: starter_school_key(catalog.factions.first[:id])
     ).value
     @hero = @campaign.find_player("player-1")[:roster].find { |entity| entity[:kind] == "hero" }
   end

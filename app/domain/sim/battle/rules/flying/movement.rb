@@ -41,7 +41,7 @@ module Sim
           end
 
           def choose_charge(combatant, enemies, claimed, terrain = [])
-            budget = combatant[:movement].to_f
+            budget = Decisions::Movement.budget_for(combatant, enemies: enemies)
             return nil if budget <= 0.05
 
             ordered = Pathing.active_units(enemies).select do |enemy|
@@ -68,7 +68,7 @@ module Sim
           end
 
           def choose_setup(combatant, enemies, claimed, terrain = [])
-            budget = combatant[:movement].to_f
+            budget = Decisions::Movement.budget_for(combatant, enemies: enemies)
             return nil if budget <= 0.05
 
             living = Pathing.active_units(enemies)
@@ -105,7 +105,7 @@ module Sim
 
           # Out of setup/charge range: still close toward rear/flank, staying off enemy front arcs.
           def choose_approach(combatant, enemies, claimed, terrain = [])
-            budget = combatant[:movement].to_f
+            budget = Decisions::Movement.budget_for(combatant, enemies: enemies)
             return nil if budget <= 0.05
 
             living = Pathing.active_units(enemies)
@@ -142,7 +142,7 @@ module Sim
             return nil unless nearest
             return nil if Decisions::Movement.engaged?(combatant, nearest)
 
-            budget = combatant[:movement].to_f
+            budget = Decisions::Movement.budget_for(combatant, enemies: enemies)
             return nil if budget <= 0.05
 
             case approach_mode

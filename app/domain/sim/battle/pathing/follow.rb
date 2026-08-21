@@ -22,12 +22,23 @@ module Sim
           last = nil
           maneuver = :advance
           multiplier = nil
+          goal = thread[:complete] ? points.last : goal_unit
 
           (0...(points.length - 1)).each do |index|
             break if remaining <= 0.05
 
             dest = points[index + 1]
             next if same?(pose, dest)
+
+            nxt = points[index + 2]
+            # A wrap vertex opposite the next hop is a clearance artifact, not a facing target.
+            if index.zero? && nxt &&
+                Geometry::Battlefield.shortest_facing_delta(
+                  Geometry::Battlefield.heading_to(pose, dest),
+                  Geometry::Battlefield.heading_to(pose, nxt)
+                ).abs >= 90.0
+              next
+            end
 
             last_segment = index == points.length - 2
             at_contact = thread[:complete] && last_segment
@@ -45,8 +56,8 @@ module Sim
               flying: flying,
               kernels: space.kernels,
               march_allowed: can_march,
-              finish: points.last,
-              allow_turn: index.zero?
+              finish: goal || points.last,
+              allow_turn: last.nil?
             )
             break unless plan && plan[:pose]
 
