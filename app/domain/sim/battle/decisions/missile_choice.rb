@@ -116,6 +116,8 @@ module Sim
             spell_range: contributor[:spell_range] || host[:spell_range],
             shooting_template: contributor[:shooting_template] || host[:shooting_template],
             spell_template: contributor[:spell_template] || host[:spell_template],
+            magic_school: contributor[:magic_school],
+            spell_keys: Array(contributor[:spell_keys]),
             requires_line_of_sight: contributor.key?(:requires_line_of_sight) ? contributor[:requires_line_of_sight] : host[:requires_line_of_sight],
             missile_attacks: contributor[:missile_attacks] || host[:missile_attacks] || 1,
             initiative: contributor[:initiative] || host[:initiative],

@@ -7,7 +7,11 @@ class GamesApplyCommandTest < ActiveSupport::TestCase
       game: game,
       command: :assign_faction,
       base_version: 0,
-      params: { player_id: "player-1", faction_id: catalog.factions.first[:id] }
+      params: {
+        player_id: "player-1",
+        faction_id: catalog.factions.first[:id],
+        school_key: starter_school_key(catalog.factions.first[:id])
+      }
     )
 
     assert result.ok?

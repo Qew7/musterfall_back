@@ -8,7 +8,7 @@ module Sim
 
         module_function
 
-        def seekers(acting_side:, target_side:, round_number:)
+        def seekers(acting_side:, target_side:, round_number:, terrain: [])
           enemies = target_side[:combatants]
           all = acting_side[:combatants] + enemies
           Roles.active(acting_side[:combatants]).select do |host|
@@ -19,7 +19,11 @@ module Sim
             next true if under_missile_threat?(host, enemies)
             next false unless Roles.missile_seeker?(host)
 
-            !cheap_opens_shot?(host, enemies, all)
+            !cheap_opens_shot?(
+              host, enemies, all,
+              acting_side: acting_side, target_side: target_side,
+              terrain: terrain, round_number: round_number
+            )
           end
         end
 
@@ -30,10 +34,16 @@ module Sim
           budget = Decisions::Movement.budget_for(combatant, enemies: enemies)
           return nil if budget <= 0.05
 
-          mode = primary_mode(combatant, enemies, all, round_number)
+          mode = primary_mode(
+            combatant, enemies, all, round_number,
+            acting_side: acting_side, target_side: target_side, terrain: terrain
+          )
           march_meta = Decisions::Movement.budget_meta(combatant, enemies: enemies)
 
-          candidate_goals(combatant, allies, enemies, all, round_number, mode, terrain: terrain).each do |goal|
+          candidate_goals(
+            combatant, allies, enemies, all, round_number, mode,
+            acting_side: acting_side, target_side: target_side, terrain: terrain, budget: budget
+          ).each do |goal|
             plan = Pathing.plan_approach(
               origin: combatant,
               goal_point: goal,
@@ -54,7 +64,10 @@ module Sim
             unless mode == :escape_charge
               candidate, plan = face_if_clear(combatant, candidate, plan, budget, enemies, all, obstacles)
             end
-            next unless improves?(combatant, candidate, allies, enemies, all, mode)
+            next unless improves?(
+              combatant, candidate, allies, enemies, all, mode,
+              acting_side: acting_side, target_side: target_side, terrain: terrain, round_number: round_number
+            )
 
             # First improving pose for the primary need is enough — no combinatorial search.
             return intent_for(combatant, candidate, plan, budget, enemies, all, march_meta: march_meta)
@@ -65,19 +78,42 @@ module Sim
           hold_wheel_intent(combatant, allies, enemies, all, budget, obstacles)
         end
 
-        def primary_mode(combatant, enemies, all, _round_number)
+        def primary_mode(combatant, enemies, all, round_number, acting_side:, target_side:, terrain: [])
           return :escape_charge if in_charge_danger?(combatant, enemies)
           return :leave_shot if under_missile_threat?(combatant, enemies)
-          return :open_los if Roles.missile_seeker?(combatant) && !cheap_opens_shot?(combatant, enemies, all)
+          if Rules::Wizard::Movement.caster?(combatant) &&
+              !Rules::Wizard::Movement.opens_cast?(
+                combatant,
+                acting_side: acting_side,
+                target_side: target_side,
+                terrain: terrain,
+                round_number: round_number
+              )
+            return :cast_seek
+          end
+          return :open_los if Roles.missile_seeker?(combatant) && !cheap_opens_shot?(
+            combatant, enemies, all,
+            acting_side: acting_side, target_side: target_side,
+            terrain: terrain, round_number: round_number
+          )
 
           :hold
         end
 
-        def candidate_goals(combatant, _allies, enemies, all, round_number, mode, terrain: [])
+        def candidate_goals(combatant, _allies, enemies, all, round_number, mode,
+          acting_side:, target_side:, terrain: [], budget: 0.0)
           goals =
             case mode
             when :escape_charge then escape_charge_goals(combatant, enemies)
             when :leave_shot then leave_shot_goals(combatant, enemies)
+            when :cast_seek
+              Rules::Wizard::Movement.seek_goals(
+                combatant,
+                acting_side: acting_side,
+                target_side: target_side,
+                budget: budget,
+                terrain: terrain
+              )
             when :open_los then open_los_goals(combatant, enemies, all, terrain: terrain)
             else []
             end
@@ -217,7 +253,8 @@ module Sim
           }
         end
 
-        def improves?(origin, candidate, allies, enemies, all, mode = nil)
+        def improves?(origin, candidate, allies, enemies, all, mode = nil,
+          acting_side: nil, target_side: nil, terrain: [], round_number: 1)
           case mode
           when :escape_charge
             return !in_charge_danger?(candidate, enemies) if in_charge_danger?(origin, enemies)
@@ -225,14 +262,31 @@ module Sim
             false
           when :leave_shot
             missile_threat_count(candidate, enemies) < missile_threat_count(origin, enemies)
+          when :cast_seek
+            Rules::Wizard::Movement.improves_seek?(
+              origin,
+              candidate,
+              acting_side: acting_side,
+              target_side: target_side,
+              terrain: terrain,
+              round_number: round_number
+            )
           when :open_los, :hold
-            return true if cheap_opens_shot?(candidate, enemies, replace_unit(all, candidate)) &&
-              !cheap_opens_shot?(origin, enemies, all)
+            board = replace_unit(all, candidate)
+            return true if cheap_opens_shot?(
+              candidate, enemies, board,
+              acting_side: acting_side, target_side: target_side,
+              terrain: terrain, round_number: round_number
+            ) && !cheap_opens_shot?(
+              origin, enemies, all,
+              acting_side: acting_side, target_side: target_side,
+              terrain: terrain, round_number: round_number
+            )
 
             false
           else
-            before = snapshot_metrics(origin, enemies, all)
-            after = snapshot_metrics(candidate, enemies, replace_unit(all, candidate))
+            before = snapshot_metrics(origin, enemies, all, acting_side: acting_side, target_side: target_side, terrain: terrain, round_number: round_number)
+            after = snapshot_metrics(candidate, enemies, replace_unit(all, candidate), acting_side: acting_side, target_side: target_side, terrain: terrain, round_number: round_number)
             return true if after[:charge] > before[:charge]
             return true if after[:threat] < before[:threat]
             return true if after[:shot] > before[:shot]
@@ -241,11 +295,15 @@ module Sim
           end
         end
 
-        def snapshot_metrics(pose_unit, enemies, all)
+        def snapshot_metrics(pose_unit, enemies, all, acting_side: nil, target_side: nil, terrain: [], round_number: 1)
           {
             charge: in_charge_danger?(pose_unit, enemies) ? 0 : 1,
             threat: missile_threat_count(pose_unit, enemies),
-            shot: cheap_opens_shot?(pose_unit, enemies, all) ? 1 : 0
+            shot: cheap_opens_shot?(
+              pose_unit, enemies, all,
+              acting_side: acting_side, target_side: target_side,
+              terrain: terrain, round_number: round_number
+            ) ? 1 : 0
           }
         end
 
@@ -309,24 +367,45 @@ module Sim
           end
         end
 
-        def cheap_opens_shot?(pose_unit, enemies, all_combatants)
+        def cheap_opens_shot?(pose_unit, enemies, all_combatants,
+          acting_side: nil, target_side: nil, terrain: [], round_number: 1)
           board = replace_unit(all_combatants, pose_unit)
+          acting_side ||= sides_from(pose_unit, board).fetch(:acting_side)
+          target_side ||= sides_from(pose_unit, board).fetch(:target_side)
           actors_for(pose_unit).any? do |actor|
             posed = actor.merge(x: pose_unit[:x], y: pose_unit[:y], facing: pose_unit[:facing])
             can_shoot = posed[:ranged].to_i > 0
             can_cast = posed[:spell].to_i > 0
             next false unless can_shoot || can_cast
 
+            if can_cast && Rules::Wizard::Movement.opens_cast?(
+              pose_unit,
+              acting_side: acting_side,
+              target_side: target_side,
+              terrain: terrain,
+              round_number: round_number
+            )
+              next true
+            end
+            next false unless can_shoot
+
             Roles.standing(enemies).any? do |enemy|
               next false if Targeting.in_melee_combat?(enemy, board)
-              next true if can_cast
-
               next false if Rules.for(:shooting).requires_front_arc_for_ranged?(posed) &&
                 !Geometry::Battlefield.in_front_arc?(posed, enemy, posed[:facing])
 
               Geometry::Battlefield.line_of_sight_blockers(posed, enemy, board).empty?
             end
           end
+        end
+
+        def sides_from(pose_unit, board)
+          allies = board.select { |entry| entry[:side_key] == pose_unit[:side_key] }
+          foes = board.reject { |entry| entry[:side_key] == pose_unit[:side_key] }
+          {
+            acting_side: { side_key: pose_unit[:side_key], combatants: allies },
+            target_side: { side_key: foes.first&.dig(:side_key) || "right", combatants: foes }
+          }
         end
 
         def preferred_facing(pose_unit, enemies, _all_combatants = nil)

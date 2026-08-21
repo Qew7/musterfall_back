@@ -26,6 +26,8 @@ module Sim
 
         round[:events].concat(State.apply_faction_passives!(battle[:sides][:left]))
         round[:events].concat(State.apply_faction_passives!(battle[:sides][:right]))
+        round[:events].concat(State.resolve_summons_end_round!(battle[:sides][:left]))
+        round[:events].concat(State.resolve_summons_end_round!(battle[:sides][:right]))
         round
       end
     end

@@ -29,7 +29,16 @@ module Sim
           faction = @rng.pick(pool)
           next unless faction
 
-          result = AssignFaction.call(campaign: @campaign, catalog: @catalog, player_id: player[:id], faction_id: faction[:id])
+          default_hero = @catalog.hero_templates(faction[:id]).first
+          school_key = @rng.pick(Battle::Spells.schools_for(faction[:id])) if default_hero&.dig(:abilities)&.include?("wizard")
+          result = AssignFaction.call(
+            campaign: @campaign,
+            catalog: @catalog,
+            player_id: player[:id],
+            faction_id: faction[:id],
+            rng: @rng,
+            school_key: school_key
+          )
           @campaign = result.value if result.ok?
         end
       end
@@ -54,7 +63,13 @@ module Sim
           selected = @rng.pick(affordable)
           break unless selected
 
-          result = Recruit.call(campaign: @campaign, catalog: @catalog, player_id: player[:id], template_id: selected[:id])
+          result = Recruit.call(
+            campaign: @campaign,
+            catalog: @catalog,
+            player_id: player[:id],
+            template_id: selected[:id],
+            rng: @rng
+          )
           break unless result.ok?
 
           @campaign = result.value

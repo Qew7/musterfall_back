@@ -12,7 +12,8 @@ module Sim
             Charge::Melee,
             Ferocious::Melee,
             Steadfast::Melee,
-            Skirmisher::Melee
+            Skirmisher::Melee,
+            MagicEffects::Melee
           ]
         },
         shooting: -> {
@@ -22,7 +23,8 @@ module Sim
             Blast::Shooting,
             Machine::Shooting,
             Steadfast::Melee,
-            Skirmisher::Melee
+            Skirmisher::Melee,
+            MagicEffects::Shooting
           ]
         },
         morale: -> {
@@ -35,7 +37,8 @@ module Sim
         },
         setup: -> { [ BannerAura::Setup, SteadfastAura::Setup ] },
         round: -> { [ Undead::Round ] },
-        movement: -> { [ March::Movement, Flying::Movement ] }
+        turn: -> { [ MagicEffects::Turn ] },
+        movement: -> { [ March::Movement, Flying::Movement, Wizard::Movement, MagicEffects::Movement ] }
       }.freeze
 
       def for(phase)
@@ -60,6 +63,18 @@ module Sim
         def before_play!(ctx)
           @rules.each do |rule|
             rule.before_play!(ctx) if rule.respond_to?(:before_play!)
+          end
+        end
+
+        def after_play!(ctx)
+          @rules.each do |rule|
+            rule.after_play!(ctx) if rule.respond_to?(:after_play!)
+          end
+        end
+
+        def after_hit!(ctx)
+          @rules.each do |rule|
+            rule.after_hit!(ctx) if rule.respond_to?(:after_hit!)
           end
         end
 
@@ -130,6 +145,20 @@ module Sim
           return true if voters.empty?
 
           voters.all? { |rule| rule.requires_front_arc_for_ranged?(attacker) }
+        end
+
+        def allow_target?(attacker, target, attack_type)
+          @rules.all? do |rule|
+            !rule.respond_to?(:allow_target?) || rule.allow_target?(attacker, target, attack_type)
+          end
+        end
+
+        def hit_chance_factor(attacker, defender, attack_type)
+          @rules.reduce(1.0) do |factor, rule|
+            next factor unless rule.respond_to?(:hit_chance_factor)
+
+            factor * rule.hit_chance_factor(attacker, defender, attack_type).to_f
+          end
         end
 
         def apply_attach!(host_ctx)

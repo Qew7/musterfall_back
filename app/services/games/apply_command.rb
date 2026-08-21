@@ -6,15 +6,20 @@ module Games
           campaign: campaign,
           catalog: catalog,
           player_id: params.fetch(:player_id),
-          faction_id: params.fetch(:faction_id)
+          faction_id: params.fetch(:faction_id),
+          rng: rng,
+          school_key: params[:school_key],
+          template_id: params[:template_id]
         )
       },
-      recruit: ->(campaign, catalog, _rng, params) {
+      recruit: ->(campaign, catalog, rng, params) {
         Sim::Campaign::Recruit.call(
           campaign: campaign,
           catalog: catalog,
           player_id: params.fetch(:player_id),
-          template_id: params.fetch(:template_id)
+          template_id: params.fetch(:template_id),
+          rng: rng,
+          school_key: params[:school_key]
         )
       },
       dismiss: ->(campaign, _catalog, _rng, params) {

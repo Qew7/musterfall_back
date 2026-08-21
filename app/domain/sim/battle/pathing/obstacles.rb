@@ -251,17 +251,27 @@ module Sim
         def minkowski_points(mover, kernel)
           mhw, mhd = Geometry::Obb.half_sizes(mover)
           half = [ mhw, mhd ].max
-          [ half + PAD, (2 * half) + PAD ].flat_map do |clearance|
-            ihw = kernel.hw + clearance
-            ihd = kernel.hd + clearance
-            corners = 4.times.map { |index| Geometry::Obb.corner(kernel.x, kernel.y, ihw, ihd, kernel.c, kernel.s, index) }
-            mids = 4.times.map do |index|
-              a = corners[index]
-              b = corners[(index + 1) % 4]
-              [ (a[0] + b[0]) * 0.5, (a[1] + b[1]) * 0.5 ]
-            end
-            (corners + mids).map { |x, y| { x: x, y: y } }
+          radius = Math.hypot(mhw, mhd)
+          points = [ half + PAD, (2 * half) + PAD ].flat_map { |clearance| ring_points(kernel, clearance, :both) }
+          # ponytail: hypot corners so a wide tray's diagonal clears; face mids stay at max(half).
+          points.concat(ring_points(kernel, radius + PAD, :corners)) if radius > half + 0.05 &&
+            kernel.source[:obstacle_kind] == :terrain
+          points
+        end
+
+        def ring_points(kernel, clearance, parts)
+          ihw = kernel.hw + clearance
+          ihd = kernel.hd + clearance
+          corners = 4.times.map { |index| Geometry::Obb.corner(kernel.x, kernel.y, ihw, ihd, kernel.c, kernel.s, index) }
+          mids = 4.times.map do |index|
+            a = corners[index]
+            b = corners[(index + 1) % 4]
+            [ (a[0] + b[0]) * 0.5, (a[1] + b[1]) * 0.5 ]
           end
+          body = []
+          body.concat(corners) if parts != :mids
+          body.concat(mids) if parts != :corners
+          body.map { |x, y| { x: x, y: y } }
         end
 
         def wheeled_to?(mover, heading, to, contact_id)

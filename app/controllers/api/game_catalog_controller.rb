@@ -10,7 +10,8 @@ module Api
         units: Unit.includes(:faction, :abilities_records).order(:name).map { |template| serialize_template(template) },
         heroes: Hero.includes(:faction, :abilities_records).order(:name).map { |template| serialize_template(template) },
         abilities: Ability.order(:key).map { |ability| serialize_ability(ability) },
-        hero_upgrades: HeroUpgrade.order(:position).map { |upgrade| serialize_upgrade(upgrade) }
+        hero_upgrades: HeroUpgrade.order(:position).map { |upgrade| serialize_upgrade(upgrade) },
+        magicSchools: serialize_magic_schools
       }
     end
 
@@ -24,7 +25,8 @@ module Api
         passive: faction.passive,
         color: faction.color,
         unitPool: faction.units.map(&:template_key),
-        heroPool: faction.heroes.map(&:template_key)
+        heroPool: faction.heroes.map(&:template_key),
+        magicSchoolIds: Sim::Battle::Spells.schools_for(faction.slug).map(&:to_s)
       }
     end
 
@@ -86,6 +88,13 @@ module Api
         category: upgrade.category,
         summary: upgrade.summary
       }
+    end
+
+    def serialize_magic_schools
+      Faction.order(:position)
+        .flat_map { |faction| Sim::Battle::Spells.schools_for(faction.slug) }
+        .uniq
+        .map { |key| Sim::Battle::Spells.serialize_school(key) }
     end
   end
 end

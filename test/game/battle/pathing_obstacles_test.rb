@@ -74,6 +74,30 @@ class SimBattlePathingObstaclesTest < ActiveSupport::TestCase
     refute world.wheel_clear?(mover, 270.0)
   end
 
+  test "wrap vertices sit outside the tray circumradius so corners clear the obstacle" do
+    mover = BattleScenarios.combatant(
+      x: 8.0, y: 12.0, facing: 0.0, base_width: 5.0, base_depth: 4.0
+    )
+    lake = BattleScenarios.terrain(id: "lake", type: "lake", x: 16.0, y: 12.0, width: 3.0, depth: 2.4)
+    world = Obstacles.merge([ mover ], [ lake ])
+    lake_obs = BF.feature_as_obstacle(lake)
+    vertices = world.wrap_vertices(mover)
+
+    assert vertices.any?, "expected Minkowski wrap vertices around the lake"
+    vertices.each do |vertex|
+      pose = mover.merge(x: vertex[:x], y: vertex[:y])
+      refute BF.rectangles_overlap?(pose, lake_obs), vertex.inspect
+    end
+
+    corners = vertices.select { |vertex| (vertex[:x] - 16.0).abs > 2.0 && (vertex[:y] - 12.0).abs > 2.0 }
+    assert corners.any?, "expected hypot-offset corners, got #{vertices.inspect}"
+    corners.each do |vertex|
+      heading = BF.heading_to(mover, vertex)
+      pose = mover.merge(x: vertex[:x], y: vertex[:y], facing: heading)
+      refute BF.rectangles_overlap?(pose, lake_obs), vertex.inspect
+    end
+  end
+
   test "wrap_vertices omit a vertex whose tray hangs off the board" do
     mover = BattleScenarios.combatant(
       entity_id: "unit-36", x: 4.0, y: 4.0, facing: 0.0,

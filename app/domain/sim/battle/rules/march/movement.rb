@@ -19,6 +19,13 @@ module Sim
             return {} unless applies?(combatant)
 
             clearance = CONFIG[:march_clearance_inches].to_f
+            if SpellEffects.status?(combatant, :no_march)
+              return {
+                march: "blocked",
+                march_clearance: clearance,
+                march_blocker_name: "магические путы"
+              }
+            end
             blocker = nearest_blocker(combatant, ctx[:enemies], clearance: clearance)
             if blocker
               {

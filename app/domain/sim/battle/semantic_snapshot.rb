@@ -62,6 +62,17 @@ module Sim
             blocked_by_ally: maneuver[:blocked_by_ally]
           ),
           damage: action[:damage] || action[:models_lost],
+          spell: action[:spell_key] && compact_hash(
+            key: action[:spell_key],
+            school: action[:magic_school],
+            dice: action[:dice],
+            total: action[:casting_total],
+            value: action[:casting_value],
+            outcome: action[:outcome],
+            affected_ids: Array(action[:affected_ids]).sort,
+            summon_ids: Array(action[:summon_ids]).sort,
+            terrain_delta: action[:terrain_delta]
+          ),
           morale: compact_hash(
             roll: action.dig(:check, :roll),
             threshold: action.dig(:check, :threshold),

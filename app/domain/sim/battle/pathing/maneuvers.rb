@@ -34,8 +34,9 @@ module Sim
           end
         end
 
-        # Turn when the segment is a 90° reform, or when a wheel to this heading
+        # Turn when the goal is a 90° reform, or when a wheel to this heading
         # cannot complete at the current frontage (arc cost or swing clearance).
+        # `finish` must be the enemy/contact, not a wrap vertex beside the tray.
         def turn_for?(origin, heading, budget, finish, space, contact_id)
           delta = Geometry::Battlefield.shortest_facing_delta(origin[:facing], heading)
           return false unless Geometry::Battlefield.turn_delta?(delta)

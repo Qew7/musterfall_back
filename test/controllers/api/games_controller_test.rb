@@ -1,6 +1,63 @@
 require "test_helper"
 
 class Api::GamesControllerTest < ActionDispatch::IntegrationTest
+  test "assign faction accepts a starter wizard school and returns its authoritative loadout" do
+    post "/api/games", params: { game: { player_count: 2 } }
+    game_id = response.parsed_body.fetch("id")
+    faction_id = catalog.factions.find do |faction|
+      catalog.hero_templates(faction[:id]).first&.dig(:abilities)&.include?("wizard")
+    end[:id]
+
+    with_spell_api(
+      schools: %i[necromancy shadow],
+      spell_keys: %i[raise_dead soul_drain grave_call]
+    ) do
+      post "/api/games/#{game_id}/assign_faction", params: {
+        base_version: 0,
+        player_id: "player-1",
+        faction_id: faction_id,
+        school_key: "necromancy"
+      }
+    end
+
+    assert_response :success
+    hero = response.parsed_body.dig("campaign", "players", 0, "roster", 0, "components", "hero")
+    assert_equal "necromancy", hero.fetch("magicSchool")
+    assert_equal 2, hero.fetch("spellKeys").uniq.length
+  end
+
+  test "recruit accepts a wizard school and returns its authoritative loadout" do
+    faction = catalog.factions.find do |entry|
+      heroes = catalog.hero_templates(entry[:id])
+      !heroes.first&.dig(:abilities)&.include?("wizard") && heroes.any? { |hero| hero[:abilities].include?("wizard") }
+    end
+    wizard = catalog.hero_templates(faction[:id]).find { |hero| hero[:abilities].include?("wizard") }
+    post "/api/games", params: { game: { player_count: 2 } }
+    game_id = response.parsed_body.fetch("id")
+    post "/api/games/#{game_id}/assign_faction", params: {
+      base_version: 0,
+      player_id: "player-1",
+      faction_id: faction[:id]
+    }
+
+    with_spell_api(
+      schools: %i[pyromancy celestial],
+      spell_keys: %i[fireball inferno cinder_shield]
+    ) do
+      post "/api/games/#{game_id}/recruit", params: {
+        base_version: 1,
+        player_id: "player-1",
+        template_id: wizard[:id],
+        school_key: "pyromancy"
+      }
+    end
+
+    assert_response :success
+    hero = response.parsed_body.dig("campaign", "players", 0, "roster").last
+    assert_equal "pyromancy", hero.dig("components", "hero", "magicSchool")
+    assert_equal 2, hero.dig("components", "hero", "spellKeys").uniq.length
+  end
+
   test "stores nested battle reports in the same snapshot request" do
     post "/api/games", params: {
       game: {

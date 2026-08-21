@@ -905,7 +905,7 @@
     "action_counts": {
       "magic": 6,
       "morale": 6,
-      "movement": 18,
+      "movement": 16,
       "shooting": 9
     },
     "contacts": [],
@@ -1259,9 +1259,9 @@
           "facing": 199.87
         },
         "to": {
-          "x": 27.749,
-          "y": 16.909,
-          "facing": 200.82
+          "x": 27.112,
+          "y": 17.192,
+          "facing": 187.27
         },
         "maneuver": {
           "kind": "bypass",
@@ -1385,14 +1385,14 @@
         "actor_id": "unit-14",
         "target_id": "unit-10",
         "from": {
-          "x": 27.281,
-          "y": 16.731,
-          "facing": 200.82
+          "x": 26.616,
+          "y": 17.129,
+          "facing": 187.27
         },
         "to": {
-          "x": 25.173,
-          "y": 16.067,
-          "facing": 178.4
+          "x": 23.894,
+          "y": 16.929,
+          "facing": 179.68
         },
         "maneuver": {
           "kind": "wheel",
@@ -1459,33 +1459,6 @@
           "x": 4.25,
           "y": 18.5,
           "facing": 270.0
-        },
-        "maneuver": {
-          "kind": "blocked_by_ally",
-          "truncated": false,
-          "avoided": true,
-          "blocked_by_ally": true
-        },
-        "morale": {},
-        "trace": {
-          "version": 1,
-          "result": "blocked_by_ally"
-        }
-      },
-      {
-        "path": "R5/T1/movement/A2",
-        "type": "movement",
-        "actor_id": "unit-34",
-        "target_id": "unit-14",
-        "from": {
-          "x": 4.25,
-          "y": 13.5,
-          "facing": 90.0
-        },
-        "to": {
-          "x": 4.25,
-          "y": 13.5,
-          "facing": 90.0
         },
         "maneuver": {
           "kind": "blocked_by_ally",
@@ -1572,9 +1545,9 @@
         "type": "morale",
         "actor_id": "unit-14",
         "from": {
-          "x": 24.673,
-          "y": 16.081,
-          "facing": 178.4
+          "x": 23.394,
+          "y": 16.931,
+          "facing": 179.68
         },
         "maneuver": {},
         "damage": 0,
@@ -1610,16 +1583,16 @@
         "path": "R5/T2/movement/A1",
         "type": "movement",
         "actor_id": "unit-14",
-        "target_id": "unit-9",
+        "target_id": "unit-10",
         "from": {
-          "x": 24.673,
-          "y": 16.081,
-          "facing": 178.4
+          "x": 23.394,
+          "y": 16.931,
+          "facing": 179.68
         },
         "to": {
-          "x": 22.13,
-          "y": 15.86,
-          "facing": 190.88
+          "x": 20.429,
+          "y": 16.983,
+          "facing": 178.66
         },
         "maneuver": {
           "kind": "wheel",
@@ -1666,33 +1639,6 @@
         }
       },
       {
-        "path": "R6/T1/movement/A2",
-        "type": "movement",
-        "actor_id": "unit-34",
-        "target_id": "unit-12",
-        "from": {
-          "x": 4.25,
-          "y": 13.5,
-          "facing": 90.0
-        },
-        "to": {
-          "x": 4.25,
-          "y": 13.5,
-          "facing": 90.0
-        },
-        "maneuver": {
-          "kind": "blocked_by_ally",
-          "truncated": false,
-          "avoided": true,
-          "blocked_by_ally": true
-        },
-        "morale": {},
-        "trace": {
-          "version": 1,
-          "result": "blocked_by_ally"
-        }
-      },
-      {
         "path": "R6/T1/magic/A1",
         "type": "magic",
         "actor_id": "hero-2",
@@ -1710,14 +1656,14 @@
         "type": "morale",
         "actor_id": "unit-14",
         "from": {
-          "x": 21.639,
-          "y": 15.766,
-          "facing": 190.88
+          "x": 19.929,
+          "y": 16.994,
+          "facing": 178.66
         },
         "to": {
-          "x": 24.555,
-          "y": 16.472,
-          "facing": 13.61
+          "x": 22.046,
+          "y": 17.758,
+          "facing": 19.83
         },
         "maneuver": {},
         "damage": 0,
@@ -1765,14 +1711,14 @@
         "type": "morale",
         "actor_id": "unit-14",
         "from": {
-          "x": 24.555,
-          "y": 16.472,
-          "facing": 13.61
+          "x": 22.046,
+          "y": 17.758,
+          "facing": 19.83
         },
         "to": {
-          "x": 24.555,
-          "y": 16.472,
-          "facing": 13.61
+          "x": 22.046,
+          "y": 17.758,
+          "facing": 19.83
         },
         "maneuver": {},
         "damage": 0,

@@ -44,6 +44,7 @@ module Sim
 
         def can_target_missile?(attacker, target, attack_type, all_combatants, terrain: [])
           return false if in_melee_combat?(target, all_combatants)
+          return false unless Rules.for(:shooting).allow_target?(attacker, target, attack_type)
           return true if attack_type == "magic"
 
           can_target_ranged?(attacker, target, all_combatants, terrain: terrain)

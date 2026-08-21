@@ -45,10 +45,6 @@ module Sim
             }
           end
 
-          def player_summary(actor, target, models_hit, damage)
-            "#{Phases::AttackResolution.format_actor(actor[:actor_role], actor[:actor_name])} выдыхает пламя на #{target[:name]}: #{models_hit} моделей под шаблоном, #{damage} урона."
-          end
-
           def resolve_missile_strike!(phase:, actor:, host:, profile:, primary:, vector:, victims:, attack_type:, acting_side:, target_side:, round_number:, blockers:)
             victims.each do |victim_entry|
               victim = victim_entry[:target]
@@ -72,8 +68,7 @@ module Sim
                 target_side: target_side,
                 blockers: blockers,
                 victims: victims,
-                models_hit: models_hit,
-                breath: true
+                models_hit: models_hit
               )
             end
           end

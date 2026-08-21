@@ -18,11 +18,11 @@ module Api
     end
 
     def assign_faction
-      apply_command(:assign_faction, %i[player_id faction_id])
+      apply_command(:assign_faction, %i[player_id faction_id school_key template_id])
     end
 
     def recruit
-      apply_command(:recruit, %i[player_id template_id])
+      apply_command(:recruit, %i[player_id template_id school_key])
     end
 
     def dismiss
@@ -110,6 +110,7 @@ module Api
         :base_version,
         :player_id,
         :faction_id,
+        :school_key,
         :template_id,
         :entity_id,
         :hero_id,
