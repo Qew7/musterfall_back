@@ -23,6 +23,7 @@ module Sim
         return Result.failure("faction required") if player[:faction_id].blank?
         return Result.failure("template faction mismatch") unless template[:faction_id] == player[:faction_id]
         return Result.failure("insufficient treasury") if player[:treasury] < template[:cost]
+        return Result.failure("recruit slot unavailable") unless RecruitAccess.allowed?(player, @catalog, template)
 
         loadout = MagicLoadout.build(
           template: template,
@@ -33,12 +34,23 @@ module Sim
         return loadout if loadout.failure?
 
         factory = Entities::Factory.new(@catalog, id_sequence: { value: @campaign.id_sequence })
-        entity = template[:kind] == "hero" ? factory.create_hero(template[:id], player[:id]) : factory.create_unit(template[:id], player[:id])
+        entity =
+          if template[:kind] == "hero"
+            factory.create_hero(template[:id], player[:id], free: false, general: !roster_has_general?(player))
+          else
+            factory.create_unit(template[:id], player[:id])
+          end
         entity[:components][:hero]&.merge!(loadout.value)
         @campaign.id_sequence = factory.sequence_value
         player[:treasury] -= template[:cost]
         player[:roster] << entity
         Result.ok(@campaign)
+      end
+
+      private
+
+      def roster_has_general?(player)
+        Array(player[:roster]).any? { |entry| entry.dig(:components, :hero, :general) }
       end
     end
   end

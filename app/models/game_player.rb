@@ -6,6 +6,6 @@ class GamePlayer < ApplicationRecord
 
   validates :external_key, :name, :status, presence: true
   validates :status, inclusion: { in: STATUSES }
-  validates :treasury, :victories, :position, numericality: { greater_than_or_equal_to: 0 }
+  validates :treasury, :victories, :position, :recruit_access, numericality: { greater_than_or_equal_to: 0 }
   validates :external_key, uniqueness: { scope: :game_id }
 end

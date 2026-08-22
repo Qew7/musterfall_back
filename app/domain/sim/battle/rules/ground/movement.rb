@@ -115,8 +115,7 @@ module Sim
             return false if entry[:chargeable] == false
             return false if orbit_mode?(entry[:approach_mode])
 
-            budget = Decisions::Movement.budget_for(entry[:combatant], enemies: enemies)
-            entry[:distance] <= budget * Decisions::Movement::SETUP_RANGE_MV + Decisions::Movement::ENGAGE
+            Decisions::Movement.within_charge_range?(entry[:combatant], entry[:nearest], enemies: enemies)
           end
 
           def choose_immediate_charge(combatant, enemies, claimed, terrain = [])
@@ -262,7 +261,12 @@ module Sim
               Geometry::Battlefield.in_flank_arc?(combatant, nearest, combatant[:facing]) ||
               orbit_mode?(approach_mode)
 
-            budget = Decisions::Movement.budget_for(combatant, enemies: enemies)
+            charging = chargeable && Decisions::Movement.within_charge_range?(combatant, nearest, enemies: enemies)
+            budget = if charging
+              Decisions::Movement.charge_budget_for(combatant, enemies: enemies)
+            else
+              Decisions::Movement.budget_for(combatant, enemies: enemies)
+            end
             march_meta = Decisions::Movement.budget_meta(combatant, enemies: enemies)
             goal_point = approach_goal_point(
               combatant, nearest,
@@ -281,7 +285,8 @@ module Sim
               goal_unit: chargeable ? nearest : nil,
               terrain: terrain,
               flying: false,
-              march_allowed: march_meta[:march].to_s == "active"
+              # Charge already spends ×2; march on top would be ×4.
+              march_allowed: !charging && march_meta[:march].to_s == "active"
             )
             destination = plan[:pose]
             facing_changed = destination && Geometry::Battlefield.shortest_facing_delta(combatant[:facing], destination[:facing]).abs > 0.05

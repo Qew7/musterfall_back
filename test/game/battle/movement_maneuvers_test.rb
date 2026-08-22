@@ -209,6 +209,30 @@ class SimBattleMovementManeuversTest < ActiveSupport::TestCase
            "reformed onto wrap vertex facing=#{plan.dig(:pose, :facing)}"
   end
 
+  test "follow reforms 90 when a wheel into CONTACT-kissing terrain cannot start" do
+    actor = BattleScenarios.combatant(
+      entity_id: "hero-1", x: 11.81, y: 15.36, facing: 313.4,
+      base_width: 1.0, base_depth: 1.0, files: 1, ranks: 1, frontage: 1, movement: 3.0
+    )
+    enemy = BattleScenarios.enemy(
+      entity_id: "unit-20", x: 30.66, y: 6.24, facing: 218.4,
+      base_width: 4.0, base_depth: 2.0
+    )
+    lake = BattleScenarios.terrain(
+      id: "terrain-2", type: "lake", x: 14.76, y: 13.16, width: 3.74, depth: 3.99
+    )
+    world = Pathing::Obstacles.merge([ actor, enemy ], [ lake ])
+    plan = Pathing.plan_approach(
+      origin: actor, goal_point: enemy, budget: 3.0,
+      obstacles: world, contact_id: enemy[:entity_id], goal_unit: enemy, terrain: [ lake ]
+    )
+
+    assert BF.turn_delta?(BF.shortest_facing_delta(actor[:facing], plan[:pose][:facing])),
+           "expected a 90° reform, facing=#{plan.dig(:pose, :facing)}"
+    assert plan[:steps].any? { |step| step[:kind] == "turn" },
+           "expected a 90° reform, got #{Array(plan[:steps]).map { |step| step[:kind] }}"
+  end
+
   test "follow skips a wrap vertex that doubles back when the enemy is ahead" do
     actor = BattleScenarios.combatant(
       entity_id: "unit-10", x: 31.0, y: 11.0, facing: 180.0,

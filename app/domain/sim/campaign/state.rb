@@ -56,6 +56,8 @@ module Sim
           status: player[:status],
           factionId: player[:faction_id],
           treasury: player[:treasury],
+          recruitAccess: player[:recruit_access].to_i,
+          recruitStrategy: player[:recruit_strategy],
           roster: player[:roster].map { |entity| serialize_entity(entity) },
           victories: player[:victories],
           roundNotes: player[:round_notes]

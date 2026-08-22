@@ -45,6 +45,14 @@ module Api
       apply_command(:pick_hero_draft, %i[player_id hero_id upgrade_id])
     end
 
+    def upgrade_access
+      apply_command(:upgrade_access, %i[player_id])
+    end
+
+    def restore_unit
+      apply_command(:restore_unit, %i[player_id entity_id models])
+    end
+
     def prepare_round
       apply_command(:prepare_round, [])
     end
@@ -116,6 +124,7 @@ module Api
         :hero_id,
         :unit_id,
         :upgrade_id,
+        :models,
         :deploy_mode,
         :x,
         :y,

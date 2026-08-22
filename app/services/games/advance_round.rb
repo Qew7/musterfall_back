@@ -58,7 +58,8 @@ module Games
         settled = Sim::Campaign::SettleMatchups.call(
           campaign: plan_payload[:campaign],
           battles: battles,
-          byes: plan_payload[:byes]
+          byes: plan_payload[:byes],
+          rng: Sim::Rng::Seeded.new(base_seed + 91)
         )
         return settled if settled.failure?
 

@@ -32,7 +32,7 @@ module Sim
         Footprint.sync_entity!(entity)
       end
 
-      def create_hero(template_id, owner_id, free: false)
+      def create_hero(template_id, owner_id, free: false, general: free)
         template = @catalog.template(template_id)
         raise ArgumentError, "unknown template" unless template && template[:kind] == "hero"
 
@@ -53,7 +53,7 @@ module Sim
             pending_draft: [],
             picked_upgrade_ids: []
           },
-          hero: { mounted: template[:mounted] },
+          hero: { mounted: template[:mounted], general: general },
           state_extra: { attached_to: nil, attached_slot: nil }
         )
         Footprint.sync_entity!(entity)

@@ -2,6 +2,7 @@ class ArmyTemplate < ApplicationRecord
   # `attacks` — только ближний бой. Для стрельбы/магии — `missile_attacks` (по умолчанию 1).
   validates :attacks, :missile_attacks, numericality: { greater_than: 0 }
   KINDS = %w[unit hero].freeze
+  RECRUIT_TIERS = %w[line elite rare].freeze
   ATTACK_TEMPLATES = %w[single volley blast breath].freeze
   MAX_FORMATION_FILES = 5
   MODEL_CLASSES = {
@@ -18,6 +19,7 @@ class ArmyTemplate < ApplicationRecord
   validates :template_key, :kind, :name, :armor_type, :weapon_type, presence: true
   validates :template_key, uniqueness: true
   validates :kind, inclusion: { in: KINDS }
+  validates :recruit_tier, inclusion: { in: RECRUIT_TIERS }
   validates :model_class, inclusion: { in: MODEL_CLASSES.keys }
   validates :cost, :models, :model_health, :width, :base_depth, :initiative, :movement, :morale, :skill, numericality: { greater_than: 0 }
   validates :width, numericality: { less_than_or_equal_to: MAX_FORMATION_FILES }

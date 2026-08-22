@@ -58,18 +58,27 @@ module Sim
       end
 
       def random_free_pose(rng, unit:, all_combatants:, terrain:, center:, radius: 8.0)
+        cx = center[:x].to_f
+        cy = center[:y].to_f
+        try = lambda do |x, y, facing|
+          candidate = unit.merge(x: x, y: y, facing: facing)
+          return nil unless inside_battlefield?(candidate)
+
+          obstacles = Pathing::Obstacles.around(candidate, units: all_combatants, terrain: terrain)
+          candidate if obstacles.clear?(candidate)
+        end
         30.times do
           angle = rng.rand * Math::PI * 2
           distance = rng.rand * radius.to_f
-          candidate = unit.merge(
-            x: center[:x].to_f + (Math.cos(angle) * distance),
-            y: center[:y].to_f + (Math.sin(angle) * distance),
-            facing: rng.rand(4) * 90.0
-          )
-          next unless inside_battlefield?(candidate)
-
-          obstacles = Pathing::Obstacles.around(candidate, units: all_combatants, terrain: terrain)
-          return candidate if obstacles.clear?(candidate)
+          found = try.call(cx + (Math.cos(angle) * distance), cy + (Math.sin(angle) * distance), rng.rand(4) * 90.0)
+          return found if found
+        end
+        [ 2.5, 4.0, 5.5, 7.0, radius.to_f ].uniq.each do |ring|
+          8.times do |index|
+            angle = index * Math::PI / 4.0
+            found = try.call(cx + (Math.cos(angle) * ring), cy + (Math.sin(angle) * ring), unit[:facing].to_f)
+            return found if found
+          end
         end
         nil
       end

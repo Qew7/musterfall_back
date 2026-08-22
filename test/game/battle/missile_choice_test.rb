@@ -19,6 +19,16 @@ class SimBattleMissileChoiceTest < ActiveSupport::TestCase
     assert_equal "magic", choice[:attack_type]
   end
 
+  test "magic beyond spell_range is not chosen" do
+    actor = missile_actor(ranged: 3, spell: 5, skill: 4, weapon_type: "slash")
+    enemies = [ enemy(armor_type: "light", models_remaining: 10, x: 24) ]
+
+    choice = Sim::Battle::Decisions::MissileChoice.choose_action(actor, enemies, enemies, 1)
+
+    refute_equal "magic", choice&.dig(:attack_type)
+    assert_equal "shooting", choice[:attack_type]
+  end
+
   test "prefers magic when expected damage is higher" do
     actor = missile_actor(ranged: 1, spell: 6, skill: 2, weapon_type: "ranged", abilities: [])
     enemies = [ enemy(armor_type: "magic", models_remaining: 8) ]

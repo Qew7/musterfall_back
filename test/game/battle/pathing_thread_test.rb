@@ -296,4 +296,41 @@ class SimBattlePathingThreadTest < ActiveSupport::TestCase
     refute_in_delta 270.0, landed[:facing], 15.0
     assert_operator landed[:x], :>=, actor[:x] - 0.05
   end
+
+  test "a 4x4 tray wheels north of a house whose Minkowski corner sits off the north edge" do
+    actor = BattleScenarios.combatant(
+      entity_id: "unit-19", x: 16.96, y: 19.87, facing: 358.9,
+      base_width: 4.0, base_depth: 4.0, files: 4, ranks: 4, movement: 3.0
+    )
+    enemy = BattleScenarios.enemy(
+      entity_id: "hero-2", x: 31.0, y: 19.0, facing: 180.0,
+      base_width: 1.0, base_depth: 1.0
+    )
+    house = BattleScenarios.terrain(
+      id: "terrain-3", type: "house", x: 25.76, y: 17.65, width: 3.32, depth: 2.1
+    )
+    world = Pathing::Obstacles.merge([ actor, enemy ], [ house ])
+    thread = Thread.pull(mover: actor, goal: enemy, world: world, contact_id: enemy[:entity_id])
+    house_obs = BF.feature_as_obstacle(house)
+
+    wrap = thread[:points][1]
+    assert wrap, "thread has no wrap vertex"
+    assert_operator wrap[:y], :>, actor[:y], "wrap #{wrap.inspect} goes into the house west face, not north"
+    thread[:points].each do |point|
+      pose = actor.merge(x: point[:x], y: point[:y])
+      refute BF.rectangles_overlap?(pose, house_obs), "thread vertex #{point.inspect} overlaps the house"
+    end
+
+    plan = Pathing.plan_approach(
+      origin: actor, goal_point: enemy, budget: 3.0,
+      obstacles: world, contact_id: enemy[:entity_id], goal_unit: enemy, terrain: [ house ]
+    )
+    landed = BF.merge_footprint(actor, plan[:pose])
+    refute BF.rectangles_overlap?(landed, house_obs)
+    kinds = Array(plan[:steps]).map { |step| step[:kind] }
+    assert_includes kinds, "wheel"
+    leftover = 3.0 - plan[:cost_spent].to_f
+    assert leftover <= 0.6, "leftover #{leftover} unused against the house corner"
+    assert_operator landed[:y], :>, actor[:y]
+  end
 end

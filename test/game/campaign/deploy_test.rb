@@ -6,6 +6,26 @@ class SimCampaignDeployTest < ActiveSupport::TestCase
     assign_first_faction!(@game)
     @campaign = Sim::Persistence::CampaignRepository.new.load(@game.reload)
     @hero_id = @campaign.find_player("player-1")[:roster].first[:id]
+    player = @campaign.find_player("player-1")
+    @template = catalog.unit_templates(player[:faction_id])
+      .select { |template| template[:recruit_tier] == "line" }
+      .min_by { |template| template[:cost] }
+  end
+
+  def recruit_commons!(count)
+    player = @campaign.find_player("player-1")
+    player[:treasury] = [ player[:treasury], @template[:cost] * count ].max
+    count.times do
+      result = Sim::Campaign::Recruit.call(
+        campaign: @campaign,
+        catalog: catalog,
+        player_id: "player-1",
+        template_id: @template[:id]
+      )
+      raise result.error unless result.ok?
+
+      @campaign = result.value
+    end
   end
 
   test "auto deploy places living entities out of reserve" do
@@ -16,13 +36,7 @@ class SimCampaignDeployTest < ActiveSupport::TestCase
   end
 
   test "transform rejects attached hero placement" do
-    template = catalog.unit_templates(@campaign.find_player("player-1")[:faction_id]).first
-    @campaign = Sim::Campaign::Recruit.call(
-      campaign: @campaign,
-      catalog: catalog,
-      player_id: "player-1",
-      template_id: template[:id]
-    ).value
+    recruit_commons!(1)
     unit_id = @campaign.find_player("player-1")[:roster].find { |entity| entity[:kind] == "unit" }[:id]
     @campaign = Sim::Campaign::AttachHero.call(
       campaign: @campaign,
@@ -49,19 +63,7 @@ class SimCampaignDeployTest < ActiveSupport::TestCase
   end
 
   test "transform rejects footprints packed inside melee contact" do
-    template = catalog.unit_templates(@campaign.find_player("player-1")[:faction_id]).first
-    @campaign = Sim::Campaign::Recruit.call(
-      campaign: @campaign,
-      catalog: catalog,
-      player_id: "player-1",
-      template_id: template[:id]
-    ).value
-    @campaign = Sim::Campaign::Recruit.call(
-      campaign: @campaign,
-      catalog: catalog,
-      player_id: "player-1",
-      template_id: template[:id]
-    ).value
+    recruit_commons!(2)
 
     units = @campaign.find_player("player-1")[:roster].select { |entity| entity[:kind] == "unit" }
     first, second = units.first(2)
@@ -90,15 +92,7 @@ class SimCampaignDeployTest < ActiveSupport::TestCase
   end
 
   test "auto deploy keeps living footprints outside melee contact" do
-    template = catalog.unit_templates(@campaign.find_player("player-1")[:faction_id]).first
-    4.times do
-      @campaign = Sim::Campaign::Recruit.call(
-        campaign: @campaign,
-        catalog: catalog,
-        player_id: "player-1",
-        template_id: template[:id]
-      ).value
-    end
+    recruit_commons!(4)
 
     result = Sim::Campaign::Deploy.call(campaign: @campaign, player_id: "player-1", action: "auto")
     assert result.ok?

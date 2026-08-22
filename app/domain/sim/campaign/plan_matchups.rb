@@ -19,24 +19,25 @@ module Sim
 
         active_players.each { |player| ensure_deployment!(player) }
 
-        queue = active_players.dup
         matchups = []
+        byes = []
         position = 0
 
-        while queue.length > 1
-          attacker = queue.shift
-          defender = queue.shift
-          position += 1
-          matchups << {
-            position: position,
-            seed: battle_seed(position),
-            attacker: attacker.deep_dup,
-            defender: defender.deep_dup
-          }
-        end
+        bracket_queues(active_players).each do |queue|
+          while queue.length > 1
+            attacker = queue.shift
+            defender = queue.shift
+            position += 1
+            matchups << {
+              position: position,
+              seed: battle_seed(position),
+              attacker: attacker.deep_dup,
+              defender: defender.deep_dup
+            }
+          end
 
-        byes = []
-        if queue.length == 1
+          next unless queue.length == 1
+
           bye_player = queue.first
           byes << { player_id: bye_player[:id], player_name: bye_player[:name] }
         end
@@ -45,6 +46,22 @@ module Sim
       end
 
       private
+
+      def bracket_queues(active_players)
+        winner_ids = last_round_winner_ids
+        return [ active_players.dup ] if winner_ids.empty?
+
+        winners = []
+        rest = []
+        active_players.each do |player|
+          (winner_ids.include?(player[:id]) ? winners : rest) << player
+        end
+        [ winners, rest ].reject(&:empty?)
+      end
+
+      def last_round_winner_ids
+        Array(@campaign.last_round_report&.dig(:matchups)).filter_map { |battle| battle[:winner_id] }.to_set
+      end
 
       def battle_seed(position)
         # Stable per (campaign version context is applied by caller via rng_seed).

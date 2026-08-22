@@ -90,12 +90,14 @@ module Sim
 
               claimed_sides = claimed[enemy[:entity_id]]
               chargeable = Decisions::Movement.can_charge?(combatant, enemy, terrain)
+              blockers = living.reject { |unit| unit[:entity_id] == enemy[:entity_id] } + Array(terrain)
               [
                 [ "rear", :flyer_setup_rear ],
                 [ "flank", :flyer_setup_flank ]
               ].each do |slot, mode|
                 next if claimed_sides.key?(slot)
                 next unless setup_goal_within_budget?(combatant, enemy, slot, budget)
+                next unless setup_side_landable?(combatant, enemy, slot, budget, blockers)
 
                 return Decisions::Movement.build_entry(combatant, enemy, slot, mode, chargeable: chargeable)
               end
@@ -135,6 +137,13 @@ module Sim
           def setup_goal_within_budget?(origin, defender, slot, budget)
             setup_candidate_points(origin, defender, slot).any? do |point|
               Geometry::Battlefield.distance_between(origin, point) <= budget + 0.05
+            end
+          end
+
+          # Side is legal only if a pad stays clear after the free face toward the target.
+          def setup_side_landable?(origin, defender, slot, budget, obstacles)
+            setup_candidate_points(origin, defender, slot).any? do |point|
+              score_setup_landing(origin, defender, point, budget, obstacles)
             end
           end
 
@@ -200,41 +209,25 @@ module Sim
           end
 
           def build_setup_intent(combatant, nearest, obstacles, contact_slot, budget, approach_mode)
-            slot = approach_mode == :flyer_setup_rear ? "rear" : "flank"
-            slot = contact_slot.to_s if %w[rear flank].include?(contact_slot.to_s)
+            preferred = approach_mode == :flyer_setup_rear ? "rear" : "flank"
+            preferred = contact_slot.to_s if %w[rear flank].include?(contact_slot.to_s)
             best = nil
 
-            setup_candidate_points(combatant, nearest, slot).each do |point|
-              facing = Geometry::Battlefield.facing_into_contact_face(
-                combatant.merge(x: point[:x], y: point[:y]),
-                nearest
-              )
-              plan = plan_flyer_leap(
-                origin: combatant,
-                goal_point: point,
-                facing: facing,
-                budget: budget,
-                obstacles: obstacles,
-                contact_id: nil,
-                face_target: nearest
-              )
-              next unless plan && plan[:pose]
+            [ preferred, (%w[rear flank] - [ preferred ]).first ].compact.each do |slot|
+              setup_candidate_points(combatant, nearest, slot).each do |point|
+                landing = score_setup_landing(combatant, nearest, point, budget, obstacles)
+                next unless landing
 
-              landed = combatant.merge(x: plan[:pose][:x], y: plan[:pose][:y], facing: plan[:pose][:facing])
-              next if Geometry::Battlefield.distance_between_units(landed, nearest) < Decisions::Movement::CONTACT
+                prefer = slot == preferred ? 0 : 1
+                score = [ prefer ] + landing[:score]
+                next unless best.nil? || (score <=> best[:score]) < 0
 
-              # Prefer rear landings that stay in-arc after the free face.
-              in_arc = Geometry::Battlefield.in_front_arc?(landed, nearest, landed[:facing]) ? 0 : 1
-              geo = Geometry::Battlefield.classify_attack_vector(landed, nearest)
-              geo_rank = geo == "rear" ? 0 : (geo == "flank" ? 1 : 2)
-              travel = Geometry::Battlefield.distance_between(combatant, plan[:pose])
-              score = [ in_arc, geo_rank, -travel ]
-              if best.nil? || (score <=> best[:score]) < 0
-                best = { plan: plan, destination: plan[:pose], score: score }
+                best = landing.merge(score: score, slot: slot)
               end
             end
             return nil unless best
 
+            mode = best[:slot] == "rear" ? :flyer_setup_rear : :flyer_setup_flank
             {
               kind: "approach",
               combatant: combatant,
@@ -243,10 +236,36 @@ module Sim
               budget: budget,
               destination: best[:destination],
               wait: false,
-              contact_slot: contact_slot,
-              approach_mode: approach_mode,
+              contact_slot: best[:slot],
+              approach_mode: mode,
               charge_contact_id: nil
             }
+          end
+
+          def score_setup_landing(combatant, nearest, point, budget, obstacles)
+            facing = Geometry::Battlefield.facing_into_contact_face(
+              combatant.merge(x: point[:x], y: point[:y]),
+              nearest
+            )
+            plan = plan_flyer_leap(
+              origin: combatant,
+              goal_point: point,
+              facing: facing,
+              budget: budget,
+              obstacles: obstacles,
+              contact_id: nil,
+              face_target: nearest
+            )
+            return nil unless plan && plan[:pose]
+
+            landed = combatant.merge(x: plan[:pose][:x], y: plan[:pose][:y], facing: plan[:pose][:facing])
+            return nil if Geometry::Battlefield.distance_between_units(landed, nearest) < Decisions::Movement::CONTACT
+
+            in_arc = Geometry::Battlefield.in_front_arc?(landed, nearest, landed[:facing]) ? 0 : 1
+            geo = Geometry::Battlefield.classify_attack_vector(landed, nearest)
+            geo_rank = geo == "rear" ? 0 : (geo == "flank" ? 1 : 2)
+            travel = Geometry::Battlefield.distance_between(combatant, plan[:pose])
+            { plan: plan, destination: plan[:pose], score: [ in_arc, geo_rank, -travel ] }
           end
 
           def build_closing_intent(combatant, nearest, obstacles, contact_slot, budget, approach_mode)
@@ -434,13 +453,13 @@ module Sim
                 origin.merge(x: stepped[:x], y: stepped[:y], facing: desired_facing)
               end
 
+            pose = landing_facing_toward(pose, face_target) if face_target
             unless flyer_landing_clear?(pose, obstacles, contact_id: contact_id)
               pose = shorten_leap(origin, pose, obstacles, contact_id: contact_id)
             end
             return nil unless pose
             return nil unless flyer_landing_clear?(pose, obstacles, contact_id: contact_id)
 
-            pose = landing_facing_toward(pose, face_target) if face_target
             landing_facing = pose[:facing]
 
             meaningful =

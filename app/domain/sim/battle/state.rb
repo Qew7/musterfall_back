@@ -368,17 +368,6 @@ module Sim
           formation[:depth] = combatant[:base_depth]
         end
 
-        side[:combatants].each do |combatant|
-          (combatant[:contributors][:melee] + combatant[:contributors][:ranged]).each do |entry|
-            next unless entry[:kind] == "hero" && entry[:experience_gain].to_i.positive?
-
-            hero = player[:roster].find { |candidate| candidate[:id] == entry[:entity_id] }
-            next unless hero
-
-            hero[:components][:progression][:experience] += entry[:experience_gain]
-          end
-        end
-
         player[:roster].each do |entity|
           next unless entity[:kind] == "unit"
 

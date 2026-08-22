@@ -38,6 +38,7 @@ module Sim
           faction_id: template.faction.slug,
           name: template.name,
           cost: template.cost,
+          recruit_tier: template.kind == "hero" ? "hero" : template.recruit_tier,
           models: template.models,
           model_health: template.model_health,
           frontage: template.width,

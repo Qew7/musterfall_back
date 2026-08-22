@@ -10,6 +10,7 @@ module Sim
         ENGAGE = CONTACT + CONTACT_SNAP
         ADVANCING = { "rear" => "support", "support" => "front" }.freeze
         SLOT_RANK = { "front" => 0, "flank" => 1, "rear" => 2 }.freeze
+        # Charge range and spend: ×MV. March is the same rate but straight-only.
         SETUP_RANGE_MV = 2.0
 
         module_function
@@ -28,6 +29,10 @@ module Sim
 
         def budget_for(combatant, enemies:)
           Rules.for(:movement).movement_budget(combatant, { enemies: enemies })
+        end
+
+        def charge_budget_for(combatant, enemies:)
+          budget_for(combatant, enemies: enemies) * SETUP_RANGE_MV
         end
 
         def budget_meta(combatant, enemies:)
@@ -72,6 +77,13 @@ module Sim
 
           gap = Geometry::Battlefield.distance_between_units(combatant, enemy)
           gap <= budget_for(combatant, enemies: enemies) + ENGAGE
+        end
+
+        def within_charge_range?(combatant, enemy, enemies: [])
+          return false unless enemy
+
+          gap = Geometry::Battlefield.distance_between_units(combatant, enemy)
+          gap <= charge_budget_for(combatant, enemies: enemies) + ENGAGE
         end
 
         def unclaimed_side(combatant, enemy, claimed)

@@ -224,15 +224,15 @@ module Sim
             next if contact_id && kernel.id == contact_id
 
             minkowski_points(mover, kernel).filter_map do |vertex|
-              key = [ vertex[:x].round(2), vertex[:y].round(2) ]
-              next if seen[key]
-
-              pose = mover.merge(x: vertex[:x], y: vertex[:y])
-              next unless tray_on_board?(pose)
+              pose = fit_tray_on_board(mover.merge(x: vertex[:x], y: vertex[:y]))
+              next unless pose
               next unless clear?(pose, contact_id: contact_id)
 
+              key = [ pose[:x].round(2), pose[:y].round(2) ]
+              next if seen[key]
+
               seen[key] = true
-              vertex
+              { x: pose[:x], y: pose[:y] }
             end
           end.flatten
         end
@@ -311,6 +311,24 @@ module Sim
           Geometry::Battlefield.unit_corners(pose).all? do |corner|
             corner[:x].between?(0.0, width) && corner[:y].between?(0.0, height)
           end
+        end
+
+        # ponytail: clamp instead of drop — off-board Minkowski corners left a 4x4
+        # dead-ended on a house west face; if the clamp still overlaps, clear? drops it.
+        def fit_tray_on_board(pose)
+          width = Geometry::Battlefield::CONFIG[:width]
+          height = Geometry::Battlefield::CONFIG[:height]
+          corners = Geometry::Battlefield.unit_corners(pose)
+          xs = corners.map { |corner| corner[:x] }
+          ys = corners.map { |corner| corner[:y] }
+          dx = 0.0
+          dy = 0.0
+          dx = -xs.min if xs.min < 0.0
+          dy = -ys.min if ys.min < 0.0
+          dx = width - xs.max if xs.max + dx > width
+          dy = height - ys.max if ys.max + dy > height
+          fitted = pose.merge(x: pose[:x] + dx, y: pose[:y] + dy)
+          tray_on_board?(fitted) ? fitted : nil
         end
 
         def point(entry)

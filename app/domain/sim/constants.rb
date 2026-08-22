@@ -3,11 +3,15 @@ module Sim
     LANE_ORDER = %w[left center right].freeze
     ROW_ORDER = %w[front support rear reserve].freeze
     BATTLE_ROWS = %w[front support rear].freeze
-    STARTING_TREASURY = 36
-    WIN_REWARD = 12
-    BYE_REWARD = 8
+    STARTING_TREASURY = 250
+    ROUND_INCOME = [ 250, 500, 750, 1000, 1500, 2000 ].freeze
+    MAX_CAMPAIGN_ROUNDS = 6
     MAX_BATTLE_ROUNDS = 6
     ATTACH_SLOTS = %w[front left right rear].freeze
+
+    def self.income_for(round)
+      ROUND_INCOME[(round.to_i - 1).clamp(0, ROUND_INCOME.length - 1)]
+    end
 
     WEAPON_VS_ARMOR = {
       "heavy" => { "slash" => 0.85, "blunt" => 1.35, "puncture" => 1.1, "ranged" => 0.8, "magic" => 1.0, "breath" => 1.1, "demolish" => 1.4, "fire" => 0.9, "lightning" => 1.2, "nature" => 0.9, "shadow" => 1.0, "death" => 1.15, "chaos" => 1.1 },

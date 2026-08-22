@@ -164,7 +164,14 @@ module Sim
           wheel[:completed]
 
         if toward_contact
-          engagement = Geometry::Battlefield.charge_destination(wheeled, goal_unit, wheel[:facing])
+          # Thread already picked a clear pad (contact_pose). Recomputing
+          # charge_destination here can land the tray on a lake beside the charge.
+          engagement = if goal_point
+            face = goal_point[:facing] || heading || wheeled[:facing]
+            goal_point.merge(facing: face)
+          else
+            Geometry::Battlefield.charge_destination(wheeled, goal_unit, wheel[:facing])
+          end
           distance = Geometry::Battlefield.distance_between(wheeled, engagement)
           return engagement if remaining + 0.05 >= distance
 

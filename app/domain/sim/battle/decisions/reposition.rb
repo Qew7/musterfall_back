@@ -17,6 +17,14 @@ module Sim
             # Cheap geometric filters first; avoid full MissileChoice damage scans here.
             next true if in_charge_danger?(host, enemies)
             next true if under_missile_threat?(host, enemies)
+            next true if Rules::Wizard::Movement.caster?(host) &&
+              !Rules::Wizard::Movement.opens_cast?(
+                host,
+                acting_side: acting_side,
+                target_side: target_side,
+                terrain: terrain,
+                round_number: round_number
+              )
             next false unless Roles.missile_seeker?(host)
 
             !cheap_opens_shot?(
@@ -80,17 +88,18 @@ module Sim
 
         def primary_mode(combatant, enemies, all, round_number, acting_side:, target_side:, terrain: [])
           return :escape_charge if in_charge_danger?(combatant, enemies)
-          return :leave_shot if under_missile_threat?(combatant, enemies)
-          if Rules::Wizard::Movement.caster?(combatant) &&
-              !Rules::Wizard::Movement.opens_cast?(
-                combatant,
-                acting_side: acting_side,
-                target_side: target_side,
-                terrain: terrain,
-                round_number: round_number
-              )
+          if Rules::Wizard::Movement.caster?(combatant)
+            return :hold if Rules::Wizard::Movement.opens_cast?(
+              combatant,
+              acting_side: acting_side,
+              target_side: target_side,
+              terrain: terrain,
+              round_number: round_number
+            )
+
             return :cast_seek
           end
+          return :leave_shot if under_missile_threat?(combatant, enemies)
           return :open_los if Roles.missile_seeker?(combatant) && !cheap_opens_shot?(
             combatant, enemies, all,
             acting_side: acting_side, target_side: target_side,

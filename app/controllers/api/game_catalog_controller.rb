@@ -37,6 +37,7 @@ module Api
         factionId: template.faction.slug,
         name: template.name,
         cost: template.cost,
+        recruitTier: template.kind == "hero" ? "hero" : template.recruit_tier,
         models: template.models,
         modelHealth: template.model_health,
         frontage: template.width,

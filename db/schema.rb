@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_08_21_000100) do
+ActiveRecord::Schema[8.1].define(version: 2026_08_22_000400) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -56,6 +56,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_08_21_000100) do
     t.integer "movement", default: 3, null: false
     t.string "name", null: false
     t.integer "ranged", default: 0, null: false
+    t.string "recruit_tier", default: "line", null: false
     t.boolean "requires_line_of_sight", default: true, null: false
     t.integer "shooting_range", default: 0, null: false
     t.string "shooting_template", default: "single", null: false
@@ -185,9 +186,11 @@ ActiveRecord::Schema[8.1].define(version: 2026_08_21_000100) do
     t.boolean "is_bot", default: false, null: false
     t.string "name", null: false
     t.integer "position", default: 0, null: false
+    t.integer "recruit_access", default: 0, null: false
+    t.string "recruit_strategy"
     t.jsonb "round_notes", default: [], null: false
     t.string "status", default: "active", null: false
-    t.integer "treasury", default: 36, null: false
+    t.integer "treasury", default: 250, null: false
     t.datetime "updated_at", null: false
     t.integer "victories", default: 0, null: false
     t.index ["game_id", "external_key"], name: "index_game_players_on_game_id_and_external_key", unique: true
@@ -219,6 +222,17 @@ ActiveRecord::Schema[8.1].define(version: 2026_08_21_000100) do
     t.string "upgrade_key", null: false
     t.index ["position"], name: "index_hero_upgrades_on_position"
     t.index ["upgrade_key"], name: "index_hero_upgrades_on_upgrade_key", unique: true
+  end
+
+  create_table "player_actions", force: :cascade do |t|
+    t.string "action", null: false
+    t.datetime "created_at", null: false
+    t.bigint "game_id"
+    t.integer "http_status", null: false
+    t.jsonb "params", default: {}, null: false
+    t.string "player_id"
+    t.index ["game_id", "created_at"], name: "index_player_actions_on_game_id_and_created_at"
+    t.index ["game_id"], name: "index_player_actions_on_game_id"
   end
 
   create_table "round_matchups", force: :cascade do |t|
@@ -264,6 +278,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_08_21_000100) do
   add_foreign_key "game_entity_attachments", "game_entities", column: "hero_entity_id"
   add_foreign_key "game_entity_attachments", "game_entities", column: "unit_entity_id"
   add_foreign_key "game_players", "games"
+  add_foreign_key "player_actions", "games"
   add_foreign_key "round_matchups", "games"
   add_foreign_key "round_snapshots", "games"
 end

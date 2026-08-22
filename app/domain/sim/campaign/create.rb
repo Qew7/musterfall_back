@@ -20,6 +20,7 @@ module Sim
             status: "active",
             faction_id: nil,
             treasury: Constants::STARTING_TREASURY,
+            recruit_access: 0,
             roster: [],
             victories: 0,
             round_notes: []

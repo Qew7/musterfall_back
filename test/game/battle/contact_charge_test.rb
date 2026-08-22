@@ -94,6 +94,62 @@ class SimBattleContactChargeTest < ActiveSupport::TestCase
     assert_nil intent
   end
 
+  test "a lake beside the tray does not cancel a clear frontal charge" do
+    marauders = combatant(
+      entity_id: "unit-10",
+      name: "Мародеры",
+      x: 16.414,
+      y: 18.856,
+      facing: 346.45,
+      base_width: 4,
+      base_depth: 4,
+      files: 4,
+      ranks: 4,
+      movement: 3,
+      melee: 5
+    )
+    skeletons = combatant(
+      entity_id: "unit-5",
+      name: "Скелетный блок",
+      x: 22.538,
+      y: 16.605,
+      facing: 127.28,
+      base_width: 5,
+      base_depth: 4,
+      files: 5,
+      ranks: 4,
+      melee: 4,
+      side_index: 1
+    )
+    lake = {
+      id: "terrain-3",
+      type: "lake",
+      x: 14.98,
+      y: 13.913,
+      width: 3.692,
+      depth: 3.744,
+      impassable: true
+    }
+    lake_fp = BF.feature_footprint(lake)
+    dest = BF.charge_destination(marauders, skeletons)
+    assert BF.rectangles_overlap?(marauders.merge(dest), lake_fp), "setup: naive dest nicks the side lake"
+    refute BF.line_intersects_feature?(marauders, skeletons, lake), "setup: lake is not between the trays"
+
+    world = Pathing::Obstacles.around(marauders, units: [ marauders, skeletons ], terrain: [ lake ])
+    plan = Pathing.plan_approach(
+      origin: marauders,
+      goal_point: dest,
+      budget: 3.0,
+      obstacles: world,
+      contact_id: skeletons[:entity_id],
+      goal_unit: skeletons,
+      terrain: [ lake ]
+    )
+    landed = marauders.merge(x: plan[:pose][:x], y: plan[:pose][:y], facing: plan[:pose][:facing])
+    refute BF.rectangles_overlap?(landed, lake_fp)
+    assert_operator BF.distance_between_units(landed, skeletons), :<=, ENGAGE
+  end
+
   # ---------------------------------------------------------------------------
   # 2. Soft charge-target in conflict resolution
   # ---------------------------------------------------------------------------
@@ -268,6 +324,35 @@ class SimBattleContactChargeTest < ActiveSupport::TestCase
     entries = DecisionsMovement.plan_melee_entries([ actor ], [ enemy ])
     assert_equal "front", entries.first[:contact_slot]
     refute GroundMovement.contact_wave?(entries.first)
+  end
+
+  test "this-turn charge spends double MV and can close a gap past 1× movement" do
+    attacker = combatant(
+      entity_id: "a1", name: "Копейщики",
+      x: 10, y: 12, facing: 0, movement: 4,
+      base_width: 2, base_depth: 2, melee: 5
+    )
+    enemy = combatant(
+      entity_id: "e1", name: "Мечники",
+      x: 18, y: 12, facing: 180, movement: 4,
+      base_width: 2, base_depth: 2, melee: 4, side_index: 1
+    )
+
+    gap = BF.distance_between_units(attacker, enemy)
+    assert_operator gap, :>, attacker[:movement] + ENGAGE
+    refute DecisionsMovement.this_turn_charge?(attacker, enemy, enemies: [ enemy ])
+    assert DecisionsMovement.within_charge_range?(attacker, enemy, enemies: [ enemy ])
+
+    phase = MovementPhase.play(
+      acting_side: { player_id: "p1", combatants: [ attacker ] },
+      target_side: { player_id: "p2", combatants: [ enemy ] }
+    )
+    action = phase[:actions].find { |row| row[:actor_id] == "a1" }
+
+    assert action
+    assert_in_delta 8.0, action.dig(:maneuver, :mv_budget), 0.001
+    assert_in_delta 0.0, action.dig(:maneuver, :mv_spent_march).to_f, 0.05
+    assert_operator BF.distance_between_units(attacker, enemy), :<=, ENGAGE
   end
 
   test "orbit_mode? is ground wrap, not flyer setup" do
@@ -479,6 +564,70 @@ class SimBattleContactChargeTest < ActiveSupport::TestCase
     assert_equal 1, entries.size
     assert_equal :flyer_charge, entries.first[:approach_mode]
     assert_equal "rear", entries.first[:contact_slot]
+  end
+
+  test "a flyer takes the free flank when a rear pad faces into a packed neighbor" do
+    flyer = combatant(
+      entity_id: "unit-88",
+      name: "Костяной дракон",
+      x: 8.77,
+      y: 4.34,
+      facing: 271.8,
+      base_width: 2,
+      base_depth: 2,
+      files: 1,
+      ranks: 1,
+      movement: 20,
+      abilities: [ "flying" ],
+      melee: 6,
+      side_index: 0
+    )
+    target = combatant(
+      entity_id: "unit-61",
+      name: "Труповозка",
+      x: 2.0,
+      y: 15.0,
+      facing: 0.0,
+      base_width: 2,
+      base_depth: 2,
+      files: 2,
+      ranks: 1,
+      melee: 3,
+      side_index: 1
+    )
+    neighbor = combatant(
+      entity_id: "unit-86",
+      name: "Труповозка",
+      x: 1.0,
+      y: 11.0,
+      facing: 0.0,
+      base_width: 2,
+      base_depth: 1,
+      files: 2,
+      ranks: 1,
+      melee: 3,
+      side_index: 1
+    )
+    enemies = [ target, neighbor ]
+
+    entries = DecisionsMovement.plan_melee_entries([ flyer ], enemies)
+    assert_equal 1, entries.size
+    assert_equal :flyer_setup_flank, entries.first[:approach_mode]
+    assert_equal "flank", entries.first[:contact_slot]
+    assert_equal "unit-61", entries.first[:nearest][:entity_id]
+
+    phase = MovementPhase.play(
+      acting_side: { player_id: "p1", combatants: [ flyer ] },
+      target_side: { player_id: "p2", combatants: enemies }
+    )
+    leap = phase[:actions].find do |action|
+      action[:type] == "movement" && action[:actor_id] == "unit-88" &&
+        action.dig(:maneuver, :kind) != "row_advance"
+    end
+    refute_nil leap
+    refute_equal "blocked_by_ally", leap.dig(:maneuver, :kind)
+    assert_operator BF.distance_between(leap[:from], leap[:to]), :>, 0.05
+    assert_operator BF.distance_between_units(flyer, neighbor), :>=, CONTACT
   end
 
   test "this-turn charge takes the closer enemy free side over a far routing target" do

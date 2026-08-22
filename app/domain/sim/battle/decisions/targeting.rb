@@ -45,9 +45,15 @@ module Sim
         def can_target_missile?(attacker, target, attack_type, all_combatants, terrain: [])
           return false if in_melee_combat?(target, all_combatants)
           return false unless Rules.for(:shooting).allow_target?(attacker, target, attack_type)
-          return true if attack_type == "magic"
+          return in_spell_range?(attacker, target) if attack_type.to_s == "magic"
 
           can_target_ranged?(attacker, target, all_combatants, terrain: terrain)
+        end
+
+        # Same metric as SpellContext: center distance, range <= 0 is unlimited.
+        def in_spell_range?(attacker, target, range: nil)
+          range = attacker[:spell_range].to_f if range.nil?
+          range <= 0 || Geometry::Battlefield.distance_between(attacker, target) <= range
         end
 
         def can_target_ranged?(attacker, target, all_combatants, terrain: [])

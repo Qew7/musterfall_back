@@ -1,7 +1,7 @@
 require "test_helper"
 
 class SimBattleMovementWheelTest < ActiveSupport::TestCase
-  test "turning spends MV so a wide unit cannot fully face and close in one move" do
+  test "charge budget lets a wide unit finish the wheel and spend leftover closing" do
     actor = combatant(
       entity_id: "wide-1",
       name: "Копейщики",
@@ -17,7 +17,7 @@ class SimBattleMovementWheelTest < ActiveSupport::TestCase
       row: "front",
       lane: "center"
     )
-    # ~50° off current facing — still inside the 120° front arc, but wheel costs all MV.
+    # ~50° off current facing — still inside the 120° front arc.
     enemy = combatant(
       entity_id: "enemy-1",
       name: "Орки",
@@ -39,14 +39,16 @@ class SimBattleMovementWheelTest < ActiveSupport::TestCase
     target_side = { player_id: "p2", combatants: [ enemy ] }
     heading = Sim::Geometry::Battlefield.heading_to(actor, enemy)
     assert Sim::Geometry::Battlefield.in_front_arc?(actor, enemy, actor[:facing])
-    expected = Sim::Geometry::Battlefield.apply_wheel(actor, heading, actor[:movement])
+    budget = Sim::Battle::Decisions::Movement.charge_budget_for(actor, enemies: [ enemy ])
+    assert Sim::Battle::Decisions::Movement.within_charge_range?(actor, enemy, enemies: [ enemy ])
+    expected = Sim::Geometry::Battlefield.apply_wheel(actor, heading, budget)
 
     phase = Sim::Battle::Phases::Movement.play(acting_side: acting_side, target_side: target_side)
 
-    # width 4, MV 3 => partial arc wheel, no leftover forward march
+    # width 4, charge budget 6: the ~50° wheel fits, leftover goes forward
+    assert expected[:completed]
     assert_in_delta expected[:facing], actor[:facing], 0.2
-    assert_in_delta expected[:x], actor[:x], 0.05
-    assert_in_delta expected[:y], actor[:y], 0.05
+    refute_in_delta expected[:y], actor[:y], 0.05
     refute_in_delta 8.0, actor[:x], 0.05
     assert phase[:actions].any? { |action| action[:wheel].present? }
     assert phase[:actions].any? { |action| action[:details].any? { |line| line.include?("wheel") } }

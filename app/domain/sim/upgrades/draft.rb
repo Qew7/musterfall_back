@@ -51,18 +51,32 @@ module Sim
         }
       }.freeze
 
+      # Win = 1 level, loss = half. Stored as integer credits (2 = full level).
+      LEVEL_UNIT = 2
+      WIN_CREDIT = 2
+      LOSS_CREDIT = 1
+
       module_function
 
-      def experience_threshold(hero)
-        hero.dig(:components, :progression, :level).to_i + 3
+      def experience_threshold(_hero = nil)
+        LEVEL_UNIT
       end
 
       def level_ready?(hero)
+        return false unless hero.dig(:components, :hero, :general)
+
         progression = hero.dig(:components, :progression)
         return false unless progression
 
         available = progression[:experience].to_i - progression[:spent_experience].to_i
-        available >= experience_threshold(hero)
+        available >= experience_threshold
+      end
+
+      def grant_battle_credit!(player, credit)
+        general = Array(player[:roster]).find { |entry| entry[:kind] == "hero" && entry.dig(:components, :hero, :general) }
+        return unless general
+
+        general[:components][:progression][:experience] = general.dig(:components, :progression, :experience).to_i + credit.to_i
       end
 
       def roll(hero, catalog, rng)
@@ -80,7 +94,7 @@ module Sim
         effect = EFFECTS[upgrade_id]
         return false unless effect
 
-        cost = experience_threshold(hero)
+        cost = experience_threshold
         effect.call(hero)
         progression = hero[:components][:progression]
         progression[:level] += 1

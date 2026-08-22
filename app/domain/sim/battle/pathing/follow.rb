@@ -87,6 +87,32 @@ module Sim
             break if contact_hit || remaining <= 0.5 || spent <= 0.05 || receding
           end
 
+          if same?(pose, origin) && remaining > 0.5
+            reformed = reform_idle(
+              origin: origin,
+              points: points,
+              budget: remaining,
+              space: space,
+              contact_id: contact_id,
+              terrain: terrain,
+              flying: flying
+            )
+            if reformed && reformed[:pose]
+              pose = Geometry::Battlefield.merge_footprint(origin, reformed[:pose])
+              spent = reformed[:cost_spent].to_f
+              spent = Maneuvers.spent_mv(reformed, origin) if spent <= 0.05
+              remaining = [ remaining - spent, 0.0 ].max
+              steps = Array(reformed[:steps])
+              advance = reformed[:mv_spent_advance].to_f
+              march = reformed[:mv_spent_march].to_f
+              wheel = reformed[:wheel]
+              turn = reformed[:turn]
+              desired = reformed[:desired] || desired
+              last = reformed
+              maneuver = reformed[:maneuver]
+            end
+          end
+
           wrapped = Array(thread[:wrapped])
           blocker = last && last[:blocker]
           heading = Geometry::Battlefield.heading_to(origin, points[1] || origin)
@@ -113,6 +139,47 @@ module Sim
 
         def thread_straight?(thread)
           Array(thread[:points]).length <= 2 && Array(thread[:wrapped]).empty?
+        end
+
+        # ponytail: CONTACT-kissing trays idle when every wheel clips the lake and
+        # Advance walks into it. Reform 90° toward the wrap hop only then — live
+        # contact_align / jam closing must keep their pose.
+        def reform_idle(origin:, points:, budget:, space:, contact_id:, terrain:, flying:)
+          return nil unless points.length > 2
+
+          probe = Geometry::Battlefield.move_along_facing(origin, 0.5)
+          hit = space.first_blocker(origin.merge(x: probe[:x], y: probe[:y]), contact_id: contact_id)
+          return nil unless hit && Pathing.terrain_obstacle?(hit)
+
+          dest = points[1]
+          nxt = points[2]
+          heading = Geometry::Battlefield.heading_to(origin, dest)
+          if nxt &&
+              Geometry::Battlefield.shortest_facing_delta(heading, Geometry::Battlefield.heading_to(origin, nxt)).abs >= 90.0
+            heading = Geometry::Battlefield.heading_to(origin, nxt)
+          end
+          delta = Geometry::Battlefield.shortest_facing_delta(origin[:facing], heading)
+          return nil unless delta.abs > 45.0
+
+          snapped = Geometry::Battlefield.normalize_facing(
+            origin[:facing].to_f + (delta.positive? ? 90.0 : -90.0)
+          )
+          plan = Maneuvers::Turn.simulate(
+            origin: origin,
+            heading: snapped,
+            budget: budget,
+            goal_point: nxt || dest,
+            goal_unit: nil,
+            obstacles: space,
+            contact_id: contact_id,
+            terrain: terrain,
+            flying: flying
+          )
+          return nil unless plan && plan[:pose]
+          return nil if same?(plan[:pose], origin) &&
+            Geometry::Battlefield.shortest_facing_delta(origin[:facing], plan[:pose][:facing]).abs <= 0.05
+
+          plan
         end
 
         def idle(origin, budget, thread)

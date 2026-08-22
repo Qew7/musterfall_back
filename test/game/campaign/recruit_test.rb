@@ -5,7 +5,10 @@ class SimCampaignRecruitTest < ActiveSupport::TestCase
     @game = create_active_game
     assign_first_faction!(@game)
     @campaign = Sim::Persistence::CampaignRepository.new.load(@game.reload)
-    @template = catalog.unit_templates(@campaign.find_player("player-1")[:faction_id]).first
+    player = @campaign.find_player("player-1")
+    @template = catalog.unit_templates(player[:faction_id])
+      .select { |template| template[:recruit_tier] == "line" && template[:cost] <= player[:treasury] }
+      .min_by { |template| template[:cost] }
   end
 
   test "recruit spends treasury and adds entity" do
@@ -16,7 +19,7 @@ class SimCampaignRecruitTest < ActiveSupport::TestCase
       template_id: @template[:id]
     )
 
-    assert result.ok?
+    assert result.ok?, result.error
     player = result.value.find_player("player-1")
     assert_equal Sim::Constants::STARTING_TREASURY - @template[:cost], player[:treasury]
     assert player[:roster].any? { |entity| entity[:template_id] == @template[:id] }
@@ -47,7 +50,10 @@ class SimCampaignRecruitTest < ActiveSupport::TestCase
   end
 
   test "wizard requires an available school and receives two seeded unique spells" do
-    wizard = catalog.hero_templates(@campaign.find_player("player-1")[:faction_id]).find { |hero| hero[:abilities].include?("wizard") }
+    player = @campaign.find_player("player-1")
+    player[:recruit_access] = 1
+    player[:treasury] = 1000
+    wizard = catalog.hero_templates(player[:faction_id]).find { |hero| hero[:abilities].include?("wizard") }
 
     with_spell_api(
       schools: %i[pyromancy celestial],
@@ -62,7 +68,7 @@ class SimCampaignRecruitTest < ActiveSupport::TestCase
         rng: Sim::Rng::Seeded.new(17)
       )
 
-      assert result.ok?
+      assert result.ok?, result.error
       hero = result.value.find_player("player-1")[:roster].last
       assert_equal "pyromancy", hero.dig(:components, :hero, :magic_school)
       assert_equal 2, hero.dig(:components, :hero, :spell_keys).uniq.length
@@ -81,5 +87,22 @@ class SimCampaignRecruitTest < ActiveSupport::TestCase
 
     assert result.failure?
     assert_equal "magic school is only valid for wizards", result.error
+  end
+
+  test "elite unit blocked until access upgraded" do
+    elite = catalog.unit_templates(@campaign.find_player("player-1")[:faction_id])
+      .find { |template| template[:recruit_tier] == "elite" }
+    skip "no elite unit" unless elite
+
+    @campaign.find_player("player-1")[:treasury] = elite[:cost]
+    result = Sim::Campaign::Recruit.call(
+      campaign: @campaign,
+      catalog: catalog,
+      player_id: "player-1",
+      template_id: elite[:id]
+    )
+
+    assert result.failure?
+    assert_equal "recruit slot unavailable", result.error
   end
 end

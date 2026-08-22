@@ -49,6 +49,7 @@ module Sim
         player[:faction_id] = @faction_id
         player[:roster] = []
         player[:treasury] = Constants::STARTING_TREASURY
+        player[:recruit_access] = 0
         return unless default_hero
 
         factory = Entities::Factory.new(@catalog, id_sequence: { value: @campaign.id_sequence })

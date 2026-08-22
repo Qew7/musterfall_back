@@ -46,7 +46,7 @@ module Sim
 
       def casters(acting_side)
         acting_side[:combatants].filter_map do |host|
-          next if host[:current_health].to_i <= 0 || host[:is_routing]
+          next if host[:current_health].to_i <= 0 || host[:is_routing] || host[:summoned]
 
           Array(host.dig(:contributors, :ranged)).filter_map do |contributor|
             next if contributor[:spell].to_i <= 0 || Array(contributor[:spell_keys]).empty?
@@ -186,8 +186,6 @@ module Sim
         }
         Phases::AttackResolution.add_event(phase, summary)
         phase[:actions] << action
-        contributor = caster[:contributor]
-        contributor[:experience_gain] += [ result[:damage].to_i, success ? 1 : 0 ].max if contributor && contributor[:kind] == "hero"
         action
       end
 

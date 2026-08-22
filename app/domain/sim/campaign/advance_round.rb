@@ -31,7 +31,8 @@ module Sim
         SettleMatchups.call(
           campaign: payload[:campaign],
           battles: battles,
-          byes: payload[:byes]
+          byes: payload[:byes],
+          rng: @rng
         )
       end
     end

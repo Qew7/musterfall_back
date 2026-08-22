@@ -513,6 +513,58 @@ class SimBattleSpellRuntimeTest < ActiveSupport::TestCase
     assert_includes 2..4, clone[:summon_remaining_turns]
     assert_includes context.result[:summon_ids], clone[:entity_id]
     refute_includes spell.legal_targets(context), clone
+    refute Sim::Geometry::Battlefield.rectangles_overlap?(ally, clone)
+  end
+
+  test "doppelganger of a large caster sits beside the original and cannot recast" do
+    spell = Sim::Battle::Spells::Shadow::Doppelganger
+    host = BattleScenarios.combatant(
+      entity_id: "skeletons",
+      name: "Скелетный блок",
+      x: 22.0,
+      y: 16.0,
+      facing: 127.0,
+      base_width: 5.0,
+      base_depth: 4.0,
+      files: 5,
+      ranks: 4,
+      spell: 4,
+      contributors: {
+        melee: [],
+        ranged: [
+          {
+            entity_id: "vampire",
+            name: "Лорд-вампир",
+            kind: "hero",
+            spell: 4,
+            spell_range: 24,
+            spell_keys: %w[doppelganger],
+            magic_school: "shadow",
+            initiative: 5,
+            experience_gain: 0
+          }
+        ]
+      }
+    )
+    acting_side = { side_key: "right", combatants: [ host ] }
+    context = Sim::Battle::SpellContext.new(
+      caster: host.merge(actor_id: "vampire", spell_range: 24),
+      host: host,
+      acting_side: acting_side,
+      target_side: { side_key: "left", combatants: [ BattleScenarios.combatant(entity_id: "marauders", x: 8.0, y: 18.0) ] },
+      terrain: [],
+      rng: Sim::Rng::Seeded.new(1),
+      round_number: 1,
+      spell: spell
+    )
+
+    spell.resolve!(context, host)
+    clone = acting_side[:combatants].find { |entry| entry[:summoned] }
+
+    assert clone
+    refute Sim::Geometry::Battlefield.rectangles_overlap?(host, clone)
+    assert_operator Sim::Geometry::Battlefield.distance_between_units(host, clone), :>, 0.3
+    refute_includes Sim::Battle::SpellCasting.casters(acting_side).map { |entry| entry[:host][:entity_id] }, clone[:entity_id]
   end
 
   test "timed summons vanish after remaining player turns" do

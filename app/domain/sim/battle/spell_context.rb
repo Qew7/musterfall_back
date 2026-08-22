@@ -288,13 +288,14 @@ module Sim
 
       def clone_unit!(source, remaining_turns: nil)
         remaining_turns ||= rng.rand(3) + 2
+        # Drop entity_id so Obstacles.around does not treat the original as "self".
         pose = SpellWorld.random_free_pose(
           rng,
-          unit: source,
+          unit: source.merge(entity_id: nil),
           all_combatants: all_combatants,
           terrain: terrain,
           center: source,
-          radius: 6.0
+          radius: 8.0
         )
         return nil unless pose
 
@@ -371,8 +372,7 @@ module Sim
         return true if target.equal?(host)
 
         range = spell.respond_to?(:range) ? spell.range : nil
-        range = caster[:spell_range].to_f if range.nil?
-        range <= 0 || distance(caster, target) <= range
+        Decisions::Targeting.in_spell_range?(caster, target, range: range)
       end
 
       def point_targets

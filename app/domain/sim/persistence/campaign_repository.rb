@@ -34,6 +34,8 @@ module Sim
               status: player[:status],
               faction_key: player[:faction_id],
               treasury: player[:treasury],
+              recruit_access: player[:recruit_access].to_i,
+              recruit_strategy: player[:recruit_strategy],
               victories: player[:victories],
               position: index,
               round_notes: player[:round_notes] || []
@@ -64,6 +66,8 @@ module Sim
           status: player.status,
           faction_id: player.faction_key,
           treasury: player.treasury,
+          recruit_access: player.recruit_access.to_i,
+          recruit_strategy: player.recruit_strategy,
           victories: player.victories,
           round_notes: player.round_notes,
           roster: player.game_entities.map do |entity|

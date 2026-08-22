@@ -134,8 +134,6 @@ module Sim
           State.sync_combatant_footprint!(victim)
           after = State.snapshot_combatant(victim)
 
-          distribute_contributor_experience!(actor[:contributor] || profile, strike_damage)
-
           player_line = ActionResult.text_for(
             actor: actor.merge(weapon_type: profile[:weapon_type] || actor[:weapon_type]),
             action: { type: attack_type, magic_school: actor[:magic_school] },
@@ -202,8 +200,6 @@ module Sim
               target[:current_health] = [ 0, target[:current_health] - entry[:damage] ].max
               State.sync_combatant_footprint!(target)
               after = State.snapshot_combatant(target)
-
-              distribute_contributor_experience!(entry[:profile], entry[:damage])
 
               player_line = ActionResult.text_for(
                 actor: {
@@ -432,12 +428,6 @@ module Sim
           when "shooting" then attacker[:ranged].to_i
           else attacker[:melee].to_i
           end
-        end
-
-        def distribute_contributor_experience!(contributor, damage)
-          return unless contributor[:kind] == "hero"
-
-          contributor[:experience_gain] += [ 1, damage ].max
         end
 
         def vector_priority(...)

@@ -5,6 +5,7 @@ class Game < ApplicationRecord
   has_many :round_snapshots, -> { order(:round_number, :phase) }, dependent: :destroy
   has_many :game_players, -> { order(:position) }, dependent: :destroy
   has_many :round_matchups, -> { order(:campaign_round, :position) }, dependent: :destroy
+  has_many :player_actions, -> { order(:created_at, :id) }, dependent: :delete_all
 
   validates :status, inclusion: { in: STATUSES }
   validates :player_count, numericality: { greater_than_or_equal_to: 2 }

@@ -66,6 +66,21 @@ module Games
           upgrade_id: params.fetch(:upgrade_id)
         )
       },
+      upgrade_access: ->(campaign, _catalog, _rng, params) {
+        Sim::Campaign::UpgradeAccess.call(
+          campaign: campaign,
+          player_id: params.fetch(:player_id)
+        )
+      },
+      restore_unit: ->(campaign, catalog, _rng, params) {
+        Sim::Campaign::RestoreUnit.call(
+          campaign: campaign,
+          catalog: catalog,
+          player_id: params.fetch(:player_id),
+          entity_id: params.fetch(:entity_id),
+          models: params[:models]
+        )
+      },
       prepare_round: ->(campaign, catalog, rng, _params) {
         Sim::Campaign::PrepareRound.call(campaign: campaign, catalog: catalog, rng: rng)
       }
