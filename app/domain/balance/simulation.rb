@@ -3,25 +3,37 @@ module Balance
     module_function
 
     def start!(config:)
-      if BalanceSimulationRun.active.exists?
-        raise ArgumentError, "simulation already running"
-      end
+      BalanceSimulationRun.transaction do
+        if BalanceSimulationRun.active.lock.exists?
+          raise ArgumentError, "simulation already running"
+        end
 
-      version = CatalogVersion.current!
-      run = BalanceSimulationRun.create!(
-        catalog_version: version,
-        status: "pending",
-        config: normalize_config(config),
-        seed: SecureRandom.random_number(0x7FFFFFFF)
-      )
-      Runner.enqueue!(run.id)
-      run
+        version = CatalogVersion.current!
+        run = BalanceSimulationRun.create!(
+          catalog_version: version,
+          status: "pending",
+          config: normalize_config(config),
+          seed: SecureRandom.random_number(0x7FFFFFFF)
+        )
+        Runner.enqueue!(run.id)
+        run
+      end
     end
 
     def stop!(run_id)
       run = BalanceSimulationRun.find(run_id)
       run.stop!
+      Runner.enqueue!(run.id) if run.stopping?
       run
+    end
+
+    def stop_all!
+      runs = BalanceSimulationRun.active.order(created_at: :desc).to_a
+      runs.each do |run|
+        run.stop!
+        Runner.enqueue!(run.id) if run.stopping?
+      end
+      runs
     end
 
     def normalize_config(raw)

@@ -100,6 +100,7 @@ module Games
     def call
       return Sim::Result.failure("unknown command") unless COMMANDS.key?(@command)
       return Sim::Result.failure("game is finished") if @game.status == "finished"
+      return Sim::Result.failure("round is simulating") if @game.status == "simulating"
 
       repository = Sim::Persistence::CampaignRepository.new
       campaign = repository.load(@game)

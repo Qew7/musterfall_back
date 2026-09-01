@@ -5,10 +5,14 @@ Rails.application.routes.draw do
   namespace :api do
     namespace :admin do
       get "balance" => "balance#show"
+      get "balance/units" => "balance#units"
       post "balance/backfill" => "balance#backfill"
       post "balance/simulations" => "balance#start_simulation"
+      post "balance/simulations/stop" => "balance#stop_all_simulations"
       post "balance/simulations/:id/stop" => "balance#stop_simulation"
       post "balance/duels" => "balance#run_duel"
+      post "balance/duel_matrix" => "balance#start_duel_matrix"
+      post "balance/duel_matrix/:id/stop" => "balance#stop_duel_matrix"
     end
   end
   resources :games, only: [ :create, :show ], controller: "api/games", path: "api/games" do

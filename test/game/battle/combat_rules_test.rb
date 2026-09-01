@@ -341,6 +341,16 @@ class SimBattleCombatRulesTest < ActiveSupport::TestCase
     assert_equal 4, Rules.for(:melee).attacking_model_count(halberds, combatant(side_index: 1), "flank", 4)
   end
 
+  test "support rank needs more than one rank depth" do
+    shallow = combatant(abilities: [ "supportRank" ], files: 4, ranks: 1, models_remaining: 4)
+    enemy = combatant(side_index: 1)
+
+    assert_equal 4, Rules.for(:melee).attacking_model_count(shallow, enemy, "front", 4)
+    assert_empty Rules.for(:melee).log_clauses(
+      { host: shallow, attacker: shallow, defender: enemy, attack_type: "melee", vector: "front", contact_side: "front" }
+    )
+  end
+
   test "passive log_clauses name rules that actually changed the strike" do
     rules = Rules.for(:melee)
     enemy = combatant(side_index: 1)
@@ -374,7 +384,11 @@ class SimBattleCombatRulesTest < ActiveSupport::TestCase
     attacker = combatant(abilities: [ "poison" ])
     defender = combatant(side_index: 1, current_health: 7, max_health: 8, model_health: 4, models_remaining: 2)
     phase = Attack.create_phase("melee", "Фаза боя")
-    action = { damage: 1, details: [] }
+    action = {
+      damage: 1,
+      target_state_before: Sim::Battle::State.snapshot_combatant(defender),
+      details: []
+    }
     ctx = {
       phase: phase, attacker: attacker, defender: defender, action: action,
       acting_side: { combatants: [ attacker ] }, target_side: { combatants: [ defender ] }
@@ -387,6 +401,29 @@ class SimBattleCombatRulesTest < ActiveSupport::TestCase
     undead = defender.merge(current_health: 7, abilities: [ "undead" ])
     Sim::Battle::Rules::Poison::Melee.after_hit!(ctx.merge(defender: undead, action: { damage: 1, details: [] }))
     assert_equal 7, undead[:current_health]
+  end
+
+  test "poison does not stack when the strike already killed a model" do
+    attacker = combatant(abilities: [ "poison" ])
+    defender = combatant(side_index: 1, current_health: 10, max_health: 10, model_health: 1, models_remaining: 10)
+    before = Sim::Battle::State.snapshot_combatant(defender)
+    defender[:current_health] = 9
+    Sim::Battle::State.sync_combatant_footprint!(defender)
+    action = { damage: 1, target_state_before: before, details: [] }
+    ctx = {
+      phase: Attack.create_phase("melee", "Фаза боя"),
+      attacker: attacker,
+      defender: defender,
+      action: action,
+      acting_side: { combatants: [ attacker ] },
+      target_side: { combatants: [ defender ] }
+    }
+
+    Sim::Battle::Rules::Poison::Melee.after_hit!(ctx)
+
+    assert_equal 9, defender[:current_health]
+    assert_equal 1, action[:damage]
+    assert_empty action[:details]
   end
 
   test "ferocious skill grows once per battle round in continuous contact" do

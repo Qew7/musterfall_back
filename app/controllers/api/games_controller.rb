@@ -63,15 +63,11 @@ module Api
       return render_failure(result, game: game) if result.failure?
 
       payload = result.value
-      campaign_hash = payload[:campaign].to_api_hash
-      campaign_hash[:terrain] = serialize_terrain(payload[:game], payload[:campaign].round)
-      render json: {
-        gameId: payload[:game].id,
-        version: payload[:campaign].version,
-        campaign: campaign_hash,
-        metaReward: camelize_meta(payload[:meta_reward]),
-        battles: payload[:battles].map { |battle| serialize_battle(battle) }
-      }
+      if payload[:pending]
+        render json: serialize_advance_pending(payload), status: :accepted
+      else
+        render json: serialize_advance_complete(payload)
+      end
     end
 
     private
@@ -157,6 +153,13 @@ module Api
         payload[:statePayload] = { campaign: campaign_hash }
       end
 
+      if game.status == "simulating"
+        payload[:matchups] = game.round_matchups
+          .where(campaign_round: game.current_round)
+          .order(:position)
+          .map { |matchup| serialize_matchup(matchup) }
+      end
+
       if include_snapshots
         payload[:snapshots] = game.round_snapshots.map { |snapshot| serialize_snapshot(snapshot) }
       end
@@ -233,6 +236,46 @@ module Api
             end
           }
         end
+      }
+    end
+
+    def serialize_advance_complete(payload)
+      campaign_hash = payload[:campaign].to_api_hash
+      campaign_hash[:terrain] = serialize_terrain(payload[:game], payload[:campaign].round)
+      {
+        gameId: payload[:game].id,
+        status: payload[:game].status,
+        version: payload[:campaign].version,
+        campaign: campaign_hash,
+        metaReward: camelize_meta(payload[:meta_reward]),
+        battles: payload[:battles].map { |battle| serialize_battle(battle) }
+      }
+    end
+
+    def serialize_advance_pending(payload)
+      campaign_hash = payload[:campaign].to_api_hash
+      campaign_hash[:terrain] = serialize_terrain(payload[:game], payload[:campaign].round)
+      {
+        gameId: payload[:game].id,
+        status: payload[:game].status,
+        pending: true,
+        version: payload[:campaign].version,
+        campaign: campaign_hash,
+        matchups: Array(payload[:matchups]).map { |matchup| serialize_matchup(matchup) }
+      }
+    end
+
+    def serialize_matchup(matchup)
+      {
+        id: matchup.id,
+        position: matchup.position,
+        status: matchup.status,
+        seed: matchup.seed,
+        attackerPlayerKey: matchup.attacker_player_key,
+        defenderPlayerKey: matchup.defender_player_key,
+        attackerPlayerName: matchup.attacker_player_name,
+        defenderPlayerName: matchup.defender_player_name,
+        errorMessage: matchup.error_message
       }
     end
 

@@ -11,6 +11,7 @@ module Games
 
     def call
       return Sim::Result.failure("game is finished") if @game.status == "finished"
+      return Sim::Result.failure("round is simulating") if @game.status == "simulating"
 
       repository = Sim::Persistence::CampaignRepository.new
       campaign = repository.load(@game)
@@ -28,7 +29,6 @@ module Games
         return prepared if prepared.failure?
 
         prepared_campaign = prepared.value
-        persist_snapshot!(prepared_campaign, "pre_round")
 
         planned = Sim::Campaign::PlanMatchups.call(
           campaign: prepared_campaign,
@@ -38,23 +38,54 @@ module Games
         return planned if planned.failure?
 
         replace_matchups!(prepared_campaign.round, planned.value[:matchups])
+        persist_round_plan_snapshot!(planned.value[:campaign], planned.value, base_seed, campaign.version)
       end
 
       plan_payload = planned.value
       matchup_records = @game.round_matchups.for_round(@game, plan_payload[:campaign].round).order(:position).to_a
 
-      # 2) Simulate battles (inline or Solid Queue workers) outside the pairing transaction.
-      finished = Games::BattleJobRunner.run_all!(matchup_records)
+      if BattleJobRunner.inline?
+        settle_inline!(plan_payload, matchup_records, base_seed, campaign.version)
+      else
+        settle_async!(plan_payload, matchup_records)
+      end
+    end
+
+    private
+
+    def settle_inline!(plan_payload, matchup_records, base_seed, campaign_version)
+      finished = BattleJobRunner.run_all!(matchup_records)
       if finished.any?(&:failed?)
         return Sim::Result.failure(finished.find(&:failed?).error_message || "battle simulation failed")
       end
 
+      settle_and_persist!(plan_payload, finished, base_seed, campaign_version)
+    end
+
+    def settle_async!(plan_payload, matchup_records)
+      @game.update!(status: "simulating")
+      BattleJobRunner.enqueue_all!(matchup_records)
+
+      Sim::Result.ok(
+        pending: true,
+        game: @game.reload,
+        campaign: plan_payload[:campaign],
+        matchups: matchup_records
+      )
+    end
+
+    def settle_and_persist!(plan_payload, finished, base_seed, campaign_version)
       battles = finished.map do |matchup|
         matchup.battle_result.merge(matchup_id: matchup.id, seed: matchup.seed)
       end
 
-      # 3) Settle campaign + persist reports.
       ActiveRecord::Base.transaction do
+        repository = Sim::Persistence::CampaignRepository.new
+        campaign = repository.load(@game)
+        if campaign_version != campaign.version
+          return Sim::Result.failure("version conflict", code: :conflict)
+        end
+
         settled = Sim::Campaign::SettleMatchups.call(
           campaign: plan_payload[:campaign],
           battles: battles,
@@ -74,7 +105,7 @@ module Games
 
         finished.each { |matchup| Balance::Record.from_matchup!(matchup) }
 
-        persist_snapshot!(next_campaign, "post_round")
+        persist_snapshot!(@game, next_campaign, "post_round")
         @game.update!(status: next_campaign.winner_id ? "finished" : "active")
         @game.reload
 
@@ -86,8 +117,6 @@ module Games
         )
       end
     end
-
-    private
 
     def replace_matchups!(campaign_round, matchups)
       @game.round_matchups.where(campaign_round: campaign_round).delete_all
@@ -109,8 +138,24 @@ module Games
       end
     end
 
-    def persist_snapshot!(campaign, phase)
+    def persist_round_plan_snapshot!(campaign, plan_payload, base_seed, campaign_version)
       snapshot = @game.round_snapshots.find_or_initialize_by(
+        round_number: campaign.round,
+        phase: "pre_round"
+      )
+      snapshot.payload = {
+        campaign: campaign.to_api_hash,
+        roundPlan: {
+          byes: deep_stringify(plan_payload[:byes]),
+          baseSeed: base_seed,
+          campaignVersion: campaign_version
+        }
+      }
+      snapshot.save!
+    end
+
+    def persist_snapshot!(game, campaign, phase)
+      snapshot = game.round_snapshots.find_or_initialize_by(
         round_number: phase == "post_round" ? campaign.round - 1 : campaign.round,
         phase: phase
       )

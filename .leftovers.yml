@@ -3,6 +3,8 @@
 keep:
   - ApplicationMailer
   - Backend
+  - BalanceMorningSimulationJob
+  - BalanceDuelMatrixBatchJob
   - obstacle_kernels
   - wheel_fits?
 exclude_paths:

@@ -23,8 +23,10 @@ class SimulateBattleJob < ApplicationJob
       result_payload: deep_stringify(result),
       error_message: nil
     )
+    Games::SettleRound.enqueue_if_ready!(matchup.game_id, matchup.campaign_round)
   rescue StandardError => error
     matchup&.update!(status: "failed", error_message: error.message)
+    Games::SettleRound.enqueue_if_ready!(matchup.game_id, matchup.campaign_round) if matchup
     raise
   end
 

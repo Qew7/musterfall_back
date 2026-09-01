@@ -8,6 +8,12 @@ fi
 if [ "$1" == "./bin/rails" ] && [ "$2" == "server" ]; then
   rm -f tmp/pids/server.pid
   ./bin/rails db:prepare
+  ./bin/rails db:load_queue_schema
+fi
+
+if [ "$1" == "bin/jobs" ]; then
+  ./bin/rails db:prepare
+  ./bin/rails db:load_queue_schema
 fi
 
 exec "${@}"

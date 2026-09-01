@@ -1,5 +1,5 @@
 class Game < ApplicationRecord
-  STATUSES = %w[draft active finished].freeze
+  STATUSES = %w[draft active simulating finished].freeze
 
   has_many :battles, -> { order(:round_number, :id) }, dependent: :destroy
   has_many :round_snapshots, -> { order(:round_number, :phase) }, dependent: :destroy

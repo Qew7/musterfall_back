@@ -28,30 +28,35 @@ module Balance
         models_lost: bucket_rows(counters, "models_lost"),
         recent_battles: recent_battles(battles),
         simulation_runs: simulation_runs_payload,
+        active_simulations: active_simulations_payload,
         active_simulation: active_simulation_payload,
         factions: Faction.order(:position).pluck(:slug)
       }
     end
 
-    def active_simulation_payload
-      run = BalanceSimulationRun.active.order(created_at: :desc).first
-      return nil unless run
+    def active_simulations_payload
+      BalanceSimulationRun.active.order(created_at: :desc).map { |run| serialize_run(run) }
+    end
 
-      serialize_run(run)
+    def active_simulation_payload
+      active_simulations_payload.first
     end
 
     def simulation_runs_payload
-      BalanceSimulationRun.recent.limit(10).map { |run| serialize_run(run) }
+      runs = BalanceSimulationRun.recent.limit(5).to_a
+      recorded = BalanceBattleRollup.where(balance_simulation_run_id: runs.map(&:id))
+        .group(:balance_simulation_run_id).count
+      runs.map { |run| serialize_run(run, battles_recorded: recorded[run.id].to_i) }
     end
 
-    def serialize_run(run)
+    def serialize_run(run, battles_recorded: nil)
       {
         id: run.id,
         status: run.status,
         catalog_version_id: run.catalog_version_id,
         battles_completed: run.battles_completed,
         battles_failed: run.battles_failed,
-        battles_recorded: run.balance_battle_rollups.count,
+        battles_recorded: battles_recorded.nil? ? run.balance_battle_rollups.count : battles_recorded,
         battle_limit: run.battle_limit,
         config: run.config,
         error_message: run.error_message,

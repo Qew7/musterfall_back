@@ -33,7 +33,7 @@ module Sim
             Blast::Shooting.template_descriptor(attacker, primary_target, victims).merge(kind: "slingCatapult")
           end
 
-          def resolve_missile_strike!(phase:, actor:, host:, profile:, primary:, vector:, victims:, attack_type:, acting_side:, target_side:, round_number:, blockers:)
+          def resolve_missile_strike!(phase:, actor:, host:, profile:, primary:, vector:, victims:, attack_type:, acting_side:, target_side:, round_number:, blockers:, rng:, terrain: [], **_extra)
             living = victims.select { |entry| entry[:target][:current_health].to_i.positive? }
             return if living.empty?
 

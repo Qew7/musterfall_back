@@ -10,6 +10,10 @@ class BalanceSimulationRun < ApplicationRecord
   scope :active, -> { where(status: %w[pending running stopping]) }
   scope :recent, -> { order(created_at: :desc) }
 
+  def pending?
+    status == "pending"
+  end
+
   def running?
     status == "running"
   end
@@ -19,7 +23,12 @@ class BalanceSimulationRun < ApplicationRecord
   end
 
   def stop!
-    update!(status: "stopping") if status == "running"
+    case status
+    when "running"
+      update!(status: "stopping")
+    when "pending"
+      update!(status: "stopped", finished_at: Time.current)
+    end
   end
 
   def battle_limit

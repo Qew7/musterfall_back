@@ -3,7 +3,14 @@ class BalanceSimulationJob < ApplicationJob
 
   def perform(run_id)
     run = BalanceSimulationRun.find(run_id)
-    return unless run.running? || run.status == "pending" || run.stopping?
+    return if run.status.in?(%w[stopped completed failed])
+
+    if run.stopping?
+      run.update!(status: "stopped", finished_at: Time.current)
+      return
+    end
+
+    return unless run.pending? || run.running?
 
     run.update!(status: "running", started_at: run.started_at || Time.current, error_message: nil)
     catalog = Sim::Catalog::Loader.load
@@ -15,7 +22,7 @@ class BalanceSimulationJob < ApplicationJob
       break if run.limit_reached?
 
       begin
-        Synthetic::Play.call!(run: run, catalog: catalog, rng: rng)
+        Balance::Synthetic::Play.call!(run: run, catalog: catalog, rng: rng)
         run.increment!(:battles_completed)
       rescue StandardError => error
         run.increment!(:battles_failed)

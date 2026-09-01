@@ -1,6 +1,8 @@
 class CatalogVersion < ApplicationRecord
   has_many :balance_battle_rollups, dependent: :destroy
   has_many :balance_counters, dependent: :destroy
+  has_many :balance_duel_runs, dependent: :destroy
+  has_many :balance_duel_matrix_runs, dependent: :destroy
 
   validates :content_hash, :catalog_hash, :rules_hash, presence: true
   validates :content_hash, uniqueness: true

@@ -34,8 +34,21 @@ module Balance
     def upsert_counters!(catalog_version_id, rows)
       return if rows.empty?
 
+      merged = rows.each_with_object({}) do |row, memo|
+        key = [ row[:bucket], row[:key], row[:matchup_type] ]
+        bucket = memo[key] ||= {
+          bucket: row[:bucket],
+          key: row[:key],
+          matchup_type: row[:matchup_type],
+          n: 0,
+          sum: 0
+        }
+        bucket[:n] += row[:n]
+        bucket[:sum] += row[:sum]
+      end.values
+
       timestamp = Time.current
-      values = rows.map { |row|
+      values = merged.map { |row|
         {
           catalog_version_id: catalog_version_id,
           bucket: row[:bucket],

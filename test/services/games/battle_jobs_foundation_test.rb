@@ -1,6 +1,8 @@
 require "test_helper"
 
 class GamesBattleJobsFoundationTest < ActiveSupport::TestCase
+  include ActiveJob::TestHelper
+
   test "advance_round persists matchups and completes via battle jobs" do
     game = create_active_game(player_count: 2)
 
@@ -15,6 +17,34 @@ class GamesBattleJobsFoundationTest < ActiveSupport::TestCase
     assert matchups.all?(&:completed?)
     assert matchups.first.seed.present?
     assert game.battles.any?
+  end
+
+  test "advance_round async enqueues jobs and settle_round completes round" do
+    previous_mode = Rails.configuration.x.battle_jobs.execution_mode
+    previous_adapter = ActiveJob::Base.queue_adapter
+    Rails.configuration.x.battle_jobs.execution_mode = :async
+    ActiveJob::Base.queue_adapter = :test
+
+    game = create_active_game(player_count: 2)
+
+    result = Games::AdvanceRound.call(game: game, base_version: 0)
+    assert result.ok?, result.error
+    assert result.value[:pending]
+
+    game.reload
+    assert_equal "simulating", game.status
+
+    perform_enqueued_jobs
+    perform_enqueued_jobs
+
+    game.reload
+    assert_equal "active", game.status
+    assert game.battles.any?
+    assert game.round_matchups.all?(&:completed?)
+  ensure
+    Rails.configuration.x.battle_jobs.execution_mode = previous_mode
+    ActiveJob::Base.queue_adapter = previous_adapter
+    clear_enqueued_jobs
   end
 
   test "plan_matchups assigns distinct seeds per pair" do

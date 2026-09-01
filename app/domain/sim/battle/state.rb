@@ -58,8 +58,8 @@ module Sim
         unit[:current_health].to_i > 0 && !unit[:is_routing]
       end
 
-      def apply_faction_passives!(side, terrain: [])
-        Rules.for(:round).apply_passives!(side.merge(terrain: Array(terrain)))
+      def apply_faction_passives!(side, terrain: [], rng: nil)
+        Rules.for(:round).apply_passives!(side.merge(terrain: Array(terrain), rng: rng))
       end
 
       def resolve_summons_end_round!(side)

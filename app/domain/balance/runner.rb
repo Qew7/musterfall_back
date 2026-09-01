@@ -26,8 +26,22 @@ module Balance
       end
     end
 
+    def enqueue_duel_matrix_batch!(matrix_run_id, batch_index, anchors, all_templates)
+      if background_jobs?
+        BalanceDuelMatrixBatchJob.perform_later(matrix_run_id, batch_index, anchors, all_templates)
+      else
+        Thread.new do
+          Rails.application.executor.wrap do
+            BalanceDuelMatrixBatchJob.perform_now(matrix_run_id, batch_index, anchors, all_templates)
+          end
+        end
+      end
+    end
+
     def background_jobs?
-      ENV["SOLID_QUEUE_IN_PUMA"].present? || !Rails.env.development?
+      ENV["SOLID_QUEUE_IN_PUMA"].present? ||
+        ENV["SOLID_QUEUE_EXTERNAL"].present? ||
+        !Rails.env.development?
     end
   end
 end
