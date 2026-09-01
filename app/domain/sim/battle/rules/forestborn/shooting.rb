@@ -3,6 +3,7 @@ module Sim
     module Rules
       module Forestborn
         module Shooting
+          # rule: forestborn | shooting | +1 shooting skill when target is in forest.
           module_function
 
           def shooting_skill(attacker, defender, terrain, skill)

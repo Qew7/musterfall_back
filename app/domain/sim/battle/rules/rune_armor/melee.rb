@@ -3,6 +3,7 @@ module Sim
     module Rules
       module RuneArmor
         module Melee
+          # rule: rune_armor | melee | Non-magic damage ×⅔.
           module_function
 
           def damage_factor(_attacker, defender, attack_type, _vector, _round_number)

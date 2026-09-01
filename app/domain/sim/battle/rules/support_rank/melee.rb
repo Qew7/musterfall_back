@@ -3,6 +3,7 @@ module Sim
     module Rules
       module SupportRank
         module Melee
+          # rule: support_rank | melee | Second rank doubles front-contact attacking models (capped by models_remaining).
           module_function
 
           def attacking_model_count(attacker, _defender, contact_side, count)

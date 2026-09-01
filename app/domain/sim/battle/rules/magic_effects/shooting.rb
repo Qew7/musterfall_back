@@ -3,6 +3,7 @@ module Sim
     module Rules
       module MagicEffects
         module Shooting
+          # rule: magic_effects | shooting | ranged_hidden blocks targeting; ranged_hindered ×0.5 hit; magic_ward halves magic damage.
           module_function
 
           def allow_target?(_attacker, target, attack_type)

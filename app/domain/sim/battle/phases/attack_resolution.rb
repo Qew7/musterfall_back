@@ -137,6 +137,18 @@ module Sim
               )
             end
 
+            miss_action = if hits <= 0 && attempts.positive?
+              build_missile_miss_action(
+                actor: actor,
+                host: host,
+                profile: profile,
+                victim: victim,
+                vector: vector,
+                attack_type: attack_type,
+                blockers: blockers,
+                victims: victims
+              )
+            end
             finalize_strike_batch!(
               phase: phase,
               actions: batch_actions,
@@ -147,7 +159,8 @@ module Sim
               attack_type: attack_type,
               vector: vector,
               acting_side: acting_side,
-              target_side: target_side
+              target_side: target_side,
+              miss_action: miss_action
             )
           end
           phase
@@ -255,6 +268,14 @@ module Sim
             }
 
             unless hits.positive?
+              miss_action = build_melee_miss_action(
+                entry: entry,
+                attacker: attacker,
+                target: target,
+                vector: vector,
+                contact_side: contact_side,
+                victims: victims
+              )
               finalize_strike_batch!(
                 phase: phase,
                 actions: [],
@@ -265,7 +286,8 @@ module Sim
                 attack_type: "melee",
                 vector: vector,
                 acting_side: acting_side,
-                target_side: target_side
+                target_side: target_side,
+                miss_action: miss_action
               )
               next
             end
@@ -587,19 +609,26 @@ module Sim
           }
         end
 
-        def finalize_strike_batch!(phase:, actions:, attempts:, hits:, actor:, victim:, attack_type:, vector:, acting_side:, target_side:)
+        def finalize_strike_batch!(phase:, actions:, attempts:, hits:, actor:, victim:, attack_type:, vector:, acting_side:, target_side:, miss_action: nil)
           return if attempts <= 0
 
           if hits <= 0
-            add_event(
-              phase,
-              ActionResult.miss_roll_text(
-                actor: actor,
-                target_name: victim[:name],
-                hits_landed: 0,
-                attacks_attempted: attempts
-              )
+            summary = ActionResult.miss_roll_text(
+              actor: actor,
+              target_name: victim[:name],
+              hits_landed: 0,
+              attacks_attempted: attempts
             )
+            add_event(phase, summary)
+            if miss_action
+              miss_action[:summary] = summary
+              miss_action[:hits_landed] = 0
+              miss_action[:attacks_attempted] = attempts
+              miss_action[:target_state_after] ||= State.snapshot_combatant(victim)
+              miss_action[:snapshot] = State.snapshot_battlefield([ acting_side, target_side ])
+              miss_action[:details] = details(miss_action)
+              phase[:actions] << miss_action
+            end
             return
           end
 
@@ -692,6 +721,82 @@ module Sim
 
         def format_actor(role, name)
           role == "hero" ? "Герой #{name}" : "Отряд #{name}"
+        end
+
+        def build_melee_miss_action(entry:, attacker:, target:, vector:, contact_side:, victims:)
+          before = State.snapshot_combatant(target)
+          {
+            type: "melee",
+            actor_id: entry[:actor_id],
+            actor_unit_id: entry[:actor_unit_id],
+            actor_name: entry[:actor_name],
+            actor_role: entry[:actor_role],
+            target_id: target[:entity_id],
+            target_name: target[:name],
+            vector: vector,
+            damage: 0,
+            blockers: [],
+            requires_line_of_sight: attacker[:requires_line_of_sight],
+            template: nil,
+            affected_ids: victims.map { |victim| victim[:target][:entity_id] },
+            actor_state: State.snapshot_combatant(attacker),
+            target_state_before: before,
+            charge: melee_charge(attacker, target, "melee", vector),
+            details: [],
+            clauses: Rules.for(:melee).log_clauses(
+              attacker: entry[:profile],
+              host: attacker,
+              defender: target,
+              attack_type: "melee",
+              vector: vector,
+              contact_side: contact_side
+            ),
+            trace: Trace.build(
+              rule_keys: Trace.attack_rule_keys(attacker, "melee", profile: entry[:profile]),
+              trigger: "melee_strike",
+              result: "miss",
+              target_ids: [ target[:entity_id] ]
+            )
+          }
+        end
+
+        def build_missile_miss_action(actor:, host:, profile:, victim:, vector:, attack_type:, blockers:, victims:)
+          before = State.snapshot_combatant(victim)
+          {
+            type: attack_type,
+            actor_id: actor[:actor_id],
+            actor_unit_id: actor[:host_id],
+            actor_name: actor[:actor_name],
+            actor_role: actor[:actor_role],
+            target_id: victim[:entity_id],
+            target_name: victim[:name],
+            vector: vector,
+            damage: 0,
+            blockers: blockers.map { |blocker| blocker[:entity_id] },
+            requires_line_of_sight: profile[:requires_line_of_sight],
+            shooting_range: attack_type == "shooting" ? profile[:shooting_range] : nil,
+            template: template_descriptor(profile, victim, victims, attack_type),
+            affected_ids: victims.map { |entry| entry[:target][:entity_id] },
+            magic_school: actor[:magic_school],
+            spell_keys: Array(actor[:spell_keys]),
+            actor_state: State.snapshot_combatant(host),
+            target_state_before: before,
+            charge: nil,
+            details: [],
+            clauses: Rules.for(Rules.damage_phase_for(attack_type)).log_clauses(
+              attacker: profile,
+              host: host,
+              defender: victim,
+              attack_type: attack_type,
+              vector: vector
+            ),
+            trace: Trace.build(
+              rule_keys: Trace.attack_rule_keys(host, attack_type, profile: profile),
+              trigger: attack_type,
+              result: "miss",
+              target_ids: [ victim[:entity_id] ]
+            )
+          }
         end
       end
     end

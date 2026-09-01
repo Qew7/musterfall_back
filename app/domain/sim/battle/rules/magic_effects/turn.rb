@@ -3,6 +3,7 @@ module Sim
     module Rules
       module MagicEffects
         module Turn
+          # rule: magic_effects | turn | start_turn/end_turn spell triggers deal damage.
           module_function
 
           def before_play!(ctx)

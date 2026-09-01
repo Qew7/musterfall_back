@@ -3,6 +3,7 @@ module Sim
     module Rules
       module Poison
         module Melee
+          # rule: poison | melee | Multi-wound non-machine: extra model kill after hit. 1W/machine: normal strike damage only.
           module_function
 
           def after_hit!(ctx)
@@ -16,6 +17,9 @@ module Sim
             return if strike_killed_model?(action, defender)
 
             model_health = [ defender[:model_health].to_i, 1 ].max
+            machine = machine_defender?(defender)
+            return if model_health <= 1 || machine
+
             damage = [ model_health, defender[:current_health].to_i ].min
             return if damage <= 0
 
@@ -33,6 +37,11 @@ module Sim
             [ ctx[:attacker], ctx[:host] ].compact.any? { |entry| Array(entry[:abilities]).include?("poison") }
           end
           private_class_method :poison_attacker?
+
+          def machine_defender?(defender)
+            Array(defender[:abilities]).include?("machine") || defender[:model_class].to_s == "machine"
+          end
+          private_class_method :machine_defender?
 
           def strike_killed_model?(action, defender)
             before = action[:target_state_before]

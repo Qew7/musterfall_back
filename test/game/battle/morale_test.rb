@@ -561,6 +561,65 @@ class SimBattleMoraleTest < ActiveSupport::TestCase
     assert_equal plain_check[:threshold] + 2, check[:threshold]
   end
 
+  test "undead resolute requires living general" do
+    skeleton = {
+      entity_id: "skel-1", name: "Скелетный блок", kind: "unit", morale: 6,
+      abilities: [ "undead", "resolute" ], x: 5, y: 5
+    }
+    general = { entity_id: "gen", kind: "hero", is_general: true, current_health: 3, x: 6, y: 5 }
+
+    without_general = Sim::Battle::Phases::Morale.resolve_check(
+      combatant: skeleton, allies: [ skeleton ], enemies: [], round_number: 1,
+      phase_type: "melee", combat_score_delta: 2, sequence: 0
+    )
+    with_general = Sim::Battle::Phases::Morale.resolve_check(
+      combatant: skeleton, allies: [ skeleton, general ], enemies: [], round_number: 1,
+      phase_type: "melee", combat_score_delta: 2, sequence: 0
+    )
+    plain = skeleton.merge(abilities: [ "undead" ])
+    plain_check = Sim::Battle::Phases::Morale.resolve_check(
+      combatant: plain, allies: [ plain, general ], enemies: [], round_number: 1,
+      phase_type: "melee", combat_score_delta: 2, sequence: 0
+    )
+
+    assert_equal plain_check[:threshold], without_general[:threshold]
+    assert_equal plain_check[:threshold] + 2, with_general[:threshold]
+  end
+
+  test "undead morale failure chips models by failure margin instead of wiping the unit" do
+    skeleton = {
+      entity_id: "skel-1",
+      name: "Скелетный блок",
+      kind: "unit",
+      morale: 6,
+      abilities: [ "undead" ],
+      x: 5,
+      y: 5,
+      facing: 0,
+      current_health: 22,
+      max_health: 22,
+      model_health: 1,
+      models_remaining: 22,
+      starting_models: 22,
+      files: 5,
+      ranks: 5,
+      base_width: 5,
+      base_depth: 5,
+      model_width: 1,
+      model_depth: 1,
+      frontage: 5,
+      max_files: 5
+    }
+    check = { failure_margin: 4, passed: false }
+
+    result = Sim::Battle::Rules::Undead::Morale.handle_morale_failure!(skeleton, check, {})
+
+    assert result
+    assert_equal 4, result[:damage]
+    assert_equal 18, skeleton[:current_health]
+    assert_match(/теряет 4 моделей/, result[:summary])
+  end
+
   test "muster lets nearby unit use hero morale" do
     unit = { entity_id: "u1", name: "Spearmen", kind: "unit", morale: 5, abilities: [], x: 5, y: 5 }
     hero = { entity_id: "h1", name: "General", kind: "hero", morale: 9, abilities: [ "muster" ], x: 6, y: 5 }

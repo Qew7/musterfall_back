@@ -3,6 +3,7 @@ module Sim
     module Rules
       module ThrowRocks
         module Movement
+          # rule: throw_rocks | movement | Non-melee mover advances when no line of sight for ranged throw.
           module_function
 
           def melee_mover?(combatant)

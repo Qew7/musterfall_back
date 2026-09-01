@@ -3,6 +3,7 @@ module Sim
     module Rules
       module Skirmisher
         module Melee
+          # rule: skirmisher | melee | No flank/rear damage bonus; may shoot without requiring front arc.
           module_function
 
           def facing_damage_factor(defender, _vector)

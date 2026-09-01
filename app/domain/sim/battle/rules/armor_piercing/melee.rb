@@ -3,6 +3,7 @@ module Sim
     module Rules
       module ArmorPiercing
         module Melee
+          # rule: armor_piercing | melee | Halves armor mitigation penalty on melee (50% of excess armor factor).
           module_function
 
           def armor_factor(attacker, _defender, _attack_type, factor)

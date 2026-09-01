@@ -3,6 +3,7 @@ module Sim
     module Rules
       module Forestkin
         module Round
+          # rule: forestkin | round | Heal +1 HP per round while wounded and standing in forest.
           module_function
 
           def apply_passives!(side)

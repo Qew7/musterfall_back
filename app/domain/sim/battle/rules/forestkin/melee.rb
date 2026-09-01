@@ -3,6 +3,7 @@ module Sim
     module Rules
       module Forestkin
         module Melee
+          # rule: forestkin | melee | Melee hit on target outside forest spawns forest terrain under target.
           module_function
 
           def after_hit!(ctx)

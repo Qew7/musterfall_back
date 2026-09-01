@@ -3,6 +3,7 @@ module Sim
     module Rules
       module Dodge
         module Melee
+          # rule: dodge | melee | Defender hit chance ×0.8 for melee.
           module_function
 
           def hit_chance_factor(_attacker, defender, _attack_type)

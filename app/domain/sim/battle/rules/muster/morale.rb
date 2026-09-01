@@ -3,6 +3,7 @@ module Sim
     module Rules
       module Muster
         module Morale
+          # rule: muster | morale | Hero muster raises ally effective morale to hero morale within range.
           module_function
 
           def effective_morale(combatant, allies)

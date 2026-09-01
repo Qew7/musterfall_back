@@ -4,6 +4,7 @@ module Sim
       module CorpseTrail
         # Legacy corpse_mire terrain from older battles/replays.
         module Movement
+          # rule: corpse_trail | movement | Undead ignore movement penalty from corpseTrail terrain.
           module_function
 
           def terrain_damage_factor(combatant, feature)

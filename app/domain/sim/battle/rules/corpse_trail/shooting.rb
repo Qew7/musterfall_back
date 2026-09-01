@@ -6,6 +6,7 @@ module Sim
           SUMMON_KIND = "zombies"
           SEARCH_RADIUS = 6.0
 
+          # rule: corpse_trail | shooting | On hit, summons zombies within 6" of the victim.
           module_function
 
           def after_hit!(ctx)

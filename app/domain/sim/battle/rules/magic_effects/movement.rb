@@ -3,6 +3,7 @@ module Sim
     module Rules
       module MagicEffects
         module Movement
+          # rule: magic_effects | movement | ranged_hindered halves move; after_move effects damage movers.
           module_function
 
           def movement_multiplier(combatant, _ctx)

@@ -36,6 +36,7 @@ module Sim
             Common::Shooting,
             Blast::Shooting,
             Machine::Shooting,
+            AntiFlying::Shooting,
             ArmorPiercing::Shooting,
             Dodge::Shooting,
             Toxin::Shooting,
@@ -56,7 +57,7 @@ module Sim
           ]
         },
         setup: -> { [ BannerAura::Setup, ResoluteAura::Setup ] },
-        round: -> { [ Undead::Round, Regen::Round, Forestkin::Round ] },
+        round: -> { [ LavaSpit::Round, Undead::Round, Regen::Round, Forestkin::Round ] },
         turn: -> { [ MagicEffects::Turn ] },
         movement: -> {
           [
@@ -307,12 +308,13 @@ module Sim
           end
         end
 
-        def apply_passives!(side, terrain: side[:terrain])
+        def apply_passives!(side, enemy_side: nil)
+          ctx = side.merge(enemy_side: enemy_side)
           events = []
           @rules.each do |rule|
             next unless rule.respond_to?(:apply_passives!)
 
-            events.concat(Array(rule.apply_passives!(side.merge(terrain: Array(terrain)))))
+            events.concat(Array(rule.apply_passives!(ctx)))
           end
           events
         end

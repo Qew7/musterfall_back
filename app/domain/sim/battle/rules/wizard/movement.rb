@@ -4,6 +4,7 @@ module Sim
       module Wizard
         # Casters who cannot cast from the current pose walk toward a valid spell anchor.
         module Movement
+          # rule: wizard | movement | Casters path toward spell anchor when no valid cast is available.
           module_function
 
           def caster?(combatant)

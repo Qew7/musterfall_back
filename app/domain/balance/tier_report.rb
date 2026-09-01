@@ -18,7 +18,7 @@ module Balance
         catalog_version_id: Balance::Dashboard.resolve_version(catalog_version_id).id,
         contact_filter: contact,
         deploy_filter: deploy,
-        summary: summary_payload(runs, matchups),
+        summary: summary_payload(runs, matchups, units),
         cost_outliers: cost_outlier_rows(catalog_version_id: catalog_version_id, contact: contact, deploy: deploy),
         by_tier: RECRUIT_TIERS.index_with { |tier| tier_section(tier, matchups, units) },
         cross_tier_leaks: cross_tier_leaks(matchups, units),
@@ -29,7 +29,7 @@ module Balance
     def print_report(catalog_version_id: nil, contact: nil, deploy: nil)
       payload = build(catalog_version_id: catalog_version_id, contact: contact, deploy: deploy)
       puts "Balance tier report (catalog_version_id=#{payload[:catalog_version_id]}, contact=#{payload[:contact_filter] || 'all'}, deploy=#{payload[:deploy_filter] || 'all'})"
-      puts "duel_runs=#{payload[:summary][:duel_run_count]} iterations=#{payload[:summary][:total_iterations]} matchups=#{payload[:summary][:matchup_count]}"
+      puts "duel_runs=#{payload[:summary][:duel_run_count]} iterations=#{payload[:summary][:total_iterations]} matchups=#{payload[:summary][:matchup_count]} upsets=#{payload[:summary][:upset_count]} (#{format('%.1f%%', payload[:summary][:upset_rate] * 100)})"
       puts
 
       if payload[:low_sample_pairs].any?
@@ -65,7 +65,7 @@ module Balance
       ArmyTemplate.where(kind: "unit").includes(:faction).index_by(&:template_key)
     end
 
-    def summary_payload(runs, matchups)
+    def summary_payload(runs, matchups, units)
       iterations = runs.sum(&:iterations)
       avg_rounds =
         if iterations.positive?
@@ -79,7 +79,7 @@ module Balance
         total_iterations: iterations,
         avg_rounds: avg_rounds,
         matchup_count: matchups.length
-      }
+      }.merge(Upset.duel_counts(runs, units))
     end
 
     def tier_section(tier, matchups, units)

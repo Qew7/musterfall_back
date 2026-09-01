@@ -3,6 +3,7 @@ module Sim
     module Rules
       module Volley
         module Shooting
+          # rule: volley | shooting | Up to two targets: primary ×1, secondary ×0.65; front-rank volley per target.
           module_function
 
           def applies?(attacker, attack_type)
@@ -27,6 +28,10 @@ module Sim
               kind: "volley",
               affected_ids: victims.map { |entry| entry[:target][:entity_id] }
             }
+          end
+
+          def resolve_missile_strike!(**ctx)
+            Common::Shooting.resolve_missile_strike!(**ctx)
           end
         end
       end

@@ -3,6 +3,7 @@ module Sim
     module Rules
       module Machine
         module Shooting
+          # rule: machine | shooting | Machine ranged damage ×1.25.
           module_function
 
           def damage_factor(attacker, _defender, attack_type, _vector, _round_number)

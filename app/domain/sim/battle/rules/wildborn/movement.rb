@@ -3,6 +3,7 @@ module Sim
     module Rules
       module Wildborn
         module Movement
+          # rule: wildborn | movement | Fearless in forest; may charge through terrain toward forest targets.
           module_function
 
           def can_charge_through_terrain?(attacker, defender, terrain)

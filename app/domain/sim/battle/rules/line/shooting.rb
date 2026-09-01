@@ -3,6 +3,7 @@ module Sim
     module Rules
       module Line
         module Shooting
+          # rule: line | shooting | Line-shaped shooting template (beam/artillery line).
           module_function
 
           def applies?(attacker, attack_type)

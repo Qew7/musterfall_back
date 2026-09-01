@@ -27,11 +27,6 @@ class BalanceMorningSimulationJob < ApplicationJob
   private
 
   def start_army_simulation
-    if BalanceSimulationRun.active.exists?
-      Rails.logger.info("[BalanceMorningSimulationJob] skip army: simulation already active")
-      return
-    end
-
     run = Balance::Simulation.start!(config: ARMY_CONFIG)
     Rails.logger.info("[BalanceMorningSimulationJob] started army run ##{run.id}")
   rescue ArgumentError => error
@@ -39,11 +34,6 @@ class BalanceMorningSimulationJob < ApplicationJob
   end
 
   def start_duel_matrix
-    if BalanceDuelMatrixRun.active.exists?
-      Rails.logger.info("[BalanceMorningSimulationJob] skip duel matrix: already active")
-      return
-    end
-
     run = Balance::DuelMatrix.start!(config: DUEL_MATRIX_CONFIG)
     Rails.logger.info("[BalanceMorningSimulationJob] started duel matrix ##{run.id}")
   rescue ArgumentError => error

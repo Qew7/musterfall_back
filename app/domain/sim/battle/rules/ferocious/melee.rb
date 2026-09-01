@@ -3,6 +3,7 @@ module Sim
     module Rules
       module Ferocious
         module Melee
+          # rule: ferocious | melee | Consecutive kills on same target in contact ramp melee skill up to +6.
           module_function
 
           def before_play!(ctx)

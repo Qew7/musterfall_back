@@ -2,8 +2,8 @@ module Sim
   module Battle
     module Rules
       module Fear
-        # Blocks melee only when a charge fear check failed this round (set in Movement).
         module Melee
+          # rule: fear | melee | Attacker skips melee when fear_cannot_attack is set (failed charge fear check).
           module_function
 
           def allow_attack?(attacker, _ctx = nil)

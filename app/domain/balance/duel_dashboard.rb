@@ -13,6 +13,7 @@ module Balance
         deploy_filter: deploy,
         summary: summary_payload(runs),
         template_wins: template_wins(runs),
+        units: Balance::Dashboard.unit_template_keys,
         matchups: Balance::DuelRuns.matchup_rows(runs),
         recent_runs: recent_runs(runs),
         active_duel_matrix: active_duel_matrix_payload,
@@ -28,11 +29,12 @@ module Balance
     end
 
     def duel_matrix_runs_payload
-      BalanceDuelMatrixRun.recent.limit(5).map { |run| Balance::DuelMatrix.serialize_run(run) }
+      BalanceDuelMatrixRun.recent.limit(5).includes(:catalog_version).map { |run| Balance::DuelMatrix.serialize_run(run) }
     end
 
     def summary_payload(runs)
       entries = runs.to_a
+      units = TierReport.unit_index
       iterations = entries.sum(&:iterations)
       avg_rounds =
         if iterations.positive?
@@ -45,7 +47,7 @@ module Balance
         duel_run_count: entries.length,
         total_iterations: iterations,
         avg_rounds: avg_rounds
-      }
+      }.merge(Upset.duel_counts(entries, units))
     end
 
     def template_wins(runs)
@@ -55,13 +57,14 @@ module Balance
         totals[run.right_template] += run.right_wins.to_i
       end
       total = totals.values.sum
-      totals.sort_by { |_, wins| -wins }.map do |template_id, wins|
+      Balance::Dashboard.unit_template_keys.map do |template_id|
+        wins = totals[template_id].to_i
         {
           template_id: template_id,
           wins: wins,
           winrate: rate(wins, total)
         }
-      end
+      end.sort_by { |row| -row[:wins] }
     end
 
     def recent_runs(runs)

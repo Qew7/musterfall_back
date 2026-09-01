@@ -3,6 +3,7 @@ module Sim
     module Rules
       module Boar
         module Melee
+          # rule: boar_charge | melee | Flank/rear boarCharge marks ferocious allies in contact with target for +1 melee that round.
           module_function
 
           def before_play!(ctx)

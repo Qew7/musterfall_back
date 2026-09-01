@@ -3,7 +3,7 @@ class BalanceDuelMatrixBatchJob < ApplicationJob
 
   def perform(matrix_run_id, batch_index, anchors, all_templates)
     run = BalanceDuelMatrixRun.find(matrix_run_id)
-    return if run.status.in?(%w[stopped failed])
+    return if run.status.in?(%w[stopped failed stopping])
 
     catalog = Sim::Catalog::Loader.load
     rng = Sim::Rng::Seeded.new(run.seed + batch_index.to_i)

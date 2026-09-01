@@ -3,6 +3,7 @@ module Sim
     module Rules
       module ArmorPiercing
         module Shooting
+          # rule: armor_piercing | shooting | Same armor mitigation halving for ranged attacks.
           module_function
 
           def armor_factor(attacker, _defender, _attack_type, factor)

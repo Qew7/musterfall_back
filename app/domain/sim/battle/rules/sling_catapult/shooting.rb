@@ -3,6 +3,7 @@ module Sim
     module Rules
       module SlingCatapult
         module Shooting
+          # rule: sling_catapult | shooting | Consumes nearest slingFodder goblin within 6" to fire a blast shot.
           module_function
 
           def before_play!(ctx)

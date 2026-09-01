@@ -6,10 +6,6 @@ module Balance
     module_function
 
     def start!(config:)
-      if BalanceDuelMatrixRun.active.exists?
-        raise ArgumentError, "duel matrix already running"
-      end
-
       templates = unit_template_keys
       raise ArgumentError, "need at least 2 unit templates" if templates.length < 2
 
@@ -42,6 +38,7 @@ module Balance
     def stop!(run_id)
       run = BalanceDuelMatrixRun.find(run_id)
       run.stop!
+      Runner.enqueue_duel_matrix_finalize!(run.id) if run.stopping?
       run
     end
 
@@ -83,6 +80,7 @@ module Balance
         id: run.id,
         status: run.status,
         catalog_version_id: run.catalog_version_id,
+        catalog_version: Balance::Dashboard.catalog_version_payload(run.catalog_version),
         batches_completed: run.batches_completed,
         batches_total: run.batches_total,
         matchups_completed: run.matchups_completed,

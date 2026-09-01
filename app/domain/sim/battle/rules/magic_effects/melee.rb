@@ -3,6 +3,7 @@ module Sim
     module Rules
       module MagicEffects
         module Melee
+          # rule: magic_effects | melee | after_melee_hit spell effects damage the attacker.
           module_function
 
           def after_hit!(ctx)

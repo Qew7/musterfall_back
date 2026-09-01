@@ -3,6 +3,7 @@ module Sim
     module Rules
       module Regen
         module Round
+          # rule: regen | round | d6 3+ heals +2 HP each round while wounded.
           module_function
 
           HEAL_AMOUNT = 2

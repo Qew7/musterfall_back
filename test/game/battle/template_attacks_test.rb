@@ -88,6 +88,58 @@ class SimBattleTemplateAttacksTest < ActiveSupport::TestCase
     assert_equal 3, victims.first[:models_hit]
   end
 
+  test "line template resolves damage for every unit under the beam" do
+    Line = Sim::Battle::Rules::Line::Shooting
+    cannon = combatant(
+      entity_id: "cannon",
+      x: 5, y: 12, facing: 0,
+      ranged: 7, shooting_template: "line", shooting_range: 16,
+      weapon_type: "demolish", skill: 3, abilities: [ "ranged", "machine" ],
+      missile_attacks: 1,
+      contributors: {
+        ranged: [ {
+          entity_id: "cannon", name: "Пушка", kind: "unit", ranged: 7, skill: 3,
+          weapon_type: "demolish", shooting_template: "line", missile_attacks: 1, initiative: 4
+        } ],
+        melee: [], spell: []
+      }
+    )
+    front = combatant(
+      entity_id: "front", x: 12, y: 12, facing: 180, side_index: 1,
+      files: 1, ranks: 2, models_remaining: 2, current_health: 2, model_health: 1,
+      base_width: 1, base_depth: 2
+    )
+    rear = combatant(
+      entity_id: "rear", x: 20, y: 12, facing: 180, side_index: 1,
+      files: 1, ranks: 2, models_remaining: 2, current_health: 2, model_health: 1,
+      base_width: 1, base_depth: 2
+    )
+    victims = Line.attack_victims(cannon, front, [ front, rear ])
+    phase = Attack.create_phase("shooting", "стрельба")
+    actor = Sim::Battle::Decisions::MissileChoice.build_actor(cannon, cannon.dig(:contributors, :ranged).first)
+
+    Line.resolve_missile_strike!(
+      phase: phase,
+      actor: actor,
+      host: cannon,
+      profile: actor,
+      primary: front,
+      vector: "front",
+      victims: victims,
+      attack_type: "shooting",
+      acting_side: { combatants: [ cannon ] },
+      target_side: { combatants: [ front, rear ] },
+      round_number: 1,
+      blockers: [],
+      rng: Object.new.tap { |rng| rng.define_singleton_method(:rand) { 0.0 } },
+      terrain: []
+    )
+
+    assert_equal 2, victims.length
+    assert_operator front[:current_health], :<, 2
+    assert_operator rear[:current_health], :<, 2
+  end
+
   test "line template extends through target to the battlefield edge" do
     cannon = combatant(x: 5, y: 12, facing: 0, shooting_range: 16, shooting_template: "line", base_depth: 1)
     primary = combatant(

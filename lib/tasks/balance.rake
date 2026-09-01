@@ -9,6 +9,16 @@ namespace :balance do
     Balance::CostAudit.print_report(contact: ENV["CONTACT"].presence, deploy: ENV["DEPLOY"].presence)
   end
 
+  desc "Print battle summary: faction wins, upset, duel upset (MATCHUP_TYPE=all CONTACT= DEPLOY=)"
+  task battle_report: :environment do
+    Balance::BattleReport.print_report(
+      catalog_version_id: ENV["CATALOG_VERSION_ID"].presence,
+      matchup_type: ENV["MATCHUP_TYPE"].presence || "all",
+      contact: ENV["CONTACT"].presence,
+      deploy: ENV["DEPLOY"].presence
+    )
+  end
+
   desc "Compare unit winrates between catalog versions (FROM=5 TO=6 CONTACT= DEPLOY=)"
   task compare_versions: :environment do
     from = ENV["FROM"].presence || abort("FROM required")
@@ -19,6 +29,12 @@ namespace :balance do
       contact: ENV["CONTACT"].presence,
       deploy: ENV["DEPLOY"].presence
     )
+  end
+
+  desc "Print battle rule concept index from # rule: headers (KEYS=shieldwall,fear)"
+  task rule_index: :environment do
+    keys = ENV["KEYS"]&.split(",")&.map(&:strip)&.presence
+    Balance::RuleCatalog.print_index(keys: keys)
   end
 
   desc "Backfill balance rollups from completed RoundMatchups"

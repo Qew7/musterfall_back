@@ -3,6 +3,7 @@ module Sim
     module Rules
       module Fear
         module Morale
+          # rule: fear | morale | −1 break threshold when an enemy has fear and you are not fearless.
           module_function
 
           def morale_threshold_delta(combatant, _allies, enemies, _combat_score_delta, terrain: [])

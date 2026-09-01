@@ -49,6 +49,8 @@ module Balance
         factory = Sim::Entities::Factory.new(catalog, id_sequence: { value: 0 })
         left_entity = factory.create_unit(config[:left_template], "duel-left")
         right_entity = factory.create_unit(config[:right_template], "duel-right")
+        apply_simulation_mutant!(left_entity, config[:left_template])
+        apply_simulation_mutant!(right_entity, config[:right_template])
         apply_models!(left_entity, config[:left_models])
         apply_models!(right_entity, config[:right_models])
         deploy!(left_entity, right_entity, contact: contact, deploy: deploy)
@@ -69,6 +71,15 @@ module Balance
           faction_id: faction_id,
           roster: [ entity ]
         }
+      end
+
+      def apply_simulation_mutant!(entity, template_id)
+        template = { id: template_id.to_s }
+        return unless Sim::Campaign::RecruitRules::ChaosSpawn.applies?(template)
+
+        treasury = Sim::Campaign::RecruitRules::ChaosSpawn::SIMULATION_TREASURY
+        rng = Sim::Rng::Seeded.new(Zlib.crc32("balance-duel:#{template_id}"))
+        Sim::Campaign::RecruitRules::ChaosSpawn.apply!(entity, treasury, rng)
       end
 
       def apply_models!(entity, count)

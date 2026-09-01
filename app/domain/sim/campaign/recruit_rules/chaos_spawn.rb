@@ -3,6 +3,7 @@ module Sim
     module RecruitRules
       module ChaosSpawn
         TEMPLATE_ID = "rift_mutant"
+        SIMULATION_TREASURY = 600
         CAPS = { health: 12, melee: 8, skill: 6, attacks: 4, movement: 8 }.freeze
         ABILITIES = %w[flying regen charge armorPiercing antiLarge dodge].freeze
 
@@ -21,12 +22,13 @@ module Sim
           abilities_added = 0
           mutation_count(treasury).times do
             choices = stat_choices(entity, counts)
-            choices.concat([ :ability, :ability ]) if abilities_added < 2 && (ABILITIES - entity.dig(:components, :abilities)).any?
+            remaining_abilities = ABILITIES - Array(entity.dig(:components, :abilities))
+            choices.concat([ :ability ]) if abilities_added < 2 && remaining_abilities.any?
             choice = rng.pick(choices)
-            next unless choice
+            break unless choice
 
             if choice == :ability
-              ability = rng.pick(ABILITIES - entity.dig(:components, :abilities))
+              ability = rng.pick(remaining_abilities)
               entity[:components][:abilities] << ability
               entity[:components][:combat][:movement] = [ entity.dig(:components, :combat, :movement).to_i, 6 ].max if ability == "flying"
               abilities_added += 1
@@ -41,7 +43,9 @@ module Sim
         end
 
         def mutation_count(treasury)
-          3 + Math.sqrt(treasury.to_f / 50.0).floor
+          return 0 if treasury.to_i <= 0
+
+          (treasury.to_f / 200.0).ceil
         end
 
         def stat_choices(entity, counts)

@@ -12,6 +12,19 @@ module Api
         )
       end
 
+      def summary
+        if CatalogVersion.none?
+          return render json: empty_summary_payload
+        end
+
+        render json: Balance::BattleReport.build(
+          catalog_version_id: params[:catalog_version_id],
+          matchup_type: params[:matchup_type],
+          contact: params[:contact],
+          deploy: params[:deploy]
+        )
+      end
+
       def units
         if CatalogVersion.none?
           return render json: empty_units_payload
@@ -120,7 +133,31 @@ module Api
           simulation_runs: [],
           active_simulations: [],
           active_simulation: nil,
-          factions: Faction.order(:position).pluck(:slug)
+          factions: Balance::Dashboard.faction_slugs,
+          units: Balance::Dashboard.unit_template_keys
+        }
+      end
+
+      def empty_summary_payload
+        {
+          catalog_version_id: nil,
+          matchup_type: params[:matchup_type].presence || "all",
+          contact_filter: params[:contact],
+          deploy_filter: params[:deploy],
+          battles: {
+            summary: { battle_count: 0, recorded_battles: 0, upset_count: 0, upset_rate: 0, avg_rounds: 0 },
+            faction_wins: []
+          },
+          duels: {
+            summary: {
+              duel_run_count: 0,
+              total_iterations: 0,
+              avg_rounds: 0,
+              matchup_count: 0,
+              upset_count: 0,
+              upset_rate: 0
+            }
+          }
         }
       end
 
@@ -130,6 +167,7 @@ module Api
           selected_version_id: nil,
           summary: { duel_run_count: 0, total_iterations: 0, avg_rounds: 0 },
           template_wins: [],
+          units: Balance::Dashboard.unit_template_keys,
           matchups: [],
           recent_runs: [],
           active_duel_matrix: nil,

@@ -94,8 +94,24 @@ class SimBattleActionResultTest < ActiveSupport::TestCase
     assert_match(/осталось 1 моделей, здоровье 5\/8/, line)
   end
 
-  test "remaining models text shows per-model health when one model is left" do
+  test "remaining models text shows max health for upgraded heroes" do
     state = {
+      kind: "hero",
+      models_remaining: 1,
+      model_health: 3,
+      current_health: 6,
+      max_health: 8
+    }
+
+    assert_equal(
+      "осталось 1 моделей, здоровье 6/8",
+      Sim::Battle::ActionResult.send(:new, actor: {}, action: {}, before: [], after: [], meta: {}).send(:remaining_models_text, state)
+    )
+  end
+
+  test "remaining models text shows per-model health when one unit model is left" do
+    state = {
+      kind: "unit",
       models_remaining: 1,
       model_health: 4,
       current_health: 3,

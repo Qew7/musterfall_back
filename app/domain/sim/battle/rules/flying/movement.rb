@@ -6,6 +6,7 @@ module Sim
         module Movement
           SETUP_CLEARANCE = 0.25
 
+          # rule: flying | movement | Flyer movement AI: leap, rear/flank charge priority, ignores ground obstacles.
           module_function
 
           def plan_entries(movers, enemies, claimed, terrain: [])

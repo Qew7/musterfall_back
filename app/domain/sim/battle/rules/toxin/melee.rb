@@ -3,6 +3,7 @@ module Sim
     module Rules
       module Toxin
         module Melee
+          # rule: toxin | melee | Applies toxin debuff after melee hit.
           module_function
 
           def after_hit!(ctx)

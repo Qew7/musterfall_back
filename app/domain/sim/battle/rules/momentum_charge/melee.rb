@@ -3,6 +3,7 @@ module Sim
     module Rules
       module MomentumCharge
         module Melee
+          # rule: momentum_charge | melee | Charge bonus scales with charged_distance (up to +50% damage); resets after attack.
           module_function
 
           def damage_factor(attacker, _defender, attack_type, _vector, _round_number)

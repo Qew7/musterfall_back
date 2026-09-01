@@ -40,8 +40,8 @@ module Sim
           { x: origin[:x] + (ux * t), y: origin[:y] + (uy * t) }
         end
 
-        def models_hit_by_line(unit, start_point, end_point)
-          model_cells(unit).count { |cell| model_center_on_line?(cell, start_point, end_point) }
+        def models_hit_by_line(unit, start_point, end_point, tolerance: LINE_CENTER_TOLERANCE)
+          model_cells(unit).count { |cell| model_center_on_line?(cell, start_point, end_point, tolerance: tolerance) }
         end
 
         # Thin tip at attacker front; thick base 8" along heading toward the primary target.

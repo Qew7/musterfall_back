@@ -4,6 +4,7 @@ module Sim
       module March
         # Ground units march at ×MV when no enemy sits within clearance of their tray edges.
         module Movement
+          # rule: march | movement | Ground units (not flying/machine/undead) get march move when no enemy in clearance.
           module_function
 
           def applies?(combatant)

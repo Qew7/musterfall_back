@@ -3,6 +3,7 @@ module Sim
     module Rules
       module Charge
         module Melee
+          # rule: charge | melee | After a charge (charged_distance > 0), melee ×1.3 unless unit has momentumCharge.
           module_function
 
           def damage_factor(attacker, _defender, attack_type, _vector, _round_number)

@@ -56,6 +56,22 @@ class SimBattleCommonShootingTest < ActiveSupport::TestCase
     )
 
     assert phase[:events].any? { |event| event.include?("0 из 4 атак") }
+    miss = phase[:actions].find { |action| action[:damage].to_i.zero? }
+    assert miss, "expected miss action in phase log"
+    assert_match(/0 из 4 атак/, miss[:summary])
+  end
+
+  test "catalog seeds blast for empire cannon and volley for handgunners" do
+    load Rails.root.join("db/seeds.rb")
+    Sim::Catalog::Loader.reset!
+    catalog = Sim::Catalog::Loader.load
+
+    assert_equal "blast", catalog.template("great_cannon")[:shooting_template]
+    assert_equal 10, catalog.template("great_cannon")[:shooting_range]
+    assert_includes catalog.template("great_cannon")[:abilities], "heavyBlast"
+    assert_includes catalog.template("inferno_cannon")[:abilities], "antiFlying"
+    assert_equal "line", catalog.template("inferno_cannon")[:shooting_template]
+    assert_equal "volley", catalog.template("handgunners")[:shooting_template]
   end
 
   test "catalog seeds common template for bow units" do
@@ -65,7 +81,40 @@ class SimBattleCommonShootingTest < ActiveSupport::TestCase
     %w[goblin_archers grove_archers outriders].each do |key|
       assert_equal "common", catalog.template(key)[:shooting_template], key
     end
-    assert_equal "volley", catalog.template("handgunners")[:shooting_template]
+  end
+
+  test "volley resolve rolls one hit check per front rank model per victim" do
+    Volley = Sim::Battle::Rules::Volley::Shooting
+    host = archer_host(files: 5, ranks: 2, models_remaining: 10, missile_attacks: 1)
+    host[:shooting_template] = "volley"
+    host.dig(:contributors, :ranged).first[:shooting_template] = "volley"
+    primary = enemy(entity_id: "primary", x: 10, y: 0, current_health: 20, max_health: 20)
+    secondary = enemy(entity_id: "secondary", x: 10, y: 1, current_health: 20, max_health: 20)
+    acting_side = { combatants: [ host ] }
+    target_side = { combatants: [ primary, secondary ] }
+    phase = Attack.create_phase("shooting", "стрельба")
+    actor = Sim::Battle::Decisions::MissileChoice.build_actor(host, host.dig(:contributors, :ranged).first)
+    victims = Volley.attack_victims(actor, primary, target_side[:combatants])
+
+    assert_equal 2, victims.length
+    Volley.resolve_missile_strike!(
+      phase: phase,
+      actor: actor,
+      host: host,
+      profile: actor,
+      primary: primary,
+      vector: "front",
+      victims: victims,
+      attack_type: "shooting",
+      acting_side: acting_side,
+      target_side: target_side,
+      round_number: 1,
+      blockers: [],
+      rng: always_miss_rng,
+      terrain: []
+    )
+
+    assert phase[:events].any? { |event| event.include?("0 из 5 атак") }
   end
 
   private

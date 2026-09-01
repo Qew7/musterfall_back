@@ -2,6 +2,7 @@ module Sim
   module Battle
     module Rules
       module Toxin
+        # rule: toxin | shared | First hit permanently −1 skill and −1 melee on target (and primary contributor).
         module_function
 
         def apply!(ctx)

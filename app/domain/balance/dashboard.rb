@@ -15,7 +15,7 @@ module Balance
         matchup_type: scoped_type,
         summary: summary_payload(counters, battles.count),
         faction_wins: faction_wins(counters),
-        faction_matchups: faction_matchups(counters),
+        faction_matchups: faction_matchups(battles),
         template_wins: template_wins(counters),
         unit_matchups: unit_matchups(counters),
         rule_triggers: bucket_rows(counters, "rule_trigger"),
@@ -30,12 +30,21 @@ module Balance
         simulation_runs: simulation_runs_payload,
         active_simulations: active_simulations_payload,
         active_simulation: active_simulation_payload,
-        factions: Faction.order(:position).pluck(:slug)
+        factions: faction_slugs,
+        units: unit_template_keys
       }
     end
 
+    def faction_slugs
+      Faction.order(:position).pluck(:slug)
+    end
+
+    def unit_template_keys
+      Balance::DuelMatrix.unit_template_keys
+    end
+
     def active_simulations_payload
-      BalanceSimulationRun.active.order(created_at: :desc).map { |run| serialize_run(run) }
+      BalanceSimulationRun.active.order(created_at: :desc).includes(:catalog_version).map { |run| serialize_run(run) }
     end
 
     def active_simulation_payload
@@ -43,10 +52,18 @@ module Balance
     end
 
     def simulation_runs_payload
-      runs = BalanceSimulationRun.recent.limit(5).to_a
+      runs = BalanceSimulationRun.recent.limit(5).includes(:catalog_version).to_a
       recorded = BalanceBattleRollup.where(balance_simulation_run_id: runs.map(&:id))
         .group(:balance_simulation_run_id).count
       runs.map { |run| serialize_run(run, battles_recorded: recorded[run.id].to_i) }
+    end
+
+    def catalog_version_payload(version)
+      {
+        id: version.id,
+        content_hash: version.content_hash,
+        catalog_hash: version.catalog_hash
+      }
     end
 
     def serialize_run(run, battles_recorded: nil)
@@ -54,6 +71,7 @@ module Balance
         id: run.id,
         status: run.status,
         catalog_version_id: run.catalog_version_id,
+        catalog_version: catalog_version_payload(run.catalog_version),
         battles_completed: run.battles_completed,
         battles_failed: run.battles_failed,
         battles_recorded: battles_recorded.nil? ? run.balance_battle_rollups.count : battles_recorded,
@@ -112,33 +130,66 @@ module Balance
     end
 
     def faction_wins(counters)
-      rows = counters.where(bucket: "faction_win")
-      total = rows.sum(:n)
-      rows.order(n: :desc).map do |row|
+      rows = counters.where(bucket: "faction_win").index_by(&:key)
+      total = rows.values.sum(&:n)
+      faction_slugs.map do |slug|
+        wins = rows[slug]&.n.to_i
         {
-          faction_id: row.key,
-          wins: row.n,
-          winrate: rate(row.n, total)
+          faction_id: slug,
+          wins: wins,
+          winrate: rate(wins, total)
         }
-      end
+      end.sort_by { |row| -row[:wins] }
     end
 
-    def faction_matchups(counters)
-      counters.where(bucket: "faction_matchup").order(n: :desc).map do |row|
-        { key: row.key, battles: row.n }
+    def faction_matchups(battles_scope)
+      pairs = Hash.new { |memo, key| memo[key] = { battles: 0, wins: Hash.new(0), left_faction: nil, right_faction: nil } }
+
+      battles_scope.find_each do |rollup|
+        metrics = rollup.metrics.deep_symbolize_keys
+        left = metrics[:left_faction].to_s
+        right = metrics[:right_faction].to_s
+        winner = metrics[:winner_faction].to_s
+        next if left.blank? || right.blank?
+
+        sorted = [ left, right ].sort
+        key = sorted.join(" vs ")
+        bucket = pairs[key]
+        bucket[:left_faction] ||= sorted[0]
+        bucket[:right_faction] ||= sorted[1]
+        bucket[:battles] += 1
+        bucket[:wins][winner] += 1 if winner.present?
       end
+
+      pairs.map do |key, bucket|
+        left_faction = bucket[:left_faction]
+        right_faction = bucket[:right_faction]
+        left_wins = bucket[:wins][left_faction].to_i
+        right_wins = bucket[:wins][right_faction].to_i
+        {
+          key: key,
+          battles: bucket[:battles],
+          left_faction: left_faction,
+          right_faction: right_faction,
+          left_wins: left_wins,
+          right_wins: right_wins,
+          left_winrate: rate(left_wins, bucket[:battles]),
+          right_winrate: rate(right_wins, bucket[:battles])
+        }
+      end.sort_by { |row| -row[:battles] }
     end
 
     def template_wins(counters)
-      rows = counters.where(bucket: "template_win")
-      total = rows.sum(:n)
-      rows.order(n: :desc).map do |row|
+      rows = counters.where(bucket: "template_win").index_by(&:key)
+      total = rows.values.sum(&:n)
+      unit_template_keys.map do |template_id|
+        wins = rows[template_id]&.n.to_i
         {
-          template_id: row.key,
-          wins: row.n,
-          winrate: rate(row.n, total)
+          template_id: template_id,
+          wins: wins,
+          winrate: rate(wins, total)
         }
-      end
+      end.sort_by { |row| -row[:wins] }
     end
 
     def unit_matchups(counters)

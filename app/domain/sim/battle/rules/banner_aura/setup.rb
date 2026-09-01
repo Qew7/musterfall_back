@@ -3,6 +3,7 @@ module Sim
     module Rules
       module BannerAura
         module Setup
+          # rule: banner_aura | setup | Hero bannerAura on attach: +1 melee to host and first melee contributor.
           module_function
 
           def apply_attach!(host_ctx)

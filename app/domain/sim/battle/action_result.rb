@@ -306,7 +306,8 @@ module Sim
         return line if model_health <= 1
 
         current = state[:current_health].to_i
-        cap = models <= 1 ? model_health : state[:max_health].to_i
+        cap = state[:max_health].to_i
+        cap = model_health if models <= 1 && state[:kind].to_s != "hero"
         "#{line}, здоровье #{current}/#{cap}"
       end
     end

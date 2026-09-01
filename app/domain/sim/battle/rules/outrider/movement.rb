@@ -3,6 +3,7 @@ module Sim
     module Rules
       module Outrider
         module Movement
+          # rule: outrider | movement | Never melee-moves; kites to ideal shooting range.
           module_function
 
           def melee_mover?(combatant)

@@ -3,6 +3,7 @@ module Sim
     module Rules
       module Forestborn
         module Movement
+          # rule: forestborn | movement | Ranged forestborn repositions toward forest when cover needed to shoot.
           module_function
 
           def reposition_mode(combatant, ctx)

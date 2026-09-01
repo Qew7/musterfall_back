@@ -3,6 +3,7 @@ module Sim
     module Rules
       module Shieldwall
         module Melee
+          # rule: shieldwall | melee | Incoming frontal charge damage ×0.75 (front vector, charged_distance > 0).
           module_function
 
           def damage_factor(attacker, defender, attack_type, vector, _round_number)

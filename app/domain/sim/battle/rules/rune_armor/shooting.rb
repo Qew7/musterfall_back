@@ -3,6 +3,7 @@ module Sim
     module Rules
       module RuneArmor
         module Shooting
+          # rule: rune_armor | shooting | Non-magic ranged damage ×⅔.
           module_function
 
           def damage_factor(_attacker, defender, attack_type, _vector, _round_number)

@@ -3,6 +3,7 @@ module Sim
     module Rules
       module Wildborn
         module Morale
+          # rule: wildborn | morale | Counts as fearless while in forest (used by fear morale).
           module_function
 
           def fearless?(combatant, terrain: [])

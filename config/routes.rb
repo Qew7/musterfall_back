@@ -5,6 +5,7 @@ Rails.application.routes.draw do
   namespace :api do
     namespace :admin do
       get "balance" => "balance#show"
+      get "balance/summary" => "balance#summary"
       get "balance/units" => "balance#units"
       post "balance/backfill" => "balance#backfill"
       post "balance/simulations" => "balance#start_simulation"

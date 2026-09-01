@@ -6,6 +6,7 @@ module Sim
         # Non-fear charger vs fear target: charger checks, fail ⇒ halt halfway.
         # Fear charger vs non-fear target: target checks, fail ⇒ cannot attack this round.
         module Movement
+          # rule: fear | movement | Charge fear checks between charger and defender; may halt charge or forbid defender attacks.
           module_function
 
           def has_fear?(combatant)

@@ -26,9 +26,11 @@ class SimBattleCombatRulesTest < ActiveSupport::TestCase
     assert_includes Rules.for(:shooting).rules, Sim::Battle::Rules::Volley::Shooting
     assert_includes Rules.for(:shooting).rules, Sim::Battle::Rules::Common::Shooting
     assert_includes Rules.for(:shooting).rules, Sim::Battle::Rules::Blast::Shooting
+    assert_includes Rules.for(:shooting).rules, Sim::Battle::Rules::AntiFlying::Shooting
     assert_includes Rules.for(:morale).rules, Sim::Battle::Rules::Undead::Morale
     assert_includes Rules.for(:setup).rules, Sim::Battle::Rules::BannerAura::Setup
     assert_includes Rules.for(:round).rules, Sim::Battle::Rules::Undead::Round
+    assert_includes Rules.for(:round).rules, Sim::Battle::Rules::LavaSpit::Round
     assert_equal BreathShooting, Rules.for(:shooting).find_applicable({ shooting_template: "breath" }, "shooting")
     assert_equal Sim::Battle::Rules::Volley::Shooting, Rules.for(:shooting).find_applicable({ shooting_template: "volley" }, "shooting")
     assert_equal Sim::Battle::Rules::Common::Shooting, Rules.for(:shooting).find_applicable({ shooting_template: "common" }, "shooting")
@@ -51,6 +53,7 @@ class SimBattleCombatRulesTest < ActiveSupport::TestCase
     assert File.exist?(root.join("ground/movement.rb"))
     assert File.exist?(root.join("undead/morale.rb"))
     assert File.exist?(root.join("undead/round.rb"))
+    assert File.exist?(root.join("lava_spit/round.rb"))
     assert File.exist?(root.join("banner_aura/setup.rb"))
   end
 
@@ -656,6 +659,227 @@ class SimBattleCombatRulesTest < ActiveSupport::TestCase
     assert_match(/return "breath" if attributes\.fetch\(:weapon_type\) == "breath"/, source)
   end
 
+  test "undead faction regen requires living general" do
+    skeleton = combatant(name: "Skeleton", abilities: [ "undead" ], current_health: 10, max_health: 22)
+    side = {
+      faction_id: "undead",
+      player_name: "Necromancer",
+      combatants: [ skeleton ],
+      rng: Random.new(1)
+    }
+
+    assert_empty Sim::Battle::Rules::Undead::Round.apply_passives!(side)
+
+    general = combatant(entity_id: "gen", kind: "hero", is_general: true, current_health: 3)
+    events = Sim::Battle::Rules::Undead::Round.apply_passives!(side.merge(combatants: [ skeleton, general ]))
+    assert_equal 1, events.length
+    assert_equal 11, skeleton[:current_health]
+  end
+
+  test "undead faction regen ignores non-undead wounded units" do
+    ghoul = combatant(name: "Ghoul", abilities: [ "fear", "poison" ], current_health: 10, max_health: 12)
+    skeleton = combatant(name: "Skeleton", abilities: [ "undead" ], current_health: 10, max_health: 22)
+    general = combatant(entity_id: "gen", is_general: true, current_health: 3)
+    side = {
+      faction_id: "undead",
+      player_name: "Necromancer",
+      combatants: [ ghoul, skeleton, general ],
+      rng: Random.new(1)
+    }
+
+    events = Sim::Battle::Rules::Undead::Round.apply_passives!(side)
+    assert_equal 1, events.length
+    assert_equal 11, skeleton[:current_health]
+    assert_equal 10, ghoul[:current_health]
+  end
+
+  test "lava spit ignores armor and shieldwall on hit" do
+    LavaSpit = Sim::Battle::Rules::LavaSpit::Round
+    troll = combatant(
+      entity_id: "troll",
+      x: 0,
+      y: 0,
+      facing: 0,
+      base_width: 3,
+      base_depth: 1,
+      abilities: [ "lavaSpit" ],
+      melee: 6,
+      skill: 6,
+      models_remaining: 1,
+      model_health: 5,
+      current_health: 5,
+      max_health: 15
+    )
+    defender = combatant(
+      entity_id: "wall",
+      side_index: 1,
+      x: 1,
+      y: 0,
+      facing: 180,
+      base_width: 4,
+      base_depth: 1,
+      armor_type: "heavy",
+      abilities: [ "shieldwall" ],
+      current_health: 20,
+      max_health: 20,
+      model_health: 1,
+      models_remaining: 20
+    )
+    side = {
+      combatants: [ troll ],
+      enemy_side: { combatants: [ defender ] },
+      rng: Random.new(0)
+    }
+
+    events = LavaSpit.apply_passives!(side)
+    assert_equal 1, events.length, events.inspect
+    assert_operator defender[:current_health], :<, 20
+    assert_includes events.first, "лавовый харчок"
+    assert_equal 3, LavaSpit.send(:defenseless_damage, troll)
+    assert_equal 2, Attack.damage(troll, defender, "melee", "front", 1)
+  end
+
+  test "lava spit uses flat damage without facing bonuses" do
+    troll = combatant(melee: 6, abilities: [ "lavaSpit" ])
+    plain = combatant(side_index: 1, armor_type: "medium")
+    flat = Sim::Battle::Rules::LavaSpit::Round.send(:defenseless_damage, troll)
+
+    assert_equal 3, flat
+    assert_equal 5, Attack.damage(troll, plain, "melee", "rear", 1)
+    assert_operator flat, :<, Attack.damage(troll, plain, "melee", "rear", 1)
+  end
+
+  test "ghoul pack keeps undead faction tier without undead ability" do
+    source = File.read(Rails.root.join("db/seeds.rb"))
+    ghoul_line = source[/template_key: "ghoul_pack"[^\n]+/]
+    assert ghoul_line
+    assert_includes ghoul_line, 'faction_slug: "undead"'
+    assert_match(/abilities: \[ "fear", "skirmisher", "poison" \]/, ghoul_line)
+  end
+
+  test "poison skips extra model kill on 1W targets but kills a whole model on multi-wound" do
+    Poison = Sim::Battle::Rules::Poison::Melee
+    handgunner = combatant(name: "Аркебузиры", model_health: 1, current_health: 10, models_remaining: 10, abilities: [])
+    ghoul = combatant(name: "Упырь", model_health: 1, current_health: 12, models_remaining: 12, abilities: [ "poison" ])
+    troll = combatant(name: "Troll", model_health: 5, current_health: 15, models_remaining: 3, model_class: "monster", abilities: [])
+
+    before = Sim::Battle::State.snapshot_combatant(handgunner)
+    action = {
+      poison_model_applied: false,
+      target_state_before: before,
+      damage: 1
+    }
+    Poison.after_hit!(
+      attacker: ghoul, host: ghoul, defender: handgunner, action: action,
+      acting_side: { combatants: [ ghoul ] }, target_side: { combatants: [ handgunner ] },
+      round_number: 1, attack_type: "melee"
+    )
+    assert_equal 10, handgunner[:current_health]
+
+    troll_before = Sim::Battle::State.snapshot_combatant(troll)
+    troll_action = { poison_model_applied: false, target_state_before: troll_before, damage: 2 }
+    Poison.after_hit!(
+      attacker: ghoul, host: ghoul, defender: troll, action: troll_action,
+      acting_side: { combatants: [ ghoul ] }, target_side: { combatants: [ troll ] },
+      round_number: 1, attack_type: "melee"
+    )
+    assert_equal 10, troll[:current_health]
+    assert troll_action[:poison_model_applied]
+  end
+
+  test "anti flying halves machine shooting damage against flyers" do
+    AntiFlying = Sim::Battle::Rules::AntiFlying::Shooting
+    Machine = Sim::Battle::Rules::Machine::Shooting
+    cannon = combatant(abilities: [ "machine", "antiFlying" ])
+    flyer = combatant(abilities: [ "flying" ])
+    ground = combatant(abilities: [])
+
+    machine = Machine.damage_factor(cannon, ground, "shooting", "front", 1)
+    vs_flyer = Rules.for(:shooting).damage_factor(cannon, flyer, "shooting", "front", 1)
+    vs_ground = Rules.for(:shooting).damage_factor(cannon, ground, "shooting", "front", 1)
+
+    assert_in_delta 1.25, machine, 0.001
+    assert_in_delta 0.625, vs_flyer, 0.001
+    assert_in_delta 1.25, vs_ground, 0.001
+    assert_equal 0.5, AntiFlying.damage_factor(cannon, flyer, "shooting", "front", 1)
+  end
+
+  test "heavy blast expands blast template radius" do
+    Blast = Sim::Battle::Rules::Blast::Shooting
+    base = Sim::Geometry::Battlefield::CONFIG[:blast_radius]
+
+    assert_in_delta base, Blast.send(:blast_radius, combatant(abilities: [])), 0.001
+    assert_in_delta base * 1.5, Blast.send(:blast_radius, combatant(abilities: [ "heavyBlast" ])), 0.001
+  end
+
+  test "melee miss is persisted as a phase action" do
+    attacker = combatant(
+      entity_id: "riders",
+      name: "Наездники",
+      x: 10,
+      y: 12,
+      facing: 0,
+      base_width: 3,
+      base_depth: 4,
+      files: 3,
+      ranks: 2,
+      melee: 6,
+      skill: 4,
+      attacks: 1,
+      contributors: {
+        melee: [ { entity_id: "riders", name: "Наездники", kind: "unit", power: 6 } ],
+        ranged: [],
+        spell: []
+      }
+    )
+    defender = combatant(
+      entity_id: "warden",
+      name: "Страж",
+      x: 12,
+      y: 12,
+      facing: 180,
+      kind: "hero",
+      base_width: 1,
+      base_depth: 1,
+      files: 1,
+      ranks: 1,
+      melee: 5,
+      skill: 5,
+      attacks: 2,
+      contributors: {
+        melee: [ { entity_id: "warden", name: "Страж", kind: "hero", power: 5 } ],
+        ranged: [],
+        spell: []
+      }
+    )
+    acting_side = { combatants: [ attacker ] }
+    target_side = { combatants: [ defender ] }
+    phase = Attack.create_phase("melee", "melee")
+    selection = Sim::Battle::Decisions::Targeting.choose_target(attacker, [ defender ], "melee", [ attacker, defender ])
+    assert selection
+
+    Attack.resolve_melee_strike!(
+      phase: phase,
+      attacker: attacker,
+      target: defender,
+      vector: selection[:vector],
+      acting_side: acting_side,
+      target_side: target_side,
+      round_number: 1,
+      rng: always_miss_rng,
+      terrain: []
+    )
+
+    assert phase[:events].any? { |event| event.include?("0 из") }
+    miss = phase[:actions].find { |action| action[:damage].to_i.zero? }
+    assert miss, "expected miss action in phase log"
+    assert_equal "riders", miss[:actor_id]
+    assert_equal "warden", miss[:target_id]
+    assert_equal 0, miss[:hits_landed]
+    assert miss[:attacks_attempted].to_i.positive?
+    assert_match(/0 из \d+ атак/, miss[:summary])
+  end
+
   private
 
   def charge_combatant(**overrides)
@@ -707,6 +931,12 @@ class SimBattleCombatRulesTest < ActiveSupport::TestCase
     end
     flunk "expected a failing fear roll within 20 sequences"
   end
+
+  def always_miss_rng
+  Object.new.tap do |rng|
+    rng.define_singleton_method(:rand) { |_max = nil| 1.0 }
+  end
+end
 
   def combatant(**overrides)
     {

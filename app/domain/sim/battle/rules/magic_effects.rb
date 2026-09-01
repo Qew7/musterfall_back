@@ -2,6 +2,7 @@ module Sim
   module Battle
     module Rules
       module MagicEffects
+        # rule: magic_effects | shared | Applies spell-effect trigger damage and logs magic actions.
         module_function
 
         def trigger_damage!(phase:, target:, effect:, payload:, sides:)

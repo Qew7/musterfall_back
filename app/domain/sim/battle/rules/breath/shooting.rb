@@ -5,6 +5,7 @@ module Sim
         # Breath weapon overrides for the shooting (missile) phase.
         # Fixed 8" teardrop; models whose center is under the template are hit (auto-hit).
         module Shooting
+          # rule: breath | shooting | Teardrop template; auto-hits models under the shape.
           module_function
 
           def applies?(attacker, attack_type)

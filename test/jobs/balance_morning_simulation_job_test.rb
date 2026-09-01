@@ -19,7 +19,7 @@ class BalanceMorningSimulationJobTest < ActiveJob::TestCase
   test "starts balanced random simulation with 1000 battles at 1000 points" do
     assert_difference -> { BalanceSimulationRun.count }, 1 do
       assert_difference -> { BalanceDuelMatrixRun.count }, 1 do
-        assert_enqueued_with(job: BalanceSimulationJob) do
+        assert_enqueued_jobs Balance::Simulation.worker_count, only: BalanceSimulationJob do
           BalanceMorningSimulationJob.perform_now
         end
       end
@@ -29,7 +29,8 @@ class BalanceMorningSimulationJobTest < ActiveJob::TestCase
     assert_equal "balanced_random", run.config["preset"]
     assert_equal 1000, run.config["battle_limit"]
     assert_equal 1000, run.config["target_points"]
-    assert_equal "pending", run.status
+    assert_equal "running", run.status
+    assert_equal Balance::Simulation.worker_count, run.config["workers_total"]
 
     matrix = BalanceDuelMatrixRun.order(:id).last
     assert_equal "front", matrix.config["contact"]
@@ -41,23 +42,23 @@ class BalanceMorningSimulationJobTest < ActiveJob::TestCase
     assert_operator enqueued_jobs.count { |job| job[:job] == BalanceDuelMatrixBatchJob }, :>, 0
   end
 
-  test "skips army simulation when another simulation is active" do
+  test "starts army simulation while another simulation is active" do
     version = CatalogVersion.current!
     BalanceSimulationRun.create!(
       catalog_version: version,
       status: "running",
-      config: { battle_limit: 1 },
+      config: { battle_limit: 1, workers_total: 4, workers_finished: 0 },
       seed: 1
     )
 
-    assert_no_difference -> { BalanceSimulationRun.count } do
+    assert_difference -> { BalanceSimulationRun.count }, 1 do
       assert_difference -> { BalanceDuelMatrixRun.count }, 1 do
         BalanceMorningSimulationJob.perform_now
       end
     end
   end
 
-  test "skips duel matrix when another matrix is active" do
+  test "starts duel matrix while another matrix is active" do
     version = CatalogVersion.current!
     BalanceDuelMatrixRun.create!(
       catalog_version: version,
@@ -69,7 +70,7 @@ class BalanceMorningSimulationJobTest < ActiveJob::TestCase
       matchups_total: 1
     )
 
-    assert_no_difference -> { BalanceDuelMatrixRun.count } do
+    assert_difference -> { BalanceDuelMatrixRun.count }, 1 do
       assert_difference -> { BalanceSimulationRun.count }, 1 do
         BalanceMorningSimulationJob.perform_now
       end

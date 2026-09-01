@@ -58,8 +58,8 @@ module Sim
         unit[:current_health].to_i > 0 && !unit[:is_routing]
       end
 
-      def apply_faction_passives!(side, terrain: [], rng: nil)
-        Rules.for(:round).apply_passives!(side.merge(terrain: Array(terrain), rng: rng))
+      def apply_faction_passives!(side, enemy_side: nil, terrain: [], rng: nil)
+        Rules.for(:round).apply_passives!(side.merge(terrain: Array(terrain), rng: rng), enemy_side: enemy_side)
       end
 
       def resolve_summons_end_round!(side)
@@ -185,6 +185,7 @@ module Sim
       def build_side(player, side_key, side_index)
         units_by_id = player[:roster].select { |entry| entry[:kind] == "unit" }.index_by { |entry| entry[:id] }
         heroes_by_host = Hash.new { |hash, key| hash[key] = [] }
+        general_id = player[:general_id].presence || general_entity_id(player[:roster])
 
         player[:roster]
           .select { |entry| entry[:kind] == "hero" && entry.dig(:state, :current_health).to_i > 0 && entry.dig(:state, :attached_to) }
@@ -194,18 +195,24 @@ module Sim
           .select { |entry| entry.dig(:state, :current_health).to_i > 0 }
           .reject { |entry| entry[:kind] == "hero" && entry.dig(:state, :attached_to) && units_by_id.key?(entry[:state][:attached_to]) }
           .select { |entry| Entities::Footprint.deployable?(entry) }
-          .map { |entity| build_combatant(entity, heroes_by_host[entity[:id]] || [], side_key, side_index) }
+          .map { |entity| build_combatant(entity, heroes_by_host[entity[:id]] || [], side_key, side_index, general_id: general_id) }
 
         {
           player_id: player[:id],
           player_name: player[:name],
           faction_id: player[:faction_id],
+          general_id: general_id,
           side_key: side_key,
           combatants: combatants
         }
       end
 
-      def build_combatant(entity, attached_heroes, side_key, side_index)
+      def general_entity_id(roster)
+        Array(roster).find { |entry| entry.dig(:state, :general) || entry.dig(:components, :hero, :general) }&.dig(:id)
+      end
+      private_class_method :general_entity_id
+
+      def build_combatant(entity, attached_heroes, side_key, side_index, general_id: nil)
         abilities = entity.dig(:components, :abilities).to_a.dup
         combat = entity[:components][:combat]
         melee_contributors = [ contributor_from(entity, combat[:melee]) ]
@@ -233,6 +240,7 @@ module Sim
         end
 
         ability_set = abilities.uniq
+        is_general = general_flag?(entity, general_id)
         host_ctx = {
           ability_set: ability_set,
           melee: melee,
@@ -255,6 +263,7 @@ module Sim
             entity_id: entity[:id],
             name: entity[:name],
             kind: entity[:kind],
+            is_general: is_general,
             cost: entity.dig(:components, :economy, :cost).to_i + attached_heroes.sum { |hero| hero.dig(:components, :economy, :cost).to_i },
             side_key: side_key,
             side_index: side_index,
@@ -301,7 +310,8 @@ module Sim
                 slot: hero[:state][:attached_slot],
                 morale: hero.dig(:components, :combat, :morale),
                 skill: hero.dig(:components, :combat, :skill),
-                abilities: hero.dig(:components, :abilities).to_a
+                abilities: hero.dig(:components, :abilities).to_a,
+                general: general_flag?(hero, general_id)
               }
             end,
             abilities: ability_set,
@@ -311,6 +321,15 @@ module Sim
           }
         )
       end
+
+      def general_flag?(entity, general_id)
+        return true if general_id.present? && entity[:id] == general_id
+        return true if entity.dig(:state, :general)
+        return true if entity.dig(:components, :hero, :general)
+
+        false
+      end
+      private_class_method :general_flag?
 
       def combatant_models_remaining(combatant)
         return 0 if combatant[:current_health].to_i <= 0

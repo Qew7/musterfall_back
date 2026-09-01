@@ -3,6 +3,7 @@ module Sim
     module Rules
       module ResoluteAura
         module Setup
+          # rule: resolute_aura | setup | Attached hero grants host resolute in ability set.
           module_function
 
           def apply_attach!(host_ctx)

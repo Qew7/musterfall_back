@@ -4,6 +4,7 @@ module Sim
       module Ground
         # Default wheeled / marched melee approach.
         module Movement
+          # rule: ground | movement | Default infantry movement AI: charge, flank/rear setup, contact waves, pathfinding.
           module_function
 
           def plan_entries(movers, enemies, claimed, terrain: [])

@@ -46,4 +46,22 @@ class BalanceDuelMatrixTest < ActiveSupport::TestCase
     assert_equal "ranged", config[:deploy]
     assert_equal true, config[:random_first_turn]
   end
+
+  test "stop finalizes stopping run immediately" do
+    run = BalanceDuelMatrixRun.create!(
+      catalog_version: CatalogVersion.current!,
+      status: "running",
+      config: { contact: "front", deploy: "ranged", random_first_turn: true, iterations: 2, batch_size: 10 },
+      unit_templates: @templates.first(3),
+      seed: 42_005,
+      batches_total: 1,
+      matchups_total: 3,
+      started_at: Time.current
+    )
+
+    Balance::DuelMatrix.stop!(run.id)
+
+    assert_equal "stopped", run.reload.status
+    assert run.finished_at.present?
+  end
 end

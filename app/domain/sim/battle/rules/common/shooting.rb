@@ -3,6 +3,7 @@ module Sim
     module Rules
       module Common
         module Shooting
+          # rule: common | shooting | Default single-target ranged attack with hit roll and front-rank targeting.
           module_function
 
           def applies?(attacker, attack_type)
@@ -90,6 +91,18 @@ module Sim
                 )
               end
 
+              miss_action = if hits <= 0 && attempts.positive?
+                attack.build_missile_miss_action(
+                  actor: actor,
+                  host: host,
+                  profile: profile,
+                  victim: victim,
+                  vector: vector,
+                  attack_type: attack_type,
+                  blockers: blockers,
+                  victims: victims
+                )
+              end
               attack.finalize_strike_batch!(
                 phase: phase,
                 actions: batch_actions,
@@ -100,7 +113,8 @@ module Sim
                 attack_type: attack_type,
                 vector: vector,
                 acting_side: acting_side,
-                target_side: target_side
+                target_side: target_side,
+                miss_action: miss_action
               )
             end
           end

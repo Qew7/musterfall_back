@@ -48,6 +48,10 @@ env:
     # Set number of processes dedicated to Solid Queue (default: 1)
     # JOB_CONCURRENCY: 3
 
+    # Puma HTTP threads + Solid Queue worker threads share one AR pool (SOLID_QUEUE_IN_PUMA).
+    RAILS_MAX_THREADS: 8
+    SOLID_QUEUE_THREADS: 4
+
     # Set number of cores available to the application on each server (default: 1).
     # WEB_CONCURRENCY: 2
 

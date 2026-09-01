@@ -18,6 +18,11 @@ class BalanceDuelMatrixRun < ApplicationRecord
   end
 
   def stop!
-    update!(status: "stopping") if status == "running"
+    case status
+    when "running"
+      update!(status: "stopping")
+    when "pending"
+      update!(status: "stopped", finished_at: Time.current)
+    end
   end
 end

@@ -3,6 +3,7 @@ module Sim
     module Rules
       module AntiLarge
         module Melee
+          # rule: anti_large | melee | +35% melee damage vs cavalry and monster model classes.
           module_function
 
           def damage_factor(attacker, defender, attack_type, _vector, _round_number)
