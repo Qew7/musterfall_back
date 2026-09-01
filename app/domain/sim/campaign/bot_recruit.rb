@@ -1,6 +1,7 @@
 module Sim
   module Campaign
     # Bot shopping for roster access + units/heroes. Strategy picked once per bot.
+    # Mutates the passed campaign in place; caller owns any isolation copy.
     class BotRecruit
       STRATEGIES = {
         "horde" => {
@@ -42,7 +43,7 @@ module Sim
       end
 
       def initialize(campaign, catalog, player_id, rng)
-        @campaign = campaign.deep_dup
+        @campaign = campaign
         @catalog = catalog
         @player_id = player_id
         @rng = rng
@@ -102,14 +103,7 @@ module Sim
           models = RecruitAccess.affordable_restore_models(template, budget, missing)
           next if models <= 0
 
-          result = RestoreUnit.call(
-            campaign: @campaign,
-            catalog: @catalog,
-            player_id: player[:id],
-            entity_id: entity[:id],
-            models: models
-          )
-          @campaign = result.value if result.ok?
+          restore_entity!(player, entity, models)
         end
       end
 
@@ -120,15 +114,20 @@ module Sim
       end
 
       def shop!(player)
+        recruitable_options = nil
         24.times do
           player = @campaign.find_player(@player_id)
           break unless player && player[:treasury].positive?
 
-          if should_upgrade?(player) && try_upgrade!(player)
+          if should_upgrade?(player) && upgrade_access!(player)
+            recruitable_options = nil
             next
           end
 
-          break unless try_recruit!(player)
+          recruitable_options = recruitable(player) if recruitable_options.nil?
+          break unless try_recruit!(player, recruitable_options)
+
+          recruitable_options = nil
         end
       end
 
@@ -142,41 +141,90 @@ module Sim
         @rng.rand < cfg[:upgrade_chance]
       end
 
-      def try_upgrade!(player)
-        result = UpgradeAccess.call(campaign: @campaign, player_id: player[:id])
-        return false unless result.ok?
-
-        @campaign = result.value
-        true
-      end
-
-      def try_recruit!(player)
-        options = recruitable(player)
+      def try_recruit!(player, options)
         return false if options.empty?
 
         template = weighted_pick(options, strategy(player))
         return false unless template
 
-        school_key = wizard_school(template, player)
-        result = Recruit.call(
-          campaign: @campaign,
-          catalog: @catalog,
-          player_id: player[:id],
-          template_id: template[:id],
-          rng: @rng,
-          school_key: school_key
-        )
-        return false unless result.ok?
+        recruit_template!(player, template, school_key: wizard_school(template, player))
+      end
 
-        @campaign = result.value
+      def restore_entity!(player, entity, models)
+        template = @catalog.template(entity[:template_id])
+        return false unless template
+
+        model_health = entity.dig(:components, :health, :model_health).to_i
+        return false if model_health <= 0
+
+        max_models = entity.dig(:components, :formation, :models).to_i
+        current_models = Entities::Footprint.health_to_models(entity)
+        missing = max_models - current_models
+        return false if missing <= 0
+
+        restore_count = [ models.to_i, missing, RecruitAccess.affordable_restore_models(template, player[:treasury], missing) ].min
+        return false if restore_count <= 0
+
+        cost = RecruitAccess.model_restore_cost(template, restore_count)
+        player[:treasury] -= cost
+        entity[:state][:current_health] = (current_models + restore_count) * model_health
+        entity[:state][:is_routing] = false
+        Entities::Footprint.sync_entity!(entity)
         true
+      end
+
+      def upgrade_access!(player)
+        cost = RecruitAccess.upgrade_cost(player[:recruit_access].to_i)
+        return false unless cost
+        return false if player[:treasury] < cost
+
+        player[:treasury] -= cost
+        player[:recruit_access] = player[:recruit_access].to_i + 1
+        slots = RecruitAccess.slots_for(player[:recruit_access])
+        player[:round_notes] = [
+          "Доступ найма #{player[:recruit_access]}: герои #{slots[:hero]}, elite #{slots[:elite]}, rare #{slots[:rare]} (−#{cost})"
+        ]
+        true
+      end
+
+      def recruit_template!(player, template, school_key: nil)
+        cost = RecruitRules::ChaosSpawn.cost(player, template)
+        return false if cost <= 0 || player[:treasury] < cost
+        return false unless RecruitAccess.allowed?(player, @catalog, template)
+
+        loadout = MagicLoadout.build(
+          template: template,
+          faction_id: player[:faction_id],
+          school_key: school_key,
+          rng: @rng
+        )
+        return false if loadout.failure?
+
+        factory = Entities::Factory.new(@catalog, id_sequence: { value: @campaign.id_sequence })
+        entity =
+          if template[:kind] == "hero"
+            factory.create_hero(template[:id], player[:id], free: false, general: !roster_has_general?(player))
+          else
+            factory.create_unit(template[:id], player[:id])
+          end
+        RecruitRules::ChaosSpawn.apply!(entity, cost, @rng) if RecruitRules::ChaosSpawn.applies?(template)
+        entity[:components][:hero]&.merge!(loadout.value)
+        @campaign.id_sequence = factory.sequence_value
+        player[:treasury] -= cost
+        player[:roster] << entity
+        true
+      end
+
+      def roster_has_general?(player)
+        Array(player[:roster]).any? { |entry| entry.dig(:components, :hero, :general) }
       end
 
       def recruitable(player)
         units = @catalog.unit_templates(player[:faction_id])
         heroes = @catalog.hero_templates(player[:faction_id])
         (units + heroes).select do |template|
-          template[:cost] <= player[:treasury] && RecruitAccess.allowed?(player, @catalog, template)
+          cost = RecruitRules::ChaosSpawn.cost(player, template)
+          cost.positive? && cost <= player[:treasury] && RecruitAccess.allowed?(player, @catalog, template)
         end
       end
 

@@ -3,32 +3,48 @@ require "test_helper"
 class SimBattleCombatRulesTest < ActiveSupport::TestCase
   BF = Sim::Geometry::Battlefield
   Attack = Sim::Battle::Phases::AttackResolution
-  Melee = Sim::Battle::Phases::Melee
+  Movement = Sim::Battle::Phases::Movement
+  FearMovement = Sim::Battle::Rules::Fear::Movement
   FearMelee = Sim::Battle::Rules::Fear::Melee
+  Melee = Sim::Battle::Phases::Melee
   BreathShooting = Sim::Battle::Rules::Breath::Shooting
   Rules = Sim::Battle::Rules
 
-  test "rules registry indexes fear under melee and breath under shooting" do
+  test "wildborn rules are registered" do
+    assert_includes Sim::Battle::Rules.for(:movement).rules, Sim::Battle::Rules::Wildborn::Movement
+    assert_includes Sim::Battle::Rules.for(:morale).rules, Sim::Battle::Rules::Wildborn::Morale
+    assert_includes Sim::Battle::Rules.for(:melee).rules, Sim::Battle::Rules::Forestkin::Melee
+    assert_includes Sim::Battle::Rules.for(:round).rules, Sim::Battle::Rules::Forestkin::Round
+    assert File.exist?(Rails.root.join("app/domain/sim/battle/rules/forestborn/movement.rb"))
+  end
+
+  test "rules registry indexes fear under movement and melee" do
+    assert_includes Rules.for(:movement).rules, FearMovement
     assert_includes Rules.for(:melee).rules, FearMelee
     assert_includes Rules.for(:melee).rules, Sim::Battle::Rules::Charge::Melee
     assert_includes Rules.for(:shooting).rules, BreathShooting
     assert_includes Rules.for(:shooting).rules, Sim::Battle::Rules::Volley::Shooting
+    assert_includes Rules.for(:shooting).rules, Sim::Battle::Rules::Common::Shooting
     assert_includes Rules.for(:shooting).rules, Sim::Battle::Rules::Blast::Shooting
     assert_includes Rules.for(:morale).rules, Sim::Battle::Rules::Undead::Morale
     assert_includes Rules.for(:setup).rules, Sim::Battle::Rules::BannerAura::Setup
     assert_includes Rules.for(:round).rules, Sim::Battle::Rules::Undead::Round
     assert_equal BreathShooting, Rules.for(:shooting).find_applicable({ shooting_template: "breath" }, "shooting")
     assert_equal Sim::Battle::Rules::Volley::Shooting, Rules.for(:shooting).find_applicable({ shooting_template: "volley" }, "shooting")
+    assert_equal Sim::Battle::Rules::Common::Shooting, Rules.for(:shooting).find_applicable({ shooting_template: "common" }, "shooting")
     assert_equal Sim::Battle::Rules::Blast::Shooting, Rules.for(:shooting).find_applicable({ shooting_template: "blast" }, "shooting")
+    assert_equal Sim::Battle::Rules::Line::Shooting, Rules.for(:shooting).find_applicable({ shooting_template: "line" }, "shooting")
     assert_nil Rules.for(:shooting).find_applicable({ shooting_template: "single" }, "shooting")
   end
 
   test "rule folders are named by rule with phase files inside" do
     root = Rails.root.join("app/domain/sim/battle/rules")
+    assert File.exist?(root.join("fear/movement.rb"))
     assert File.exist?(root.join("fear/melee.rb"))
     assert File.exist?(root.join("fear/morale.rb"))
     assert File.exist?(root.join("breath/shooting.rb"))
     assert File.exist?(root.join("volley/shooting.rb"))
+    assert File.exist?(root.join("common/shooting.rb"))
     assert File.exist?(root.join("blast/shooting.rb"))
     assert File.exist?(root.join("charge/melee.rb"))
     assert File.exist?(root.join("flying/movement.rb"))
@@ -71,7 +87,7 @@ class SimBattleCombatRulesTest < ActiveSupport::TestCase
     assert_in_delta BF::Templates::BREATH_LENGTH, BF.distance_between(tip_mid, base_mid), 0.2
   end
 
-  test "breath hits models covered more than half and logs template details" do
+  test "breath hits models whose center is under the teardrop and logs template details" do
     dragon = combatant(
       entity_id: "dragon",
       name: "Костяной дракон",
@@ -154,71 +170,446 @@ class SimBattleCombatRulesTest < ActiveSupport::TestCase
     assert_operator block[:current_health], :<, 8
   end
 
-  test "fear from attacker suppresses defender melee when morale fails" do
-    scary = combatant(
-      entity_id: "scary",
-      name: "Отродье",
+  test "fear charge check halts before contact when morale fails" do
+    charger = charge_combatant(
+      entity_id: "orc",
+      name: "Orcs",
       x: 12,
       y: 12,
-      facing: 0,
-      base_width: 2,
-      base_depth: 2,
-      melee: 5,
-      morale: 7,
-      abilities: [ "fear", "monster" ],
-      skill: 4,
-      attacks: 2,
-      contributors: { melee: [ { entity_id: "scary", name: "Отродье", kind: "unit", power: 5 } ], ranged: [], spell: [] }
+      morale: 8,
+      movement: 6
     )
-    victim = combatant(
-      entity_id: "victim",
-      name: "Мародеры",
-      x: 14.2,
+    scary = charge_combatant(
+      entity_id: "skel",
+      name: "Skels",
+      x: 22,
       y: 12,
       facing: 180,
-      base_width: 2,
-      base_depth: 2,
-      melee: 4,
-      morale: 2,
-      abilities: [],
-      skill: 3,
-      attacks: 1,
-      side_index: 1,
-      contributors: { melee: [ { entity_id: "victim", name: "Мародеры", kind: "unit", power: 4 } ], ranged: [], spell: [] }
+      morale: 7,
+      abilities: [ "fear" ],
+      side_index: 1
     )
+    intent = charge_intent_for(charger, scary)
+    refute_nil intent
 
-    assert_operator BF.distance_between_units(scary, victim), :<=, Attack::CONTACT + BF::CONFIG[:contact_snap]
+    check = failing_fear_check(charger, round_number: 1, sequence: 0)
+    FearMovement.halt_charge!(intent)
+    Movement.apply_intents!([ intent ])
+    landed = intent[:combatant]
 
-    phase = Melee.play(
-      acting_side: { player_id: "p1", side_key: "left", combatants: [ scary ] },
-      target_side: { player_id: "p2", side_key: "right", combatants: [ victim ] },
-      round_number: 1,
-      rng: Random.new(42)
-    )
-
-    fear_actions = phase[:actions].select { |row| row[:type] == "fear_check" }
-    assert fear_actions.any?, "expected fear_check actions in phase"
-    assert fear_actions.any? { |row| row[:details].any? { |line| line.include?("fear_check") } }
-    assert phase[:events].any? { |line| line.match?(/страх|не атаку|не реша/i) }
+    refute check[:passed]
+    refute Sim::Battle::Decisions::Movement.engaged?(landed, scary)
+    assert_operator BF.distance_between_units(landed, scary), :>, Sim::Battle::Decisions::Movement::ENGAGE
+    assert_operator BF.distance_between({ x: 12, y: 12 }, landed), :>, 0.05
   end
 
-  test "mutual fear skips special assault checks" do
-    left = combatant(entity_id: "a", x: 12, y: 12, facing: 0, melee: 5, abilities: [ "fear" ], morale: 5, side_index: 0,
-                     contributors: { melee: [ { entity_id: "a", name: "A", kind: "unit", power: 5 } ], ranged: [], spell: [] })
-    right = combatant(entity_id: "b", x: 14.2, y: 12, facing: 180, melee: 5, abilities: [ "fear" ], morale: 5, side_index: 1,
-                      contributors: { melee: [ { entity_id: "b", name: "B", kind: "unit", power: 5 } ], ranged: [], spell: [] })
+  test "mutual fear skips charge fear checks" do
+    left = charge_combatant(entity_id: "a", x: 12, y: 12, abilities: [ "fear" ], morale: 5)
+    right = charge_combatant(entity_id: "b", x: 22, y: 12, facing: 180, abilities: [ "fear" ], morale: 5, side_index: 1)
+    phase = Attack.create_phase("movement", "Фаза движения")
+    intent = charge_intent_for(left, right)
 
-    phase = Attack.create_phase("melee", "Фаза боя")
-    FearMelee.before_play!(
+    FearMovement.prepare_melee_intents!(
       phase: phase,
-      acting_side: { player_id: "p1", combatants: [ left ] },
-      target_side: { player_id: "p2", combatants: [ right ] },
+      intents: [ intent ],
+      acting_side: { combatants: [ left ] },
+      target_side: { combatants: [ right ] },
       round_number: 1
     )
 
     assert_empty phase[:actions].select { |row| row[:type] == "fear_check" }
-    assert FearMelee.allow_attack?(left)
-    assert FearMelee.allow_attack?(right)
+  end
+
+  test "undaunted unit ignores enemy fear on charge" do
+    undaunted = charge_combatant(entity_id: "a", x: 12, y: 12, abilities: [ "undaunted" ], movement: 6)
+    scary = charge_combatant(entity_id: "b", x: 22, y: 12, facing: 180, abilities: [ "fear" ], side_index: 1)
+    phase = Attack.create_phase("movement", "Фаза движения")
+    intent = charge_intent_for(undaunted, scary)
+
+    FearMovement.prepare_melee_intents!(
+      phase: phase,
+      intents: [ intent ],
+      acting_side: { combatants: [ undaunted ] },
+      target_side: { combatants: [ scary ] },
+      round_number: 1
+    )
+
+    assert_empty phase[:actions]
+    refute intent.dig(:plan, :fear_halted)
+  end
+
+  test "fear check runs once per charger per round across movement waves" do
+    normal = charge_combatant(entity_id: "orc", x: 12, y: 12, morale: 5, movement: 6)
+    scary = charge_combatant(entity_id: "skel", x: 22, y: 12, facing: 180, abilities: [ "fear" ], side_index: 1)
+    intent_a = charge_intent_for(normal, scary)
+    intent_b = charge_intent_for(normal, scary)
+    phase_a = Attack.create_phase("movement", "Фаза движения")
+    phase_b = Attack.create_phase("movement", "Фаза движения")
+
+    FearMovement.prepare_melee_intents!(
+      phase: phase_a,
+      intents: [ intent_a ],
+      acting_side: { combatants: [ normal ] },
+      target_side: { combatants: [ scary ] },
+      round_number: 2
+    )
+    FearMovement.prepare_melee_intents!(
+      phase: phase_b,
+      intents: [ intent_b ],
+      acting_side: { combatants: [ normal ] },
+      target_side: { combatants: [ scary ] },
+      round_number: 2
+    )
+
+    fear_actions = (phase_a[:actions] + phase_b[:actions]).select { |row| row[:type] == "fear_check" }
+    assert_equal 1, fear_actions.size
+    assert_equal "orc", fear_actions.first[:actor_id]
+  end
+
+  test "fear charger forces defender check on charge not in melee" do
+    scary = charge_combatant(entity_id: "skel", x: 12, y: 12, abilities: [ "fear" ], movement: 6)
+    victim = charge_combatant(entity_id: "orc", x: 22, y: 12, facing: 180, side_index: 1, movement: 6)
+    intent = charge_intent_for(scary, victim)
+    phase = Attack.create_phase("movement", "Фаза движения")
+
+    FearMovement.prepare_melee_intents!(
+      phase: phase,
+      intents: [ intent ],
+      acting_side: { combatants: [ scary ] },
+      target_side: { combatants: [ victim ] },
+      round_number: 1
+    )
+
+    fear_actions = phase[:actions].select { |row| row[:type] == "fear_check" }
+    assert_equal 1, fear_actions.size
+    assert_equal "orc", fear_actions.first[:actor_id]
+  end
+
+  test "already engaged units skip fear checks" do
+    scary = combatant(
+      entity_id: "skel", x: 12, y: 12, facing: 0, base_width: 2, base_depth: 2, abilities: [ "fear" ], morale: 7,
+      contributors: { melee: [ { entity_id: "skel", name: "Skels", kind: "unit", power: 3 } ], ranged: [], spell: [] }
+    )
+    victim = combatant(
+      entity_id: "orc", x: 14.2, y: 12, facing: 180, base_width: 2, base_depth: 2, abilities: [], morale: 5, side_index: 1,
+      contributors: { melee: [ { entity_id: "orc", name: "Orcs", kind: "unit", power: 5 } ], ranged: [], spell: [] }
+    )
+    phase_move = Attack.create_phase("movement", "Фаза движения")
+    intent = {
+      kind: "approach",
+      combatant: victim,
+      nearest: scary,
+      from: { x: victim[:x], y: victim[:y], facing: victim[:facing] },
+      destination: victim.merge(x: victim[:x], y: victim[:y]),
+      charge_contact_id: scary[:entity_id],
+      wait: false
+    }
+
+    FearMovement.prepare_melee_intents!(
+      phase: phase_move,
+      intents: [ intent ],
+      acting_side: { combatants: [ victim ] },
+      target_side: { combatants: [ scary ] },
+      round_number: 2
+    )
+
+    assert_empty phase_move[:actions].select { |row| row[:type] == "fear_check" }
+    assert FearMelee.allow_attack?(victim)
+  end
+
+  test "movement play logs fear check on charge into scary unit" do
+    charger = charge_combatant(entity_id: "orc", x: 12, y: 12, morale: 5, movement: 6)
+    scary = charge_combatant(entity_id: "skel", x: 22, y: 12, facing: 180, abilities: [ "fear" ], side_index: 1)
+
+    phase = Movement.play(
+      acting_side: { player_id: "p1", side_key: "left", combatants: [ charger ] },
+      target_side: { player_id: "p2", side_key: "right", combatants: [ scary ] },
+      round_number: 1
+    )
+
+    fear_actions = phase[:actions].select { |row| row[:type] == "fear_check" }
+    assert_equal 1, fear_actions.size
+    assert fear_actions.first[:details].any? { |line| line.include?("fear_check") }
+    assert phase[:events].any? { |line| line.match?(/страх|заряд/i) }
+  end
+
+  test "support rank doubles front fighters but not beyond remaining models" do
+    halberds = combatant(abilities: [ "supportRank" ], files: 4, ranks: 3, models_remaining: 10)
+    count = Rules.for(:melee).attacking_model_count(halberds, combatant(side_index: 1), "front", 4)
+
+    assert_equal 8, count
+    assert_equal 4, Rules.for(:melee).attacking_model_count(halberds, combatant(side_index: 1), "flank", 4)
+  end
+
+  test "passive log_clauses name rules that actually changed the strike" do
+    rules = Rules.for(:melee)
+    enemy = combatant(side_index: 1)
+    ctx = lambda do |attacker, defender, extra = {}|
+      { attacker: attacker, host: attacker, defender: defender, attack_type: "melee", vector: "front" }.merge(extra)
+    end
+
+    assert_includes rules.log_clauses(ctx.call(combatant(charged_distance: 5), enemy)), "заряд ×1.3"
+    assert_includes rules.log_clauses(ctx.call(combatant(abilities: [ "antiLarge" ]), enemy.merge(model_class: "monster"))), "против крупной цели ×1.35"
+    assert_includes rules.log_clauses(ctx.call(combatant(charged_distance: 6), enemy.merge(abilities: [ "shieldwall" ]))), "щитовая стена ×0.75"
+    assert_includes rules.log_clauses(ctx.call(combatant(abilities: [ "ferocious" ], ferocious_streak: 2), enemy)), "ярость SK +2"
+    assert_includes rules.log_clauses(ctx.call(
+      combatant(abilities: [ "supportRank" ], files: 4, models_remaining: 10),
+      enemy,
+      contact_side: "front"
+    )), "второй ряд бьёт"
+    assert_empty rules.log_clauses(ctx.call(combatant, enemy))
+  end
+
+  test "armor piercing halves armor influence and rune armor reduces non-magic damage" do
+    attacker = combatant(abilities: [ "armorPiercing" ])
+    defender = combatant(side_index: 1, abilities: [ "runeArmor" ])
+    rules = Rules.for(:melee)
+
+    assert_in_delta 1.2, rules.armor_factor(attacker, defender, "melee", 1.4), 0.001
+    assert_in_delta 2.0 / 3.0, rules.damage_factor(attacker, defender, "melee", "front", 1), 0.001
+    assert_in_delta 1.0, rules.damage_factor(attacker, defender, "magic", "front", 1), 0.001
+  end
+
+  test "poison removes one whole living model but not undead" do
+    attacker = combatant(abilities: [ "poison" ])
+    defender = combatant(side_index: 1, current_health: 7, max_health: 8, model_health: 4, models_remaining: 2)
+    phase = Attack.create_phase("melee", "Фаза боя")
+    action = { damage: 1, details: [] }
+    ctx = {
+      phase: phase, attacker: attacker, defender: defender, action: action,
+      acting_side: { combatants: [ attacker ] }, target_side: { combatants: [ defender ] }
+    }
+
+    Sim::Battle::Rules::Poison::Melee.after_hit!(ctx)
+    assert_equal 3, defender[:current_health]
+    assert_equal 5, action[:damage]
+
+    undead = defender.merge(current_health: 7, abilities: [ "undead" ])
+    Sim::Battle::Rules::Poison::Melee.after_hit!(ctx.merge(defender: undead, action: { damage: 1, details: [] }))
+    assert_equal 7, undead[:current_health]
+  end
+
+  test "ferocious skill grows once per battle round in continuous contact" do
+    orcs = combatant(entity_id: "orcs", x: 10, abilities: [ "ferocious" ], skill: 3)
+    enemy = combatant(entity_id: "enemy", x: 10.8, side_index: 1)
+    ctx = { acting_side: { combatants: [ orcs ] }, target_side: { combatants: [ enemy ] } }
+
+    Sim::Battle::Rules::Ferocious::Melee.before_play!(ctx.merge(round_number: 1))
+    first = Rules.for(:melee).prepare_profile({ skill: 3 }, orcs, enemy, "melee")
+    Sim::Battle::Rules::Ferocious::Melee.before_play!(ctx.merge(round_number: 2))
+    second = Rules.for(:melee).prepare_profile({ skill: 3 }, orcs, enemy, "melee")
+
+    assert_equal 3, first[:skill]
+    assert_equal 4, second[:skill]
+  end
+
+  test "boar flank charge grants an extra ferocious skill point" do
+    orcs = combatant(entity_id: "orcs", x: 10, y: 12, abilities: [ "ferocious" ], skill: 3)
+    boars = combatant(entity_id: "boars", x: 12, y: 14, abilities: [ "boarCharge" ], charged_vector: "flank", charged_target_id: "enemy")
+    enemy = combatant(entity_id: "enemy", x: 10.8, y: 12, side_index: 1)
+    ctx = { acting_side: { combatants: [ orcs, boars ] }, target_side: { combatants: [ enemy ] }, round_number: 1 }
+
+    Sim::Battle::Rules::Ferocious::Melee.before_play!(ctx)
+    Sim::Battle::Rules::Boar::Melee.before_play!(ctx)
+    profile = Rules.for(:melee).prepare_profile({ skill: 3 }, orcs, enemy, "melee")
+
+    assert_equal 1, orcs[:ferocious_boar_bonus]
+    assert_equal 4, profile[:skill]
+  end
+
+  test "shieldwall cuts only a frontal charged strike" do
+    attacker = combatant(charged_distance: 6)
+    wall = combatant(side_index: 1, abilities: [ "shieldwall" ])
+    rules = Rules.for(:melee)
+
+    assert_in_delta 0.975, rules.damage_factor(attacker, wall, "melee", "front", 1), 0.001
+    assert_in_delta 1.3, rules.damage_factor(attacker, wall, "melee", "flank", 1), 0.001
+    assert_in_delta 1.0, rules.damage_factor(attacker.except(:charged_distance), wall, "melee", "front", 1), 0.001
+  end
+
+  test "antiLarge boosts melee against monsters and cavalry only" do
+    attacker = combatant(abilities: [ "antiLarge" ])
+    rules = Rules.for(:melee)
+
+    assert_in_delta 1.35, rules.damage_factor(attacker, combatant(side_index: 1, model_class: "monster"), "melee", "front", 1), 0.001
+    assert_in_delta 1.35, rules.damage_factor(attacker, combatant(side_index: 1, model_class: "cavalry"), "melee", "front", 1), 0.001
+    assert_in_delta 1.0, rules.damage_factor(attacker, combatant(side_index: 1, model_class: "infantry"), "melee", "front", 1), 0.001
+  end
+
+  test "momentum charge scales with distance and dodge reduces hit chance" do
+    rider = combatant(abilities: [ "momentumCharge" ], charged_distance: 8)
+    dodger = combatant(side_index: 1, abilities: [ "dodge" ])
+
+    assert_in_delta 1.4, Rules.for(:melee).damage_factor(rider, dodger, "melee", "front", 1), 0.001
+    assert_in_delta 0.8, Rules.for(:melee).hit_chance_factor(rider, dodger, "melee"), 0.001
+  end
+
+  test "toxin weakens a target once and regen restores a wound" do
+    attacker = combatant(abilities: [ "toxin" ])
+    defender = combatant(side_index: 1, skill: 4, melee: 5, current_health: 6, max_health: 8)
+    phase = Attack.create_phase("melee", "Фаза боя")
+    action = { details: [] }
+    ctx = {
+      phase: phase, attacker: attacker, defender: defender, action: action,
+      acting_side: { combatants: [ attacker ] }, target_side: { combatants: [ defender ] }
+    }
+
+    Sim::Battle::Rules::Toxin::Melee.after_hit!(ctx)
+    Sim::Battle::Rules::Toxin::Melee.after_hit!(ctx.merge(action: { details: [] }))
+
+    assert_equal 3, defender[:skill]
+    assert_equal 4, defender[:melee]
+    assert defender[:toxin_weakened]
+    assert_match(/токсин/, action[:clauses].join)
+    assert_empty phase[:events]
+
+    events = Sim::Battle::Rules::Regen::Round.apply_passives!({ combatants: [ defender.merge(abilities: [ "regen" ]) ] })
+    assert_match(/регенерац/i, events.first)
+  end
+
+  test "ranged attacks stop at shooting range and outriders stay missile movers" do
+    shooter = combatant(entity_id: "gun", x: 8, y: 12, facing: 0, ranged: 4, shooting_range: 10, abilities: [ "ranged", "outrider" ])
+    near = combatant(entity_id: "near", x: 16, y: 12, side_index: 1)
+    close = combatant(entity_id: "close", x: 10, y: 12, side_index: 1)
+    far = combatant(entity_id: "far", x: 30, y: 12, side_index: 1)
+
+    assert Sim::Battle::Decisions::Targeting.can_target_ranged?(shooter, near, [ shooter, near ])
+    refute Sim::Battle::Decisions::Targeting.can_target_ranged?(shooter, far, [ shooter, far ])
+    refute Sim::Battle::Decisions::Movement.melee_movers([ shooter ]).include?(shooter)
+    assert_equal :outrider_kite, Rules.for(:movement).reposition_mode(shooter, {
+      enemies: [ close ], all: [ shooter, close ], terrain: []
+    })
+  end
+
+  test "throw rocks and forestborn use movement hooks instead of melee approach" do
+    treeman = combatant(entity_id: "tree", melee: 6, ranged: 2, abilities: [ "throwRocks", "ranged" ], shooting_range: 8)
+    archer = combatant(entity_id: "arch", melee: 2, ranged: 5, abilities: [ "forestborn", "ranged" ], shooting_range: 11)
+    forest = [ { id: "f1", type: "forest", x: 12, y: 12, width: 4, depth: 3, impassable: false, blocks_los: false } ]
+
+    refute Sim::Battle::Decisions::Movement.melee_movers([ treeman ]).include?(treeman)
+    assert_equal :forest_seek, Rules.for(:movement).reposition_mode(archer, {
+      enemies: [ combatant(entity_id: "e", x: 18, side_index: 1) ],
+      all: [ archer ],
+      terrain: forest
+    })
+  end
+
+  test "line template counts each crossed model" do
+    cannon = combatant(x: 5, y: 12, facing: 0, shooting_range: 20, shooting_template: "line")
+    block = combatant(
+      x: 12, y: 12, facing: 180, side_index: 1,
+      files: 1, ranks: 3, models_remaining: 3,
+      base_width: 1, base_depth: 3
+    )
+    victims = Sim::Battle::Rules::Line::Shooting.attack_victims(cannon, block, [ block ])
+
+    assert_equal 3, victims.first[:models_hit]
+  end
+
+  test "sling catapult gains blast only with sling fodder within six inches" do
+    diver = combatant(entity_id: "diver", x: 10, abilities: [ "slingCatapult", "machine" ], shooting_template: "single")
+    goblins = combatant(entity_id: "goblins", x: 14, abilities: [ "slingFodder" ])
+    enemy = combatant(entity_id: "enemy", x: 20, side_index: 1)
+    ctx = {
+      phase: Attack.create_phase("shooting", "Фаза стрельбы"),
+      acting_side: { combatants: [ diver, goblins ] },
+      target_side: { combatants: [ enemy ] }
+    }
+
+    Sim::Battle::Rules::SlingCatapult::Shooting.before_play!(ctx)
+
+    assert_equal "goblins", diver[:sling_catapult_fodder_id]
+    assert Sim::Battle::Rules::SlingCatapult::Shooting.applies?(diver, "shooting")
+    assert_equal Sim::Battle::Rules::SlingCatapult::Shooting, Rules.for(:shooting).find_applicable(diver, "shooting")
+  end
+
+  test "corpse trail hit summons raised dead facing nearest enemy" do
+    cart = combatant(entity_id: "cart", abilities: [ "corpseTrail" ])
+    target = combatant(entity_id: "target", x: 15, y: 12, side_index: 1)
+    far_enemy = combatant(entity_id: "far", x: 24, y: 12, side_index: 1)
+    acting_side = { side_key: "left", combatants: [ cart ] }
+    target_side = { side_key: "right", combatants: [ target, far_enemy ] }
+    action = { details: [] }
+    phase = Attack.create_phase("shooting", "Фаза стрельбы")
+
+    Sim::Battle::Rules::CorpseTrail::Shooting.after_hit!(
+      phase: phase,
+      host: cart,
+      defender: target,
+      action: action,
+      terrain: [],
+      acting_side: acting_side,
+      target_side: target_side
+    )
+
+    summoned = acting_side[:combatants].find { |entry| entry[:summoned] }
+    assert summoned
+    assert_equal "zombies", summoned[:summon_kind]
+    assert_equal "Поднятые мертвецы", summoned[:name]
+    assert_includes action[:summon_ids], summoned[:entity_id]
+    nearest_heading = BF.heading_to(summoned, target)
+    assert_in_delta nearest_heading, summoned[:facing], 1.0
+  end
+
+  test "wildborn charges forest-hidden enemies from outside the woods" do
+    woods = { id: "forest-a", type: "forest", x: 20, y: 12, width: 5, depth: 5, impassable: false, blocks_los: false }
+    attacker = charge_combatant(entity_id: "wild", x: 12, y: 12, abilities: [ "wildborn" ])
+    defender = charge_combatant(entity_id: "in", x: 20, y: 12, side_index: 1)
+    plain = charge_combatant(entity_id: "plain", x: 12, y: 12)
+
+    refute Sim::Battle::Decisions::Movement.can_charge?(plain, defender, [ woods ])
+    assert Sim::Battle::Decisions::Movement.can_charge?(attacker, defender, [ woods ])
+  end
+
+  test "wildborn in forest ignores enemy fear on charge" do
+    woods = { id: "forest-a", type: "forest", x: 12, y: 12, width: 5, depth: 5, impassable: false, blocks_los: false }
+    wildborn = charge_combatant(entity_id: "wild", x: 12, y: 12, abilities: [ "wildborn" ])
+    scary = charge_combatant(entity_id: "scary", x: 18, y: 12, side_index: 1, abilities: [ "fear" ])
+    intent = charge_intent_for(wildborn, scary)
+
+    FearMovement.prepare_melee_intents!(
+      phase: Attack.create_phase("movement", "Фаза движения"),
+      intents: [ intent ],
+      acting_side: { combatants: [ wildborn ] },
+      target_side: { combatants: [ scary ] },
+      round_number: 1,
+      terrain: [ woods ]
+    )
+
+    refute intent[:plan][:fear_halted]
+  end
+
+  test "forestkin melee hit plants forest and regrows in woods" do
+    dryad = combatant(entity_id: "dryad", abilities: [ "forestkin" ], melee: 4)
+    target = combatant(entity_id: "target", x: 18, y: 12, side_index: 1)
+    terrain = []
+    action = { details: [] }
+    acting_side = { combatants: [ dryad ] }
+    target_side = { combatants: [ target ] }
+
+    Sim::Battle::Rules::Forestkin::Melee.after_hit!(
+      phase: Attack.create_phase("melee", "Фаза боя"),
+      host: dryad,
+      defender: target,
+      action: action,
+      acting_side: acting_side,
+      target_side: target_side,
+      attack_type: "melee",
+      terrain: terrain
+    )
+
+    assert_equal 1, terrain.length
+    assert_equal "forest", terrain.first[:type]
+    assert_match(/лес прорастает/, action[:clauses].join)
+    assert_equal "add", action[:terrain_delta].first[:operation]
+    assert_equal "forest", action[:terrain_delta].first[:feature][:type]
+
+    wounded = dryad.merge(current_health: 5, max_health: 8, x: 18, y: 12)
+    events = Sim::Battle::Rules::Forestkin::Round.apply_passives!(
+      { combatants: [ wounded ], terrain: terrain }
+    )
+    assert_equal 6, wounded[:current_health]
+    assert_match(/регенерац/i, events.first)
   end
 
   test "seeds wire breath shooting on bone dragon" do
@@ -229,6 +620,56 @@ class SimBattleCombatRulesTest < ActiveSupport::TestCase
   end
 
   private
+
+  def charge_combatant(**overrides)
+    combatant(
+      facing: 0,
+      base_width: 2,
+      base_depth: 2,
+      movement: 6,
+      melee: 5,
+      morale: 6,
+      contributors: {
+        melee: [ { entity_id: overrides[:entity_id] || "unit-1", name: overrides[:name] || "Unit", kind: "unit", power: 5 } ],
+        ranged: [],
+        spell: []
+      },
+      **overrides
+    )
+  end
+
+  def charge_intent_for(charger, scary)
+    intent = Sim::Battle::Decisions::Movement.build_approach_intent(
+      combatant: charger,
+      nearest: scary,
+      obstacles: [ scary ],
+      enemies: [ scary ],
+      chargeable: true
+    )
+    return nil unless intent
+
+    intent.merge(
+      from: { x: charger[:x], y: charger[:y], facing: charger[:facing], row: charger[:row], lane: charger[:lane] },
+      before: Sim::Battle::State.snapshot_combatant(charger),
+      origin_pose: charger.dup
+    )
+  end
+
+  def failing_fear_check(combatant, round_number:, sequence: 0)
+    20.times do |seq|
+      check = Sim::Battle::Phases::Morale.resolve_check(
+        combatant: combatant,
+        allies: [ combatant ],
+        enemies: [ { abilities: [ "fear" ], x: combatant[:x], y: combatant[:y] } ],
+        round_number: round_number,
+        phase_type: "fear",
+        combat_score_delta: 0,
+        sequence: seq
+      )
+      return check unless check[:passed]
+    end
+    flunk "expected a failing fear roll within 20 sequences"
+  end
 
   def combatant(**overrides)
     {

@@ -127,7 +127,10 @@ module Sim
         def resolve_action(combatant:, allies:, enemies:, round_number:, phase_type:, combat_score_delta:, sequence:, engaged_enemies: [], trigger: nil, terrain: [])
           before = State.snapshot_combatant(combatant)
           from = position_of(combatant)
-          check = resolve_check(combatant: combatant, allies: allies, enemies: enemies, round_number: round_number, phase_type: phase_type, combat_score_delta: combat_score_delta, sequence: sequence)
+          check = resolve_check(
+            combatant: combatant, allies: allies, enemies: enemies, round_number: round_number,
+            phase_type: phase_type, combat_score_delta: combat_score_delta, sequence: sequence, terrain: terrain
+          )
           damage = 0
           to = nil
           retreat = {}
@@ -171,7 +174,8 @@ module Sim
               combatant[:movement],
               obstacles: blockers,
               ally_ids: Array(allies).map { |entry| entry[:entity_id] },
-              preferred_heading: preferred_heading
+              preferred_heading: preferred_heading,
+              contact_exempt_ids: Array(engaged_enemies).map { |entry| entry[:entity_id] }
             )
             combatant[:x] = retreat[:destination][:x]
             combatant[:y] = retreat[:destination][:y]
@@ -305,9 +309,9 @@ module Sim
           lines
         end
 
-        def resolve_check(combatant:, allies:, enemies:, round_number:, phase_type:, combat_score_delta:, sequence:)
+        def resolve_check(combatant:, allies:, enemies:, round_number:, phase_type:, combat_score_delta:, sequence:, terrain: [])
           source = effective_morale(combatant, allies)
-          delta = Rules.for(:morale).morale_threshold_delta(combatant, allies, enemies, combat_score_delta)
+          delta = Rules.for(:morale).morale_threshold_delta(combatant, allies, enemies, combat_score_delta, terrain: terrain)
           threshold = [ 2, source[:value] + delta - combat_score_delta ].max
           roll = roll_dice("#{phase_type}:#{round_number}:#{sequence}:#{combatant[:entity_id]}")
           {

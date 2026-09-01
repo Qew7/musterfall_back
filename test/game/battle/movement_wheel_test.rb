@@ -39,8 +39,8 @@ class SimBattleMovementWheelTest < ActiveSupport::TestCase
     target_side = { player_id: "p2", combatants: [ enemy ] }
     heading = Sim::Geometry::Battlefield.heading_to(actor, enemy)
     assert Sim::Geometry::Battlefield.in_front_arc?(actor, enemy, actor[:facing])
-    budget = Sim::Battle::Decisions::Movement.charge_budget_for(actor, enemies: [ enemy ])
-    assert Sim::Battle::Decisions::Movement.within_charge_range?(actor, enemy, enemies: [ enemy ])
+    budget = Sim::Battle::Decisions::ChargeRange.budget(actor, enemies: [ enemy ])
+    assert Sim::Battle::Decisions::ChargeRange.within?(actor, enemy, enemies: [ enemy ])
     expected = Sim::Geometry::Battlefield.apply_wheel(actor, heading, budget)
 
     phase = Sim::Battle::Phases::Movement.play(acting_side: acting_side, target_side: target_side)
@@ -99,7 +99,7 @@ class SimBattleMovementWheelTest < ActiveSupport::TestCase
   test "right-side row advance keeps facing and does not remirror to 0" do
     actor = combatant(
       entity_id: "bot-marauders",
-      name: "Мародеры",
+      name: "Отряд грабителей",
       side_index: 1,
       x: 35,
       y: 19,
@@ -139,7 +139,7 @@ class SimBattleMovementWheelTest < ActiveSupport::TestCase
   test "row advance keeps battlefield coordinates and never teleports backward" do
     actor = combatant(
       entity_id: "chaos-knights",
-      name: "Рыцари Хаоса",
+      name: "Рыцари разлома",
       x: 14.6,
       y: 12.9,
       facing: 2,
@@ -198,7 +198,7 @@ class SimBattleMovementWheelTest < ActiveSupport::TestCase
     )
     blocker = combatant(
       entity_id: "blocker",
-      name: "Мародеры",
+      name: "Отряд грабителей",
       x: 16,
       y: 12,
       facing: 0,
@@ -273,7 +273,7 @@ class SimBattleMovementWheelTest < ActiveSupport::TestCase
     )
     enemy = combatant(
       entity_id: "enemy-1",
-      name: "Мародеры",
+      name: "Отряд грабителей",
       x: 12,
       y: 12,
       facing: 0,
@@ -315,7 +315,7 @@ class SimBattleMovementWheelTest < ActiveSupport::TestCase
     )
     blocker = combatant(
       entity_id: "blocker",
-      name: "Мародеры",
+      name: "Отряд грабителей",
       x: 18,
       y: 12,
       facing: 0,
@@ -345,7 +345,7 @@ class SimBattleMovementWheelTest < ActiveSupport::TestCase
       lane: "center"
     )
 
-    assert Sim::Battle::Decisions::Movement.this_turn_charge?(actor, blocker, enemies: [ blocker, target ])
+    assert Sim::Battle::Decisions::ChargeRange.within?(actor, blocker, enemies: [ blocker, target ])
 
     before = Sim::Geometry::Battlefield.distance_between_units(actor, blocker)
     phase = Sim::Battle::Phases::Movement.play(
@@ -363,7 +363,7 @@ class SimBattleMovementWheelTest < ActiveSupport::TestCase
   test "co-moving allies do not force each other to wait or orbit" do
     actor = combatant(
       entity_id: "chaos-knights",
-      name: "Рыцари Хаоса",
+      name: "Рыцари разлома",
       x: 4,
       y: 12,
       facing: 0,
@@ -378,9 +378,9 @@ class SimBattleMovementWheelTest < ActiveSupport::TestCase
       side_index: 0
     )
     ally = combatant(
-      entity_id: "marauders",
-      name: "Мародеры",
-      x: 10,
+      entity_id: "reavers",
+      name: "Отряд грабителей",
+      x: 14,
       y: 12,
       facing: 0,
       base_width: 4,
@@ -418,7 +418,7 @@ class SimBattleMovementWheelTest < ActiveSupport::TestCase
     )
 
     assert phase[:actions].any? { |action| action[:actor_id] == "chaos-knights" }
-    assert phase[:actions].any? { |action| action[:actor_id] == "marauders" }
+    assert phase[:actions].any? { |action| action[:actor_id] == "reavers" }
     refute phase[:actions].any? { |action|
       action[:summary].include?("ждёт прохода") ||
         action.dig(:maneuver, :blocked_by_ally)
@@ -431,7 +431,7 @@ class SimBattleMovementWheelTest < ActiveSupport::TestCase
   test "faster co-mover does not sweep through a waiting allied hero" do
     knights = combatant(
       entity_id: "unit-22",
-      name: "Черные рыцари",
+      name: "Теневые всадники",
       x: 4,
       y: 4,
       facing: 0,
@@ -449,7 +449,7 @@ class SimBattleMovementWheelTest < ActiveSupport::TestCase
     )
     lich = combatant(
       entity_id: "hero-5",
-      name: "Король-лич",
+      name: "Король курганов",
       x: 8,
       y: 4,
       facing: 0,
@@ -469,7 +469,7 @@ class SimBattleMovementWheelTest < ActiveSupport::TestCase
     )
     orcs = combatant(
       entity_id: "unit-25",
-      name: "Орки-бойзы",
+      name: "Орки-громилы",
       x: 31,
       y: 3,
       facing: 180,
@@ -523,7 +523,7 @@ class SimBattleMovementWheelTest < ActiveSupport::TestCase
   test "stationary allied blocker is wrapped with wheel/turn then advance" do
     actor = combatant(
       entity_id: "chaos-knights",
-      name: "Рыцари Хаоса",
+      name: "Рыцари разлома",
       x: 4,
       y: 8,
       facing: 0,
@@ -654,6 +654,120 @@ class SimBattleMovementWheelTest < ActiveSupport::TestCase
     assert_operator first[:front_x], :>, 12.5
   end
 
+  test "co-movers in one wave do not block each other from their start squares" do
+    flank_dryad = combatant(
+      entity_id: "flank-dryad", name: "Фланг", x: 8, y: 2, facing: 0, lane: "left",
+      movement: 3, melee: 4, ranged: 0, spell: 0, morale: 6, skill: 3,
+      base_width: 4, base_depth: 2, files: 4, ranks: 2, initiative: 3,
+      current_health: 16, max_health: 16, abilities: [ "fear", "forestkin" ]
+    )
+    center_dryad = combatant(
+      entity_id: "center-dryad", name: "Центр", x: 8, y: 14, facing: 7.125,
+      movement: 3, melee: 4, ranged: 0, spell: 0, morale: 6, skill: 3,
+      base_width: 4, base_depth: 2, files: 4, ranks: 2, initiative: 3,
+      current_health: 16, max_health: 16, abilities: [ "fear", "forestkin" ]
+    )
+    rear_dryad = combatant(
+      entity_id: "rear-dryad", name: "Тыл", x: 2, y: 15, facing: 0,
+      movement: 3, melee: 4, ranged: 0, spell: 0, morale: 6, skill: 3,
+      base_width: 4, base_depth: 2, files: 4, ranks: 2, initiative: 3,
+      current_health: 16, max_health: 16, abilities: [ "fear", "forestkin" ]
+    )
+    dancers = combatant(
+      entity_id: "dancers", name: "Танцоры", x: 8, y: 19, facing: 0,
+      movement: 4, melee: 5, ranged: 0, spell: 0, morale: 5, skill: 4,
+      base_width: 4, base_depth: 2, files: 4, ranks: 2, initiative: 3
+    )
+    prince = combatant(
+      entity_id: "prince", name: "Принц", x: 6, y: 22, facing: 0,
+      movement: 4, melee: 6, ranged: 0, spell: 0, morale: 8, skill: 5,
+      base_width: 2, base_depth: 2, files: 1, ranks: 1, initiative: 5
+    )
+    enemy = combatant(
+      entity_id: "guard", name: "Стража", x: 31, y: 3, facing: 180,
+      movement: 3, melee: 2, ranged: 5, spell: 0, morale: 5, skill: 4,
+      base_width: 5, base_depth: 2, files: 5, ranks: 2, initiative: 4,
+      lane: "right", side_index: 1
+    )
+    wyst = combatant(
+      entity_id: "wyst", name: "Следопыт", x: 31, y: 11, facing: 180,
+      movement: 3, melee: 2, ranged: 5, spell: 0, morale: 8, skill: 5,
+      base_width: 1, base_depth: 1, files: 1, ranks: 1, initiative: 5,
+      lane: "center", side_index: 1
+    )
+    foe_dryad = combatant(
+      entity_id: "foe-dryad", name: "Вражеские дриады", x: 35, y: 11, facing: 180,
+      movement: 3, melee: 4, ranged: 0, spell: 0, morale: 6, skill: 3,
+      base_width: 4, base_depth: 2, files: 4, ranks: 2, initiative: 3,
+      row: "support", lane: "center", side_index: 1,
+      current_health: 16, max_health: 16, abilities: [ "fear", "forestkin" ]
+    )
+    dancers_enemy = combatant(
+      entity_id: "foe-dancers", name: "Вражеские танцоры", x: 31, y: 19, facing: 180,
+      movement: 4, melee: 5, ranged: 0, spell: 0, morale: 5, skill: 4,
+      base_width: 4, base_depth: 2, files: 4, ranks: 2, initiative: 3,
+      lane: "left", side_index: 1
+    )
+
+    starts = {
+      "center-dryad" => center_dryad[:x],
+      "rear-dryad" => rear_dryad[:x]
+    }
+    phase = Sim::Battle::Phases::Movement.play(
+      acting_side: { player_id: "p1", combatants: [ flank_dryad, center_dryad, rear_dryad, dancers, prince ] },
+      target_side: { player_id: "bot", combatants: [ enemy, wyst, foe_dryad, dancers_enemy ] }
+    )
+
+    %w[center-dryad rear-dryad].each do |id|
+      action = phase[:actions].find { |entry| entry[:actor_id] == id }
+      assert action, "expected movement action for #{id}"
+      refute action.dig(:maneuver, :blocked_by_ally)
+      refute action[:summary].include?("ждёт прохода")
+      assert_operator action[:to][:x], :>, starts[id] + 0.2, "#{id} should advance"
+    end
+  end
+
+  test "wave transit re-paths around a co-mover landing without blocking on its start" do
+    leader = combatant(
+      entity_id: "leader", name: "Фронт", x: 14, y: 12, facing: 0,
+      movement: 6, melee: 4, ranged: 0, spell: 0, base_width: 2, base_depth: 2, initiative: 4
+    )
+    follower = combatant(
+      entity_id: "follower", name: "Тыл", x: 8, y: 12, facing: 0,
+      movement: 6, melee: 4, ranged: 0, spell: 0, base_width: 2, base_depth: 2, initiative: 3
+    )
+    enemy = combatant(
+      entity_id: "enemy", name: "Враг", x: 28, y: 12, facing: 180,
+      movement: 4, melee: 4, ranged: 0, spell: 0, base_width: 2, base_depth: 2,
+      lane: "center", side_index: 1
+    )
+
+    phase = Sim::Battle::Phases::Movement.play(
+      acting_side: { player_id: "p1", combatants: [ leader, follower ] },
+      target_side: { player_id: "bot", combatants: [ enemy ] }
+    )
+
+    follower_action = phase[:actions].find { |entry| entry[:actor_id] == "follower" }
+    leader_action = phase[:actions].find { |entry| entry[:actor_id] == "leader" }
+    assert follower_action
+    assert leader_action
+    refute follower_action.dig(:maneuver, :blocked_by_ally)
+    assert_operator follower[:x], :>, 8.2
+    assert_operator leader[:x], :>, 14.2
+    refute Sim::Geometry::Battlefield.rectangles_overlap?(leader, follower)
+
+    transit_world = [
+      Sim::Battle::Phases::Movement.freeze_obstacle(leader),
+      Sim::Battle::Phases::Movement.freeze_obstacle(follower)
+    ]
+    assert Sim::Battle::Pathing::Obstacles.coerce(transit_world).except("follower").translation_clear?(
+      follower,
+      follower_action[:from],
+      follower_action[:to],
+      contact_id: enemy[:entity_id]
+    )
+  end
+
   test "plan_approach wraps an allied blocker on the frontal line" do
     origin = combatant(
       entity_id: "boars",
@@ -667,8 +781,8 @@ class SimBattleMovementWheelTest < ActiveSupport::TestCase
       side_index: 0
     )
     ally = combatant(
-      entity_id: "boyz",
-      name: "Орки-бойзы",
+      entity_id: "brutes",
+      name: "Орки-громилы",
       x: 14,
       y: 12,
       facing: 0,
@@ -678,7 +792,7 @@ class SimBattleMovementWheelTest < ActiveSupport::TestCase
     )
     enemy = combatant(
       entity_id: "target",
-      name: "Мародеры",
+      name: "Отряд грабителей",
       x: 22,
       y: 12,
       facing: 180,
@@ -707,8 +821,8 @@ class SimBattleMovementWheelTest < ActiveSupport::TestCase
 
   test "player log does not say обходит when soft-stopping on the charge target" do
     actor = combatant(
-      entity_id: "boyz",
-      name: "Орки-бойзы",
+      entity_id: "brutes",
+      name: "Орки-громилы",
       x: 28,
       y: 16,
       facing: 180,
@@ -724,7 +838,7 @@ class SimBattleMovementWheelTest < ActiveSupport::TestCase
     )
     target = combatant(
       entity_id: "warriors",
-      name: "Воины Хаоса",
+      name: "Тяжёлая гвардия",
       x: 18,
       y: 16,
       facing: 0,
@@ -743,10 +857,10 @@ class SimBattleMovementWheelTest < ActiveSupport::TestCase
       acting_side: { player_id: "bot", combatants: [ actor ] },
       target_side: { player_id: "p1", combatants: [ target ] }
     )
-    action = phase[:actions].find { |entry| entry[:actor_id] == "boyz" }
-    assert action, "expected boyz to move toward warriors"
+    action = phase[:actions].find { |entry| entry[:actor_id] == "brutes" }
+    assert action, "expected brutes to move toward warriors"
     refute_includes action[:summary], "обходит"
-    assert_includes action[:summary], "сближается с Воины Хаоса"
+    assert_includes action[:summary], "совершил продвижение к Воины Хаоса"
     assert action[:details].any? { |line| line.include?("MV budget=") }
     refute_includes action[:summary], "wheel"
   end

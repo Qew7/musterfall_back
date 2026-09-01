@@ -22,6 +22,7 @@ class Api::BattlesReplayTest < ActionDispatch::IntegrationTest
     assert_equal matchup.seed, battle.fetch("seed")
     assert_equal matchup.id, battle.fetch("matchupId")
     assert battle.fetch("winnerId").present?
+    assert battle.fetch("battleId").to_i > original_ids.max.to_i
 
     matchup.reload
     assert_equal stored_payload, matchup.result_payload

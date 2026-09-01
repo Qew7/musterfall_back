@@ -10,7 +10,8 @@ class SimBattleRuleContractTest < ActiveSupport::TestCase
       morale_threshold_delta: ->(*) { -1 },
       facing_damage_factor: ->(*) { nil },
       effective_morale: ->(*) { nil },
-      apply_passives!: ->(*) { [ "first" ] }
+      apply_passives!: ->(*) { [ "first" ] },
+      log_clauses: ->(*) { [ "alpha" ] }
     )
     second = rule_module(
       before_play!: ->(ctx) { calls << [ :second, ctx ] },
@@ -19,7 +20,8 @@ class SimBattleRuleContractTest < ActiveSupport::TestCase
       morale_threshold_delta: ->(*) { 3 },
       facing_damage_factor: ->(*) { 1.25 },
       effective_morale: ->(*) { 8 },
-      apply_passives!: ->(*) { [ "second" ] }
+      apply_passives!: ->(*) { [ "second" ] },
+      log_clauses: ->(*) { [ "beta" ] }
     )
     rules = Sim::Battle::Rules::RuleSet.new([ first, second ])
 
@@ -32,6 +34,7 @@ class SimBattleRuleContractTest < ActiveSupport::TestCase
     assert_in_delta 1.25, rules.facing_damage_factor({}, :front), 0.001
     assert_equal 8, rules.effective_morale({}, [])
     assert_equal %w[first second], rules.apply_passives!({})
+    assert_equal %w[alpha beta], rules.log_clauses({})
   end
 
   test "RuleSet preserves defaults when no rule implements an optional hook" do
@@ -45,6 +48,13 @@ class SimBattleRuleContractTest < ActiveSupport::TestCase
     assert_nil rules.effective_morale({}, [])
     assert_nil rules.handle_morale_failure!({}, {}, {})
     assert_empty rules.apply_passives!({})
+    assert_empty rules.log_clauses({})
+    assert_in_delta 1.0, rules.armor_factor({}, {}, :melee, 1.0), 0.001
+    assert_equal 3, rules.shooting_skill({}, {}, [], 3)
+    assert_equal 4, rules.attacking_model_count({}, {}, "front", 4)
+    assert_nil rules.reposition_mode({}, {})
+    assert_nil rules.melee_mover?({})
+    assert_in_delta 1.0, rules.terrain_damage_factor({}, {}), 0.001
   end
 
   test "movement ability dispatch is observable through the public facade" do

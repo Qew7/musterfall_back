@@ -14,6 +14,7 @@ module Sim
           pose = origin
           remaining = budget.to_f
           steps = []
+          motion_sequence = []
           advance = 0.0
           march = 0.0
           wheel = nil
@@ -29,16 +30,6 @@ module Sim
 
             dest = points[index + 1]
             next if same?(pose, dest)
-
-            nxt = points[index + 2]
-            # A wrap vertex opposite the next hop is a clearance artifact, not a facing target.
-            if index.zero? && nxt &&
-                Geometry::Battlefield.shortest_facing_delta(
-                  Geometry::Battlefield.heading_to(pose, dest),
-                  Geometry::Battlefield.heading_to(pose, nxt)
-                ).abs >= 90.0
-              next
-            end
 
             last_segment = index == points.length - 2
             at_contact = thread[:complete] && last_segment
@@ -61,8 +52,10 @@ module Sim
             )
             break unless plan && plan[:pose]
 
+            segment_origin = pose
             spent = plan[:cost_spent].to_f
             spent = Maneuvers.spent_mv(plan, pose) if spent <= 0.05
+            motion_sequence.concat(Maneuvers.motion_entries_for(segment_origin, plan))
             pose = Geometry::Battlefield.merge_footprint(pose, plan[:pose])
             remaining = [ remaining - spent, 0.0 ].max
             steps.concat(Array(plan[:steps]))
@@ -102,6 +95,7 @@ module Sim
               spent = reformed[:cost_spent].to_f
               spent = Maneuvers.spent_mv(reformed, origin) if spent <= 0.05
               remaining = [ remaining - spent, 0.0 ].max
+              motion_sequence = Maneuvers.motion_entries_for(origin, reformed)
               steps = Array(reformed[:steps])
               advance = reformed[:mv_spent_advance].to_f
               march = reformed[:mv_spent_march].to_f
@@ -130,7 +124,8 @@ module Sim
             mv_spent_march: march,
             march_multiplier: multiplier,
             steps: steps,
-            avoided: wrapped.any? && points.length > 2,
+            motion_sequence: motion_sequence,
+            avoided: wrapped.any?,
             heading: heading,
             blocked_by_ally: false,
             thread: points
@@ -196,6 +191,7 @@ module Sim
             mv_spent_march: 0.0,
             march_multiplier: nil,
             steps: [],
+            motion_sequence: [],
             avoided: false,
             heading: origin[:facing],
             blocked_by_ally: false,

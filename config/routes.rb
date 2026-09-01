@@ -2,6 +2,15 @@ Rails.application.routes.draw do
   get "up" => "rails/health#show", as: :rails_health_check
   get "api/status" => "api/status#show"
   get "api/game_catalog" => "api/game_catalog#show"
+  namespace :api do
+    namespace :admin do
+      get "balance" => "balance#show"
+      post "balance/backfill" => "balance#backfill"
+      post "balance/simulations" => "balance#start_simulation"
+      post "balance/simulations/:id/stop" => "balance#stop_simulation"
+      post "balance/duels" => "balance#run_duel"
+    end
+  end
   resources :games, only: [ :create, :show ], controller: "api/games", path: "api/games" do
     member do
       post :assign_faction

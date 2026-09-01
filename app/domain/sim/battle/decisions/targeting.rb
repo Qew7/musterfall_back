@@ -57,6 +57,9 @@ module Sim
         end
 
         def can_target_ranged?(attacker, target, all_combatants, terrain: [])
+          range = attacker[:shooting_range].to_f
+          return false if range.positive? && Geometry::Battlefield.distance_between(attacker, target) > range
+
           if Rules.for(:shooting).requires_front_arc_for_ranged?(attacker) &&
               !Geometry::Battlefield.in_front_arc?(attacker, target, attacker[:facing])
             return false

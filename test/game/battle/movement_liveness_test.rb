@@ -64,9 +64,9 @@ class SimBattleMovementLivenessTest < ActiveSupport::TestCase
       actor: { x: 6.0, y: 12.0 },
       target: { x: 30.0, y: 12.0 },
       allies: [
-        { entity_id: "front", x: 10.0, y: 12.0, base_width: 4.0, base_depth: 4.0, ranged: 5, melee: 0 },
-        { entity_id: "upper", x: 6.0, y: 8.5, base_width: 4.0, base_depth: 2.0, ranged: 5, melee: 0 },
-        { entity_id: "lower", x: 6.0, y: 15.5, base_width: 4.0, base_depth: 2.0, ranged: 5, melee: 0 }
+        { entity_id: "front", x: 10.0, y: 12.0, base_width: 4.0, base_depth: 4.0, ranged: 5, melee: 0, movement: 0 },
+        { entity_id: "upper", x: 6.0, y: 8.5, base_width: 4.0, base_depth: 2.0, ranged: 5, melee: 0, movement: 0 },
+        { entity_id: "lower", x: 6.0, y: 15.5, base_width: 4.0, base_depth: 2.0, ranged: 5, melee: 0, movement: 0 }
       ]
     },
     {

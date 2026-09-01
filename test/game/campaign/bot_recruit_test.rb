@@ -103,4 +103,24 @@ class SimCampaignBotRecruitTest < ActiveSupport::TestCase
     assert_operator restored.dig(:state, :current_health), :>, before_health
     assert_operator player[:treasury], :>=, 0
   end
+
+  test "chaos spawn remains recruitable when catalog cost exceeds leftover treasury" do
+    campaign = Sim::Campaign::Create.call(player_count: 2).value
+    bot = campaign.find_player("player-2")
+    campaign = Sim::Campaign::AssignFaction.call(
+      campaign: campaign,
+      catalog: catalog,
+      player_id: bot[:id],
+      faction_id: "chaos",
+      rng: Sim::Rng::Seeded.new(1)
+    ).value
+    bot = campaign.find_player(bot[:id])
+    bot[:recruit_access] = 2
+    bot[:treasury] = 80
+    spawn = catalog.template("rift_mutant")
+    shop = Sim::Campaign::BotRecruit.new(campaign, catalog, bot[:id], Sim::Rng::Seeded.new(1))
+
+    assert_operator spawn[:cost], :>, 80
+    assert_includes shop.send(:recruitable, bot).map { |template| template[:id] }, "rift_mutant"
+  end
 end

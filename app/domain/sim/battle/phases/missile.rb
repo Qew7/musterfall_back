@@ -5,8 +5,20 @@ module Sim
       module Missile
         module_function
 
-        def plan(**kwargs)
-          Decisions::MissileChoice.plan(**kwargs)
+        def plan(acting_side:, target_side:, round_number:, terrain: [], **)
+          Rules.for(:shooting).before_play!(
+            phase: AttackResolution.create_phase("shooting", "План стрельбы"),
+            acting_side: acting_side,
+            target_side: target_side,
+            round_number: round_number,
+            terrain: terrain
+          )
+          Decisions::MissileChoice.plan(
+            acting_side: acting_side,
+            target_side: target_side,
+            round_number: round_number,
+            terrain: terrain
+          )
         end
 
         def play_planned!(phase:, plan:, attack_type:, acting_side:, target_side:, round_number:, rng:, terrain: [])

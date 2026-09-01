@@ -112,6 +112,33 @@ class SimBattleTerrainTest < ActiveSupport::TestCase
     assert_empty BF.line_of_sight_blockers(attacker, defender, [], terrain: [ water ])
   end
 
+  test "impassable terrain keeps TERRAIN_WRAP_PAD clearance not melee CONTACT" do
+    building = house(x: 16, y: 12, width: 3, depth: 3)
+    obstacles = Pathing::Obstacles.merge([], [ building ])
+    inside = unit(entity_id: "inside", x: 16, y: 12, facing: 0, base_width: 2, base_depth: 2)
+    refute obstacles.clear?(inside), "tray overlapping house must be blocked"
+
+    kissing = unit(entity_id: "kiss", x: 13.49, y: 12, facing: 0, base_width: 2, base_depth: 2)
+    refute obstacles.clear?(kissing), "tray must stay at least TERRAIN_WRAP_PAD away from terrain"
+
+    clear = unit(entity_id: "clear", x: 12.9, y: 12, facing: 0, base_width: 2, base_depth: 2)
+    assert obstacles.clear?(clear), "tray with enough terrain clearance is legal"
+
+    left = unit(entity_id: "left", x: 10, y: 12, facing: 0, base_width: 2, base_depth: 2, side_index: 0)
+    right = unit(entity_id: "right", x: 12.35, y: 12, facing: 180, base_width: 2, base_depth: 2, side_index: 1)
+    units = Pathing::Obstacles.merge([ left, right ], [])
+    refute units.clear?(left), "unit-unit spacing still uses melee CONTACT"
+  end
+
+  test "ground march closer than TERRAIN_WRAP_PAD to a house corner is blocked" do
+    building = house(x: 12.763, y: 12.389, width: 3.489, depth: 2.11)
+    mover = unit(entity_id: "hero", x: 9.602, y: 10.552, facing: 345.92, base_width: 1, base_depth: 1, movement: 8)
+    dest = { x: 12.14298936534002, y: 9.627737078179468, facing: 338.18 }
+    world = Pathing::Obstacles.merge([], [ building ])
+
+    refute world.translation_clear?(mover, mover, mover.merge(x: dest[:x], y: dest[:y], facing: dest[:facing]))
+  end
+
   test "impassable terrain blocks ground pathing and flyer landing" do
     origin = unit(entity_id: "walker", x: 12, y: 12, facing: 0, movement: 8)
     building = house(x: 16, y: 12, width: 3, depth: 3)
@@ -237,5 +264,34 @@ class SimBattleTerrainTest < ActiveSupport::TestCase
       origin.merge(x: plan[:pose][:x], y: plan[:pose][:y], facing: plan[:pose][:facing]),
       BF.feature_as_obstacle(building)
     )
+  end
+
+  test "corpse mire damages a living unit crossing it but not undead" do
+    mire = {
+      id: "mire", type: "corpse_mire", x: 10, y: 10, width: 3, depth: 3,
+      impassable: false, blocks_los: false, entry_damage: 2,
+      damage_type: "magic", rule_key: "corpseTrail"
+    }
+    living = unit(entity_id: "living", x: 12, y: 10, current_health: 6).merge(
+      kind: "unit", max_health: 6, model_health: 1, starting_models: 6,
+      models_remaining: 6, frontage: 2, max_files: 2, files: 2, ranks: 3,
+      model_width: 1, model_depth: 1, base_width: 2, base_depth: 3
+    )
+    undead = living.merge(entity_id: "undead", abilities: [ "undead" ], current_health: 6)
+    phase = Attack.create_phase("movement", "Фаза движения")
+    phase[:actions] = [
+      { type: "movement", actor_id: "living", from: { x: 8, y: 10 }, to: { x: 12, y: 10 } },
+      { type: "movement", actor_id: "undead", from: { x: 8, y: 10 }, to: { x: 12, y: 10 } }
+    ]
+
+    Sim::Battle::Phases::Movement.apply_terrain_hazards!(
+      phase,
+      { combatants: [ living, undead ] },
+      { combatants: [] },
+      [ mire ]
+    )
+
+    assert_equal 4, living[:current_health]
+    assert_equal 6, undead[:current_health]
   end
 end

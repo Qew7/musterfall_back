@@ -22,7 +22,8 @@ module Sim
         end
 
         def impassable_obstacles(features)
-          Array(features).select { |entry| entry[:impassable] }.map { |entry| feature_as_obstacle(entry) }
+          Array(features).select { |entry| entry[:impassable] || entry["impassable"] }
+            .map { |entry| feature_as_obstacle(entry.transform_keys(&:to_sym)) }
         end
 
         def los_blocking_features(features)

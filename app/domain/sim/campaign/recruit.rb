@@ -22,7 +22,8 @@ module Sim
         return Result.failure("unknown template") unless template
         return Result.failure("faction required") if player[:faction_id].blank?
         return Result.failure("template faction mismatch") unless template[:faction_id] == player[:faction_id]
-        return Result.failure("insufficient treasury") if player[:treasury] < template[:cost]
+        cost = RecruitRules::ChaosSpawn.cost(player, template)
+        return Result.failure("insufficient treasury") if cost <= 0 || player[:treasury] < cost
         return Result.failure("recruit slot unavailable") unless RecruitAccess.allowed?(player, @catalog, template)
 
         loadout = MagicLoadout.build(
@@ -40,9 +41,10 @@ module Sim
           else
             factory.create_unit(template[:id], player[:id])
           end
+        RecruitRules::ChaosSpawn.apply!(entity, cost, @rng) if RecruitRules::ChaosSpawn.applies?(template)
         entity[:components][:hero]&.merge!(loadout.value)
         @campaign.id_sequence = factory.sequence_value
-        player[:treasury] -= template[:cost]
+        player[:treasury] -= cost
         player[:roster] << entity
         Result.ok(@campaign)
       end

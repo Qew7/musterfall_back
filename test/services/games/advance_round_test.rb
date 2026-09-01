@@ -9,7 +9,7 @@ class GamesAdvanceRoundServiceTest < ActiveSupport::TestCase
     game.reload
     assert game.battles.any?
     assert_equal %w[pre_round post_round].sort, game.round_snapshots.map(&:phase).sort
-    assert_equal "finished", game.status
+    assert_equal "active", game.status
   end
 
   test "conflict when base version mismatches" do

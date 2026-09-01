@@ -15,7 +15,10 @@ module Sim
             next false if host[:movement].to_f <= 0.05
 
             # Cheap geometric filters first; avoid full MissileChoice damage scans here.
-            next true if in_charge_danger?(host, enemies)
+            next true if Rules.for(:movement).reposition_mode(host, {
+              acting_side: acting_side, target_side: target_side, enemies: enemies, all: all,
+              terrain: terrain, round_number: round_number
+            })
             next true if under_missile_threat?(host, enemies)
             next true if Rules::Wizard::Movement.caster?(host) &&
               !Rules::Wizard::Movement.opens_cast?(
@@ -69,9 +72,7 @@ module Sim
             next unless clear_pose?(pose.merge(entity_id: combatant[:entity_id]), obstacles)
 
             candidate = apply_pose(combatant, pose)
-            unless mode == :escape_charge
-              candidate, plan = face_if_clear(combatant, candidate, plan, budget, enemies, all, obstacles)
-            end
+            candidate, plan = face_if_clear(combatant, candidate, plan, budget, enemies, all, obstacles)
             next unless improves?(
               combatant, candidate, allies, enemies, all, mode,
               acting_side: acting_side, target_side: target_side, terrain: terrain, round_number: round_number
@@ -81,13 +82,15 @@ module Sim
             return intent_for(combatant, candidate, plan, budget, enemies, all, march_meta: march_meta)
           end
 
-          return nil if mode == :escape_charge
-
           hold_wheel_intent(combatant, allies, enemies, all, budget, obstacles)
         end
 
         def primary_mode(combatant, enemies, all, round_number, acting_side:, target_side:, terrain: [])
-          return :escape_charge if in_charge_danger?(combatant, enemies)
+          custom = Rules.for(:movement).reposition_mode(combatant, {
+            acting_side: acting_side, target_side: target_side, enemies: enemies, all: all,
+            terrain: terrain, round_number: round_number
+          })
+          return custom if custom
           if Rules::Wizard::Movement.caster?(combatant)
             return :hold if Rules::Wizard::Movement.opens_cast?(
               combatant,
@@ -111,9 +114,12 @@ module Sim
 
         def candidate_goals(combatant, _allies, enemies, all, round_number, mode,
           acting_side:, target_side:, terrain: [], budget: 0.0)
-          goals =
+          custom = Rules.for(:movement).reposition_goals(combatant, mode, {
+            acting_side: acting_side, target_side: target_side, enemies: enemies, all: all,
+            terrain: terrain, round_number: round_number, budget: budget
+          })
+          goals = custom ||
             case mode
-            when :escape_charge then escape_charge_goals(combatant, enemies)
             when :leave_shot then leave_shot_goals(combatant, enemies)
             when :cast_seek
               Rules::Wizard::Movement.seek_goals(
@@ -127,23 +133,6 @@ module Sim
             else []
             end
           goals.compact.first(MAX_PATH_ATTEMPTS)
-        end
-
-        def escape_charge_goals(combatant, enemies)
-          threats = Roles.standing(enemies).select { |enemy| Roles.melee_primary?(enemy) }
-          return [] if threats.empty?
-
-          away = heading_away_from(combatant, threats)
-          step = Decisions::Movement.budget_for(combatant, enemies: threats)
-          # Pure retreat often stays inside a 120° front arc; oblique headings exit range/arc cheaper.
-          [ away, away + 45, away - 45, away + 30, away - 30 ].map do |heading|
-            vector = Geometry::Battlefield.facing_vector(heading)
-            Geometry::Battlefield.clamp_battlefield_position(
-              x: combatant[:x].to_f + (vector[:x] * step),
-              y: combatant[:y].to_f + (vector[:y] * step),
-              facing: Geometry::Battlefield.normalize_facing(heading)
-            )
-          end
         end
 
         def leave_shot_goals(combatant, enemies)
@@ -177,20 +166,28 @@ module Sim
           return [] unless target
 
           heading = Geometry::Battlefield.heading_to(combatant, target)
+          forward = Geometry::Battlefield.facing_vector(heading)
+          budget = Decisions::Movement.budget_for(combatant, enemies: enemies)
+          advance = Geometry::Battlefield.clamp_battlefield_position(
+            x: combatant[:x].to_f + (forward[:x] * budget),
+            y: combatant[:y].to_f + (forward[:y] * budget),
+            facing: heading
+          )
           right = Geometry::Battlefield.right_vector(heading)
-          step = [ Decisions::Movement.budget_for(combatant, enemies: enemies) * 0.55, 2.5 ].min
-          # Oblique goals: clear the blocker while ending roughly facing the target.
-          [ 1, -1 ].flat_map do |sign|
+          step = [ budget * 0.55, 2.5 ].min
+          # Advance first when out of range; oblique goals clear LoS blockers.
+          oblique = [ 1, -1 ].flat_map do |sign|
             [ 0.6, 1.0 ].map do |scale|
               Geometry::Battlefield.clamp_battlefield_position(
                 x: combatant[:x].to_f + (right[:x] * step * scale * sign) +
-                  (Geometry::Battlefield.facing_vector(heading)[:x] * step * 0.45 * scale),
+                  (forward[:x] * step * 0.45 * scale),
                 y: combatant[:y].to_f + (right[:y] * step * scale * sign) +
-                  (Geometry::Battlefield.facing_vector(heading)[:y] * step * 0.45 * scale),
+                  (forward[:y] * step * 0.45 * scale),
                 facing: heading
               )
             end
           end
+          [ advance, *oblique ].first(MAX_PATH_ATTEMPTS)
         end
 
         def hold_wheel_intent(combatant, allies, enemies, all, budget, obstacles)
@@ -264,11 +261,13 @@ module Sim
 
         def improves?(origin, candidate, allies, enemies, all, mode = nil,
           acting_side: nil, target_side: nil, terrain: [], round_number: 1)
-          case mode
-          when :escape_charge
-            return !in_charge_danger?(candidate, enemies) if in_charge_danger?(origin, enemies)
+          custom = Rules.for(:movement).reposition_improves?(origin, candidate, mode, {
+            acting_side: acting_side, target_side: target_side, allies: allies, enemies: enemies,
+            all: all, terrain: terrain, round_number: round_number
+          })
+          return custom unless custom.nil?
 
-            false
+          case mode
           when :leave_shot
             missile_threat_count(candidate, enemies) < missile_threat_count(origin, enemies)
           when :cast_seek
@@ -280,7 +279,22 @@ module Sim
               terrain: terrain,
               round_number: round_number
             )
-          when :open_los, :hold
+          when :open_los
+            board = replace_unit(all, candidate)
+            if cheap_opens_shot?(
+              candidate, enemies, board,
+              acting_side: acting_side, target_side: target_side,
+              terrain: terrain, round_number: round_number
+            ) && !cheap_opens_shot?(
+              origin, enemies, all,
+              acting_side: acting_side, target_side: target_side,
+              terrain: terrain, round_number: round_number
+            )
+              return true
+            end
+
+            closes_on_target?(origin, candidate, enemies, all)
+          when :hold
             board = replace_unit(all, candidate)
             return true if cheap_opens_shot?(
               candidate, enemies, board,
@@ -365,7 +379,8 @@ module Sim
         def missile_threat_count(unit, enemies)
           Roles.standing(enemies).count do |enemy|
             if enemy[:ranged].to_i > 0
-              Geometry::Battlefield.in_front_arc?(enemy, unit, enemy[:facing]) &&
+              (enemy[:shooting_range].to_f <= 0 || Geometry::Battlefield.distance_between(enemy, unit) <= enemy[:shooting_range].to_f) &&
+                Geometry::Battlefield.in_front_arc?(enemy, unit, enemy[:facing]) &&
                 Geometry::Battlefield.line_of_sight_blockers(enemy, unit, [ enemy, unit ]).empty?
             elsif enemy[:spell].to_i > 0
               range = enemy[:spell_range].to_f
@@ -402,6 +417,8 @@ module Sim
               next false if Targeting.in_melee_combat?(enemy, board)
               next false if Rules.for(:shooting).requires_front_arc_for_ranged?(posed) &&
                 !Geometry::Battlefield.in_front_arc?(posed, enemy, posed[:facing])
+              next false if posed[:shooting_range].to_f.positive? &&
+                Geometry::Battlefield.distance_between(posed, enemy) > posed[:shooting_range].to_f
 
               Geometry::Battlefield.line_of_sight_blockers(posed, enemy, board).empty?
             end
@@ -440,13 +457,15 @@ module Sim
           (dx * dx) + (dy * dy)
         end
 
-        def heading_away_from(combatant, threats)
-          center = threats.each_with_object(x: 0.0, y: 0.0) do |enemy, memo|
-            memo[:x] += enemy[:x].to_f
-            memo[:y] += enemy[:y].to_f
-          end
-          average = { x: center[:x] / threats.length, y: center[:y] / threats.length }
-          Geometry::Battlefield.heading_to(average, combatant)
+        def closes_on_target?(origin, candidate, enemies, all)
+          return false if !in_charge_danger?(origin, enemies) && in_charge_danger?(candidate, enemies)
+
+          target = best_potential_target(origin, enemies, all)
+          return false unless target
+
+          before = Geometry::Battlefield.distance_between(origin, target)
+          after = Geometry::Battlefield.distance_between(candidate, target)
+          after < before - 0.05
         end
 
         def actors_for(host)

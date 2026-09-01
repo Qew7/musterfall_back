@@ -106,14 +106,17 @@ module Sim
             !!entry[:contact_wave]
           end
 
-          def orbit_mode?(approach_mode)
-            approach_mode == :orbit_flank || approach_mode == :wrap_rear
+          def slot_path?(origin, defender, contact_slot)
+            slot = contact_slot.to_s
+            return false if slot.empty?
+
+            Geometry::Battlefield.classify_attack_vector(origin, defender) != slot
           end
 
           def closing_front?(entry, enemies)
             return false unless entry[:contact_slot] == "front" && entry[:vector] == "front"
             return false if entry[:chargeable] == false
-            return false if orbit_mode?(entry[:approach_mode])
+            return false if entry[:contact_slot].to_s != entry[:vector].to_s
 
             Decisions::Movement.within_charge_range?(entry[:combatant], entry[:nearest], enemies: enemies)
           end
@@ -152,7 +155,11 @@ module Sim
             end
             candidates.each do |enemy|
               side = Geometry::Battlefield.classify_attack_vector(combatant, enemy)
-              next if claimed[enemy[:entity_id]].key?(side)
+              if claimed[enemy[:entity_id]].key?(side)
+                return nil if enemy.equal?(candidates.first)
+
+                next
+              end
 
               chargeable = Decisions::Movement.can_charge?(combatant, enemy, terrain)
               return { nearest: enemy, contact_slot: side, approach_mode: :direct, chargeable: chargeable }
@@ -171,33 +178,30 @@ module Sim
             end
             return nil if candidates.empty?
 
-            candidates.each do |enemy|
-              %w[front flank rear].each do |side|
-                next if claimed[enemy[:entity_id]].key?(side)
-                geo = Geometry::Battlefield.classify_attack_vector(combatant, enemy)
-                next unless side == geo
+            primary = candidates.first
+            %w[front flank rear].each do |side|
+              next if claimed[primary[:entity_id]].key?(side)
+              geo = Geometry::Battlefield.classify_attack_vector(combatant, primary)
+              next unless side == geo
 
-                chargeable = Decisions::Movement.can_charge?(combatant, enemy, terrain)
-                return { nearest: enemy, contact_slot: side, approach_mode: :direct, chargeable: chargeable }
-              end
+              chargeable = Decisions::Movement.can_charge?(combatant, primary, terrain)
+              return { nearest: primary, contact_slot: side, approach_mode: :direct, chargeable: chargeable }
             end
 
-            primary = candidates.first
             claimed_sides = claimed[primary[:entity_id]]
             chargeable = Decisions::Movement.can_charge?(combatant, primary, terrain)
             unless claimed_sides.key?("flank")
-              return { nearest: primary, contact_slot: "flank", approach_mode: :orbit_flank, chargeable: chargeable }
+              return { nearest: primary, contact_slot: "flank", approach_mode: :direct, chargeable: chargeable }
             end
             return nil if claimed_sides.key?("rear")
 
-            { nearest: primary, contact_slot: "rear", approach_mode: :wrap_rear, chargeable: chargeable }
+            { nearest: primary, contact_slot: "rear", approach_mode: :direct, chargeable: chargeable }
           end
 
           def choose_setup_flank_or_rear(combatant, enemies, claimed, terrain = [])
             return nil if Decisions::Movement.engaged_with_any?(combatant, enemies)
 
-            budget = Decisions::Movement.budget_for(combatant, enemies: enemies)
-            range = budget * Decisions::Movement::SETUP_RANGE_MV
+            range = Decisions::ChargeRange.setup_radius(combatant, enemies: enemies)
             return nil if range <= 0.05
 
             candidates = Pathing.active_units(enemies).select do |enemy|
@@ -221,11 +225,11 @@ module Sim
               claimed_sides = claimed[enemy[:entity_id]]
               chargeable = Decisions::Movement.can_charge?(combatant, enemy, terrain)
               unless claimed_sides.key?("flank")
-                return { nearest: enemy, contact_slot: "flank", approach_mode: :orbit_flank, chargeable: chargeable }
+                return { nearest: enemy, contact_slot: "flank", approach_mode: :direct, chargeable: chargeable }
               end
               next if claimed_sides.key?("rear")
 
-              return { nearest: enemy, contact_slot: "rear", approach_mode: :wrap_rear, chargeable: chargeable }
+              return { nearest: enemy, contact_slot: "rear", approach_mode: :direct, chargeable: chargeable }
             end
             nil
           end
@@ -254,12 +258,18 @@ module Sim
             nil
           end
 
+          def approach_allowed?(combatant, nearest, contact_slot)
+            return true if Geometry::Battlefield.in_front_arc?(combatant, nearest, combatant[:facing])
+            return true if Geometry::Battlefield.in_flank_arc?(combatant, nearest, combatant[:facing])
+            return true if slot_path?(combatant, nearest, contact_slot)
+
+            contact_slot.to_s == Geometry::Battlefield.classify_attack_vector(combatant, nearest)
+          end
+
           def build_approach_intent(combatant:, nearest:, obstacles:, enemies: [], contact_slot: nil, allow_ally_bypass: false, approach_mode: :direct, terrain: [], chargeable: true)
             return nil unless nearest
             return nil if Decisions::Movement.engaged?(combatant, nearest)
-            return nil unless Geometry::Battlefield.in_front_arc?(combatant, nearest, combatant[:facing]) ||
-              Geometry::Battlefield.in_flank_arc?(combatant, nearest, combatant[:facing]) ||
-              orbit_mode?(approach_mode)
+            return nil unless approach_allowed?(combatant, nearest, contact_slot)
 
             charging = chargeable && Decisions::Movement.within_charge_range?(combatant, nearest, enemies: enemies)
             budget = if charging
@@ -310,13 +320,8 @@ module Sim
           end
 
           def approach_goal_point(origin, defender, contact_slot:, approach_mode:, chargeable: true)
-            slot =
-              case approach_mode
-              when :orbit_flank then "flank"
-              when :wrap_rear then "rear"
-              else contact_slot.to_s
-              end
-            if orbit_mode?(approach_mode) && %w[flank rear].include?(slot)
+            slot = contact_slot.to_s
+            if slot_path?(origin, defender, slot) && %w[flank rear].include?(slot)
               points = Pathing.contact_slot_points(origin, defender, slot)
               return points.min_by { |point| Geometry::Battlefield.distance_between(origin, point) } if points.any?
 

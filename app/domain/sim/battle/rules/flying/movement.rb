@@ -2,7 +2,7 @@ module Sim
   module Battle
     module Rules
       module Flying
-        # Flyer leap: land behind when the setup fits this turn, else charge a free side.
+        # Flyer priority: rear charge → flank charge → front charge (if no rear setup) → rear setup → close.
         module Movement
           SETUP_CLEARANCE = 0.25
 
@@ -35,72 +35,78 @@ module Sim
           def plan_entry(combatant, enemies, claimed, terrain = [])
             return nil if Decisions::Movement.engaged_with_any?(combatant, enemies)
 
-            choose_setup(combatant, enemies, claimed, terrain) ||
-              choose_charge(combatant, enemies, claimed, terrain) ||
+            choose_charge_for_slot(combatant, enemies, claimed, terrain, "rear") ||
+              choose_charge_for_slot(combatant, enemies, claimed, terrain, "flank") ||
+              (!any_rear_setup_possible?(combatant, enemies, claimed, terrain) &&
+                choose_charge_for_slot(combatant, enemies, claimed, terrain, "front")) ||
+              choose_setup_rear(combatant, enemies, claimed, terrain) ||
               choose_approach(combatant, enemies, claimed, terrain)
           end
 
-          def choose_charge(combatant, enemies, claimed, terrain = [])
+          def choose_charge_for_slot(combatant, enemies, claimed, terrain, slot)
             budget = Decisions::Movement.budget_for(combatant, enemies: enemies)
             return nil if budget <= 0.05
 
-            ordered = Pathing.active_units(enemies).select do |enemy|
-              next false unless Decisions::Movement.can_charge?(combatant, enemy, terrain)
+            enemy = furthest_chargeable_enemy(combatant, enemies, claimed, terrain, slot)
+            return nil unless enemy
 
-              Geometry::Battlefield.distance_between_units(combatant, enemy) <= budget + Decisions::Movement::ENGAGE
-            end.sort_by do |enemy|
-              [
-                Geometry::Battlefield.in_front_arc?(combatant, enemy, combatant[:facing]) ? 0 : 1,
-                enemy[:is_routing] ? 0 : 1,
-                Geometry::Battlefield.distance_between_units(combatant, enemy),
-                enemy[:entity_id].to_s
-              ]
-            end
-            return nil if ordered.empty?
-
-            ordered.each do |enemy|
-              side = Decisions::Movement.unclaimed_side(combatant, enemy, claimed)
-              next unless side
-
-              return Decisions::Movement.build_entry(combatant, enemy, side, :flyer_charge, chargeable: true)
-            end
-            nil
+            chargeable = Decisions::Movement.can_charge?(combatant, enemy, terrain)
+            Decisions::Movement.build_entry(combatant, enemy, slot, :flyer_charge, chargeable: chargeable)
           end
 
-          def choose_setup(combatant, enemies, claimed, terrain = [])
+          def furthest_chargeable_enemy(combatant, enemies, claimed, terrain, slot)
+            Pathing.active_units(enemies).select do |enemy|
+              next false unless Decisions::Movement.can_charge?(combatant, enemy, terrain)
+              next false if claimed[enemy[:entity_id]].key?(slot)
+              next false unless Decisions::Movement.this_turn_charge?(combatant, enemy, enemies: enemies)
+
+              true
+            end.max_by do |enemy|
+              [ Geometry::Battlefield.distance_between_units(combatant, enemy), enemy[:entity_id].to_s ]
+            end
+          end
+
+          def any_rear_setup_possible?(combatant, enemies, claimed, terrain = [])
+            budget = Decisions::Movement.budget_for(combatant, enemies: enemies)
+            return false if budget <= 0.05
+
+            living = Pathing.active_units(enemies)
+            return false if living.empty?
+
+            living.any? do |enemy|
+              next false if %w[flank rear].include?(Geometry::Battlefield.classify_attack_vector(combatant, enemy))
+              next false if claimed[enemy[:entity_id]].key?("rear")
+              next false unless setup_goal_within_budget?(combatant, enemy, "rear", budget)
+
+              blockers = living.reject { |unit| unit[:entity_id] == enemy[:entity_id] } + Array(terrain)
+              setup_side_landable?(combatant, enemy, "rear", budget, blockers)
+            end
+          end
+
+          def choose_setup_rear(combatant, enemies, claimed, terrain = [])
             budget = Decisions::Movement.budget_for(combatant, enemies: enemies)
             return nil if budget <= 0.05
 
             living = Pathing.active_units(enemies)
             return nil if living.empty?
 
-            # Furthest first — fly behind the deep target when MV allows.
             ordered = living.sort_by do |enemy|
               [
-                Decisions::Movement.can_charge?(combatant, enemy, terrain) ? 0 : 1,
-                enemy[:is_routing] ? 1 : 0,
                 -Geometry::Battlefield.distance_between_units(combatant, enemy),
                 enemy[:entity_id].to_s
               ]
             end
 
             ordered.each do |enemy|
-              # Already behind: charge this turn instead of leaping to another setup pad.
               next if %w[flank rear].include?(Geometry::Battlefield.classify_attack_vector(combatant, enemy))
+              next if claimed[enemy[:entity_id]].key?("rear")
+              next unless setup_goal_within_budget?(combatant, enemy, "rear", budget)
 
-              claimed_sides = claimed[enemy[:entity_id]]
+              pad_blockers = living.reject { |unit| unit[:entity_id] == enemy[:entity_id] } + Array(terrain)
+              next unless setup_side_landable?(combatant, enemy, "rear", budget, pad_blockers)
+
               chargeable = Decisions::Movement.can_charge?(combatant, enemy, terrain)
-              blockers = living.reject { |unit| unit[:entity_id] == enemy[:entity_id] } + Array(terrain)
-              [
-                [ "rear", :flyer_setup_rear ],
-                [ "flank", :flyer_setup_flank ]
-              ].each do |slot, mode|
-                next if claimed_sides.key?(slot)
-                next unless setup_goal_within_budget?(combatant, enemy, slot, budget)
-                next unless setup_side_landable?(combatant, enemy, slot, budget, blockers)
-
-                return Decisions::Movement.build_entry(combatant, enemy, slot, mode, chargeable: chargeable)
-              end
+              return Decisions::Movement.build_entry(combatant, enemy, "rear", :flyer_setup_rear, chargeable: chargeable)
             end
             nil
           end

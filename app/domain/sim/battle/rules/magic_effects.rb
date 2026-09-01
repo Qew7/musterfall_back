@@ -13,7 +13,14 @@ module Sim
           State.sync_combatant_footprint!(target)
           spell_key = payload[:spell_key] || effect[:key]
           spell_name = Spells.fetch(spell_key)&.name || spell_key.to_s.tr("_", " ")
-          summary = "#{target[:name]} получает #{damage} урона от эффекта «#{spell_name}»."
+          summary = ActionResult.text_for(
+            actor: { actor_name: target[:name], actor_role: target[:kind] == "hero" ? "hero" : "unit" },
+            action: { type: "spell_effect" },
+            before: [ before ],
+            after: [ State.snapshot_combatant(target) ],
+            damage: damage,
+            clauses: [ "#{target[:name]} получает #{damage} урона от эффекта «#{spell_name}»" ]
+          )
           action = {
             type: "magic",
             outcome: "triggered",

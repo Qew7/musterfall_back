@@ -46,14 +46,36 @@ module Sim
             forward = Geometry::Battlefield.facing_vector(heading)
             right = Geometry::Battlefield.right_vector(heading)
             step = [ budget.to_f, 0.05 ].max
-            [ 0.0, 1.0, -1.0 ].map do |sign|
+            direct = [ 0.0, 1.0, -1.0 ].map do |sign|
               Geometry::Battlefield.clamp_battlefield_position(
                 x: combatant[:x].to_f + (forward[:x] * step * 0.9) + (right[:x] * step * 0.2 * sign),
                 y: combatant[:y].to_f + (forward[:y] * step * 0.9) + (right[:y] * step * 0.2 * sign),
                 facing: heading
               )
             end
+            bypass = seek_bypass_goals(combatant, anchor, heading, acting_side, target_side, terrain)
+            (bypass + direct).uniq { |goal| [ goal[:x].round(2), goal[:y].round(2) ] }
+              .first(Sim::Battle::Decisions::Reposition::MAX_PATH_ATTEMPTS)
           end
+
+          def seek_bypass_goals(combatant, anchor, heading, acting_side, target_side, terrain)
+            return [] if Array(terrain).empty?
+
+            board = Decisions::Roles.standing(acting_side[:combatants]) +
+              Decisions::Roles.standing(target_side[:combatants])
+            world = Pathing::Obstacles.around(combatant, units: board, terrain: terrain)
+            thread = Pathing::Thread.pull(mover: combatant, goal: anchor, world: world)
+            return [] if Array(thread[:wrapped]).empty? || Array(thread[:points]).length < 2
+
+            Array(thread[:points]).drop(1).map do |point|
+              Geometry::Battlefield.clamp_battlefield_position(
+                x: point[:x],
+                y: point[:y],
+                facing: heading
+              )
+            end
+          end
+          private_class_method :seek_bypass_goals
 
           def improves_seek?(origin, candidate, acting_side:, target_side:, terrain: [], round_number: 1)
             if opens_cast?(candidate, acting_side: acting_side, target_side: target_side, terrain: terrain, round_number: round_number) &&

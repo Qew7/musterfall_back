@@ -97,7 +97,7 @@ class SimBattlePathingRetreatTest < ActiveSupport::TestCase
     }
     spawn = {
       entity_id: "unit-5",
-      name: "Отродье Хаоса",
+      name: "Мутант разлома",
       x: 18.8,
       y: 11.6,
       facing: 356.7,
@@ -131,5 +131,56 @@ class SimBattlePathingRetreatTest < ActiveSupport::TestCase
       :>=,
       Sim::Battle::Pathing::CONTACT - 0.001
     )
+  end
+
+  test "plan_retreat does not turn in place onto an allied tray" do
+    origin = {
+      entity_id: "u1",
+      name: "Бегущие",
+      x: 11.0,
+      y: 9.5,
+      facing: 45,
+      base_width: 2,
+      base_depth: 4,
+      current_health: 4,
+      side_index: 0,
+      movement: 4
+    }
+    ally = {
+      entity_id: "ally-1",
+      name: "Союзник",
+      x: 8.0,
+      y: 12.0,
+      facing: 0,
+      base_width: 4,
+      base_depth: 4,
+      current_health: 8,
+      side_index: 0
+    }
+    enemy = {
+      entity_id: "e1",
+      name: "Враг",
+      x: 22.0,
+      y: 12.0,
+      facing: 0,
+      base_width: 4,
+      base_depth: 4,
+      current_health: 8,
+      side_index: 1
+    }
+    preferred = Sim::Geometry::Battlefield.heading_to(enemy, origin)
+
+    plan = Sim::Battle::Pathing.plan_retreat(
+      origin: origin,
+      distance: 4,
+      obstacles: [ ally, enemy ],
+      ally_ids: [ ally[:entity_id] ],
+      preferred_heading: preferred,
+      contact_exempt_ids: [ enemy[:entity_id] ]
+    )
+
+    assert plan[:pose]
+    landed = origin.merge(x: plan[:pose][:x], y: plan[:pose][:y], facing: plan[:pose][:facing])
+    refute Sim::Geometry::Battlefield.rectangles_overlap?(landed, ally)
   end
 end

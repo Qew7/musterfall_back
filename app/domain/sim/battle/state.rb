@@ -58,15 +58,15 @@ module Sim
         unit[:current_health].to_i > 0 && !unit[:is_routing]
       end
 
-      def apply_faction_passives!(side)
-        Rules.for(:round).apply_passives!(side)
+      def apply_faction_passives!(side, terrain: [])
+        Rules.for(:round).apply_passives!(side.merge(terrain: Array(terrain)))
       end
 
       def resolve_summons_end_round!(side)
         events = []
         side[:combatants].each do |combatant|
           next unless combatant[:summoned] && combatant[:current_health].to_i > 0
-          next unless combatant[:summon_kind] == "chaos_spawn"
+          next unless combatant[:summon_kind] == "rift_mutant"
 
           combatant[:current_health] -= 1
           sync_combatant_footprint!(combatant)
@@ -156,11 +156,7 @@ module Sim
       end
 
       def sync_combatant_footprint!(combatant)
-        models_remaining = if combatant[:current_health].to_i > 0
-          [ 1, (combatant[:current_health].to_f / combatant[:model_health]).ceil ].max
-        else
-          0
-        end
+        models_remaining = combatant_models_remaining(combatant)
         old_half_depth = Geometry::Battlefield.unit_dimensions(combatant)[:half_depth]
         metrics = Geometry::Formation.metrics(
           models_remaining: models_remaining,
@@ -295,7 +291,8 @@ module Sim
             current_health: entity[:state][:current_health],
             max_health: entity.dig(:components, :health, :max),
             model_health: entity.dig(:components, :health, :model_health),
-            starting_models: [ 1, (entity[:state][:current_health].to_f / entity.dig(:components, :health, :model_health)).ceil ].max,
+            formation_models: entity.dig(:components, :formation, :models).to_i,
+            starting_models: Entities::Footprint.formation_models_remaining(entity),
             is_routing: !!entity[:state][:is_routing],
             attached_heroes: attached_heroes.map do |hero|
               {
@@ -313,6 +310,19 @@ module Sim
             missile_attacks: combat[:missile_attacks] || 1
           }
         )
+      end
+
+      def combatant_models_remaining(combatant)
+        return 0 if combatant[:current_health].to_i <= 0
+        if combatant[:kind] == "hero"
+          models = combatant[:formation_models].to_i
+          return models if models.positive?
+
+          return 1
+        end
+        return 1 if combatant[:model_class].to_s == "machine"
+
+        [ 1, (combatant[:current_health].to_f / combatant[:model_health]).ceil ].max
       end
 
       def contributor_from(entity, power)

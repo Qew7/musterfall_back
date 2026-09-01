@@ -8,7 +8,7 @@ module Sim
         include Enumerable
 
         Kernel = Pathing::ObstacleKernel
-        PAD = Pathing::CONTACT + 0.35
+        UNIT_WRAP_PAD = Pathing::CONTACT + Pathing::TERRAIN_WRAP_PAD
 
         def self.merge(units, terrain = [])
           new(Pathing.merge_obstacles(units, terrain))
@@ -79,11 +79,7 @@ module Sim
             reach = pr + kernel.radius
             next if ((dx * dx) + (dy * dy)) > (reach * reach)
 
-            if contact_id && kernel.id == contact_id
-              if Geometry::Obb.overlap?(px, py, phw, phd, pc, ps, kernel.x, kernel.y, kernel.hw, kernel.hd, kernel.c, kernel.s)
-                return kernel.source
-              end
-            elsif Geometry::Obb.distance(px, py, phw, phd, pc, ps, kernel.x, kernel.y, kernel.hw, kernel.hd, kernel.c, kernel.s) < Pathing::CONTACT
+            if blocks_pose?(px, py, phw, phd, pc, ps, kernel, contact_id: contact_id)
               return kernel.source
             end
           end
@@ -112,9 +108,7 @@ module Sim
             reach = pr + kernel.radius
             next if ((dx * dx) + (dy * dy)) > (reach * reach)
 
-            if contact_id && kernel.id == contact_id
-              return false if Geometry::Obb.overlap?(mx, my, phw, swept_hd, pc, ps, kernel.x, kernel.y, kernel.hw, kernel.hd, kernel.c, kernel.s)
-            elsif Geometry::Obb.distance(mx, my, phw, swept_hd, pc, ps, kernel.x, kernel.y, kernel.hw, kernel.hd, kernel.c, kernel.s) < Pathing::CONTACT
+            if blocks_pose?(mx, my, phw, swept_hd, pc, ps, kernel, contact_id: contact_id)
               return false
             end
           end
@@ -252,10 +246,11 @@ module Sim
           mhw, mhd = Geometry::Obb.half_sizes(mover)
           half = [ mhw, mhd ].max
           radius = Math.hypot(mhw, mhd)
-          points = [ half + PAD, (2 * half) + PAD ].flat_map { |clearance| ring_points(kernel, clearance, :both) }
+          pad = terrain_kernel?(kernel) ? Pathing::TERRAIN_WRAP_PAD : UNIT_WRAP_PAD
+          points = [ half + pad, (2 * half) + pad ].flat_map { |clearance| ring_points(kernel, clearance, :both) }
           # ponytail: hypot corners so a wide tray's diagonal clears; face mids stay at max(half).
-          points.concat(ring_points(kernel, radius + PAD, :corners)) if radius > half + 0.05 &&
-            kernel.source[:obstacle_kind] == :terrain
+          points.concat(ring_points(kernel, radius + pad, :corners)) if radius > half + 0.05 &&
+            terrain_kernel?(kernel)
           points
         end
 
@@ -337,6 +332,22 @@ module Sim
 
         def same_point?(left, right)
           Geometry::Battlefield.distance_between(left, right) <= 0.05
+        end
+
+        def terrain_kernel?(kernel)
+          Pathing.terrain_obstacle?(kernel.source)
+        end
+
+        # Charge target: overlap. Impassable terrain: TERRAIN_WRAP_PAD gap. Units: CONTACT gap.
+        def blocks_pose?(px, py, phw, phd, pc, ps, kernel, contact_id: nil)
+          if contact_id && kernel.id == contact_id
+            return Geometry::Obb.overlap?(px, py, phw, phd, pc, ps, kernel.x, kernel.y, kernel.hw, kernel.hd, kernel.c, kernel.s)
+          end
+          if terrain_kernel?(kernel)
+            return Geometry::Obb.distance(px, py, phw, phd, pc, ps, kernel.x, kernel.y, kernel.hw, kernel.hd, kernel.c, kernel.s) < Pathing::TERRAIN_WRAP_PAD
+          end
+
+          Geometry::Obb.distance(px, py, phw, phd, pc, ps, kernel.x, kernel.y, kernel.hw, kernel.hd, kernel.c, kernel.s) < Pathing::CONTACT
         end
       end
     end

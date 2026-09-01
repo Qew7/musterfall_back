@@ -6,7 +6,7 @@ class SimBattleWizardCastSeekTest < ActiveSupport::TestCase
 
     host = BattleScenarios.combatant(
       entity_id: "mage",
-      name: "Спеллвивер",
+      name: "Лесной чародей",
       x: 3.0,
       y: 8.0,
       spell: 5,
@@ -17,7 +17,7 @@ class SimBattleWizardCastSeekTest < ActiveSupport::TestCase
         melee: [],
         ranged: [ {
           entity_id: "mage",
-          name: "Спеллвивер",
+          name: "Лесной чародей",
           kind: "hero",
           spell: 5,
           spell_range: 8,
@@ -44,7 +44,7 @@ class SimBattleWizardCastSeekTest < ActiveSupport::TestCase
   test "wizard out of cast range seeks toward a valid spell anchor" do
     mage = BattleScenarios.combatant(
       entity_id: "mage",
-      name: "Спеллвивер",
+      name: "Лесной чародей",
       x: 3.0,
       y: 8.0,
       melee: 2,
@@ -58,7 +58,7 @@ class SimBattleWizardCastSeekTest < ActiveSupport::TestCase
         melee: [],
         ranged: [ {
           entity_id: "mage",
-          name: "Спеллвивер",
+          name: "Лесной чародей",
           kind: "hero",
           spell: 5,
           ranged: 0,
@@ -88,10 +88,83 @@ class SimBattleWizardCastSeekTest < ActiveSupport::TestCase
     assert_operator mage[:x].to_f, :>, before + 0.5
   end
 
+  test "wizard cast seek routes around impassable house with wheel or advance" do
+    house = BattleScenarios.terrain(
+      id: "terrain-3", type: "house", x: 12.763, y: 12.389,
+      width: 3.489, depth: 2.11, impassable: true, blocks_los: true
+    )
+    mage = BattleScenarios.combatant(
+      entity_id: "hero-1",
+      name: "Некромант",
+      x: 9.396,
+      y: 11.791,
+      facing: 357.12,
+      movement: 3.0,
+      spell: 5,
+      spell_keys: %w[earth_split rift_lightning],
+      magic_school: "ruin",
+      abilities: %w[wizard],
+      base_width: 1.0,
+      base_depth: 1.0,
+      files: 1,
+      ranks: 1,
+      frontage: 1,
+      max_files: 1
+    )
+    orks = BattleScenarios.enemy(
+      entity_id: "unit-5", name: "Орки-громилы",
+      x: 26.53, y: 9.69, facing: 212.0,
+      base_width: 4.0, base_depth: 4.0, files: 4, ranks: 4
+    )
+    acting = { side_key: "left", player_name: "Left", combatants: [ mage ] }
+    target = { side_key: "right", player_name: "Right", combatants: [ orks ] }
+    obstacles = Sim::Battle::Pathing::Obstacles.merge([ orks ], [ house ])
+
+    refute Sim::Battle::Rules::Wizard::Movement.opens_cast?(
+      mage, acting_side: acting, target_side: target, terrain: [ house ]
+    )
+
+    intent = Sim::Battle::Decisions::Reposition.build_intent(
+      combatant: mage,
+      acting_side: acting,
+      target_side: target,
+      obstacles: obstacles,
+      round_number: 3,
+      terrain: [ house ]
+    )
+    assert intent, "expected a cast-seek reposition intent beside the house"
+    refute intent[:wait]
+
+    packed = intent.merge(
+      combatant: mage,
+      from: mage.slice(:x, :y, :facing, :row, :lane),
+      before: mage.dup,
+      origin_pose: mage.dup
+    )
+    Sim::Battle::Phases::Movement.resolve_destination_conflicts!([ packed ], obstacles)
+    refute packed[:wait], "landing beside terrain must not be rejected as ally block"
+
+    house_obs = Sim::Geometry::Battlefield.feature_as_obstacle(house)
+    landed = mage.merge(x: intent[:destination][:x], y: intent[:destination][:y], facing: intent[:destination][:facing])
+    refute Sim::Geometry::Battlefield.rectangles_overlap?(landed, house_obs)
+
+    phase = Sim::Battle::Phases::Movement.play(
+      acting_side: acting,
+      target_side: target,
+      round_number: 3,
+      terrain: [ house ]
+    )
+    move = phase[:actions].find { |action| action[:actor_id] == "hero-1" }
+    assert move
+    refute_equal move[:from][:x], move[:to][:x]
+    assert move.dig(:maneuver, :avoided) || move.dig(:maneuver, :pathing_avoided) ||
+      Array(move.dig(:maneuver, :steps)).any? { |step| %w[wheel turn advance march].include?(step[:kind].to_s) }
+  end
+
   test "hybrid wizard out of spell range seeks instead of holding under distant LoS" do
     mage = BattleScenarios.combatant(
       entity_id: "hero-2",
-      name: "Лорд-вампир",
+      name: "Ночной лорд",
       x: 3.0,
       y: 8.0,
       melee: 5,
@@ -106,7 +179,7 @@ class SimBattleWizardCastSeekTest < ActiveSupport::TestCase
         melee: [],
         ranged: [ {
           entity_id: "hero-2",
-          name: "Лорд-вампир",
+          name: "Ночной лорд",
           kind: "hero",
           ranged: 3,
           spell: 4,

@@ -1,13 +1,48 @@
 module Sim
   module Geometry
     module Battlefield
-      # Polygon templates (breath teardrop) and per-model coverage.
+      # Polygon/line templates and per-model hit tests (model center under template).
       module Templates
         BREATH_LENGTH = 8.0
         BREATH_TIP_HALF_WIDTH = 0.3
         BREATH_BASE_HALF_WIDTH = 1.25
-        COVERAGE_THRESHOLD = 0.5
-        COVERAGE_SAMPLES = 5
+        LINE_CENTER_TOLERANCE = 0.05
+
+        def line_template_segment(attacker, primary_target)
+          start_point = front_center(attacker)
+          through_point = { x: primary_target[:x].to_f, y: primary_target[:y].to_f }
+          if distance_between(start_point, through_point) < 1e-6
+            through_point = closest_point_on_unit(start_point, primary_target)
+          end
+
+          dx = through_point[:x] - start_point[:x]
+          dy = through_point[:y] - start_point[:y]
+          len = Math.hypot(dx, dy)
+          if len < 1e-9
+            forward = facing_vector(attacker[:facing])
+            return [ start_point, ray_exit_point(start_point, forward[:x], forward[:y]) ]
+          end
+
+          ux = dx / len
+          uy = dy / len
+          [ start_point, ray_exit_point(start_point, ux, uy) ]
+        end
+
+        def ray_exit_point(origin, ux, uy)
+          w = CONFIG[:width].to_f
+          h = CONFIG[:height].to_f
+          candidates = []
+          candidates << (w - origin[:x]) / ux if ux.abs > 1e-9
+          candidates << (0 - origin[:x]) / ux if ux.abs > 1e-9
+          candidates << (h - origin[:y]) / uy if uy.abs > 1e-9
+          candidates << (0 - origin[:y]) / uy if uy.abs > 1e-9
+          t = candidates.select { |value| value > 1e-6 }.min || w
+          { x: origin[:x] + (ux * t), y: origin[:y] + (uy * t) }
+        end
+
+        def models_hit_by_line(unit, start_point, end_point)
+          model_cells(unit).count { |cell| model_center_on_line?(cell, start_point, end_point) }
+        end
 
         # Thin tip at attacker front; thick base 8" along heading toward the primary target.
         def breath_teardrop_polygon(attacker, primary_target)
@@ -81,35 +116,27 @@ module Sim
         end
 
         def models_hit_by_polygon(unit, polygon)
-          model_cells(unit).count { |cell| coverage_fraction(cell, polygon) > COVERAGE_THRESHOLD }
+          model_cells(unit).count { |cell| point_in_polygon?({ x: cell[:x], y: cell[:y] }, polygon) }
         end
 
-        def coverage_fraction(model_unit, polygon)
-          samples = sample_points_in_unit(model_unit, COVERAGE_SAMPLES)
-          return 0.0 if samples.empty?
-
-          inside = samples.count { |point| point_in_polygon?(point, polygon) }
-          inside.to_f / samples.length
+        def model_center_on_line?(cell, start_point, end_point, tolerance: LINE_CENTER_TOLERANCE)
+          point_on_segment?({ x: cell[:x], y: cell[:y] }, start_point, end_point, tolerance: tolerance)
         end
 
-        def sample_points_in_unit(unit, grid)
-          dims = unit_dimensions(unit)
-          forward = facing_vector(unit[:facing])
-          right = right_vector(unit[:facing])
-          points = []
-          grid.times do |iy|
-            grid.times do |ix|
-              u = (ix + 0.5) / grid
-              v = (iy + 0.5) / grid
-              lat = -dims[:half_width] + (2 * dims[:half_width] * u)
-              lon = -dims[:half_depth] + (2 * dims[:half_depth] * v)
-              points << {
-                x: unit[:x] + (right[:x] * lat) + (forward[:x] * lon),
-                y: unit[:y] + (right[:y] * lat) + (forward[:y] * lon)
-              }
-            end
-          end
-          points
+        def point_on_segment?(point, start_point, end_point, tolerance: LINE_CENTER_TOLERANCE)
+          dx = end_point[:x] - start_point[:x]
+          dy = end_point[:y] - start_point[:y]
+          len_sq = (dx * dx) + (dy * dy)
+          return distance_between(point, start_point) <= tolerance if len_sq < 1e-9
+
+          t = (((point[:x] - start_point[:x]) * dx) + ((point[:y] - start_point[:y]) * dy)) / len_sq
+          return false if t < -0.001 || t > 1.001
+
+          proj = {
+            x: start_point[:x] + (t * dx),
+            y: start_point[:y] + (t * dy)
+          }
+          distance_between(point, proj) <= tolerance
         end
 
         def point_in_polygon?(point, polygon)

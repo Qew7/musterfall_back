@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_08_22_000400) do
+ActiveRecord::Schema[8.1].define(version: 2026_08_22_000800) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -73,6 +73,52 @@ ActiveRecord::Schema[8.1].define(version: 2026_08_22_000400) do
     t.index ["template_key"], name: "index_army_templates_on_template_key", unique: true
   end
 
+  create_table "balance_battle_rollups", force: :cascade do |t|
+    t.bigint "balance_simulation_run_id"
+    t.bigint "catalog_version_id", null: false
+    t.datetime "created_at", null: false
+    t.bigint "game_id"
+    t.string "matchup_type", null: false
+    t.jsonb "metrics", default: {}, null: false
+    t.bigint "round_matchup_id"
+    t.string "source", default: "campaign", null: false
+    t.datetime "updated_at", null: false
+    t.index ["balance_simulation_run_id"], name: "index_balance_battle_rollups_on_balance_simulation_run_id"
+    t.index ["catalog_version_id", "created_at"], name: "idx_on_catalog_version_id_created_at_efe4a32f37"
+    t.index ["catalog_version_id"], name: "index_balance_battle_rollups_on_catalog_version_id"
+    t.index ["game_id"], name: "index_balance_battle_rollups_on_game_id"
+    t.index ["round_matchup_id"], name: "index_balance_battle_rollups_on_round_matchup_id", unique: true, where: "(round_matchup_id IS NOT NULL)"
+  end
+
+  create_table "balance_counters", force: :cascade do |t|
+    t.string "bucket", null: false
+    t.bigint "catalog_version_id", null: false
+    t.datetime "created_at", null: false
+    t.string "key", null: false
+    t.string "matchup_type", default: "all", null: false
+    t.bigint "n", default: 0, null: false
+    t.bigint "sum", default: 0, null: false
+    t.datetime "updated_at", null: false
+    t.index ["catalog_version_id", "bucket", "key", "matchup_type"], name: "index_balance_counters_unique", unique: true
+    t.index ["catalog_version_id"], name: "index_balance_counters_on_catalog_version_id"
+  end
+
+  create_table "balance_simulation_runs", force: :cascade do |t|
+    t.integer "battles_completed", default: 0, null: false
+    t.integer "battles_failed", default: 0, null: false
+    t.bigint "catalog_version_id", null: false
+    t.jsonb "config", default: {}, null: false
+    t.datetime "created_at", null: false
+    t.text "error_message"
+    t.datetime "finished_at"
+    t.bigint "seed", null: false
+    t.datetime "started_at"
+    t.string "status", default: "pending", null: false
+    t.datetime "updated_at", null: false
+    t.index ["catalog_version_id"], name: "index_balance_simulation_runs_on_catalog_version_id"
+    t.index ["status", "created_at"], name: "index_balance_simulation_runs_on_status_and_created_at"
+  end
+
   create_table "battle_phases", force: :cascade do |t|
     t.jsonb "actions", default: [], null: false
     t.bigint "battle_turn_id", null: false
@@ -124,6 +170,15 @@ ActiveRecord::Schema[8.1].define(version: 2026_08_22_000400) do
     t.string "winner_name", null: false
     t.index ["game_id", "round_number", "left_player_id", "right_player_id"], name: "index_battles_on_round_and_players"
     t.index ["game_id"], name: "index_battles_on_game_id"
+  end
+
+  create_table "catalog_versions", force: :cascade do |t|
+    t.string "catalog_hash", null: false
+    t.string "content_hash", null: false
+    t.datetime "created_at", null: false
+    t.string "rules_hash", null: false
+    t.datetime "updated_at", null: false
+    t.index ["content_hash"], name: "index_catalog_versions_on_content_hash", unique: true
   end
 
   create_table "factions", force: :cascade do |t|
@@ -215,11 +270,16 @@ ActiveRecord::Schema[8.1].define(version: 2026_08_22_000400) do
   create_table "hero_upgrades", force: :cascade do |t|
     t.string "category", null: false
     t.datetime "created_at", null: false
+    t.bigint "faction_id"
+    t.boolean "general_only", default: false, null: false
+    t.integer "min_level", default: 1, null: false
     t.string "name", null: false
     t.integer "position", default: 0, null: false
+    t.boolean "repeatable", default: false, null: false
     t.string "summary", null: false
     t.datetime "updated_at", null: false
     t.string "upgrade_key", null: false
+    t.index ["faction_id"], name: "index_hero_upgrades_on_faction_id"
     t.index ["position"], name: "index_hero_upgrades_on_position"
     t.index ["upgrade_key"], name: "index_hero_upgrades_on_upgrade_key", unique: true
   end
@@ -270,6 +330,12 @@ ActiveRecord::Schema[8.1].define(version: 2026_08_22_000400) do
   add_foreign_key "army_template_abilities", "abilities"
   add_foreign_key "army_template_abilities", "army_templates"
   add_foreign_key "army_templates", "factions"
+  add_foreign_key "balance_battle_rollups", "balance_simulation_runs"
+  add_foreign_key "balance_battle_rollups", "catalog_versions"
+  add_foreign_key "balance_battle_rollups", "games"
+  add_foreign_key "balance_battle_rollups", "round_matchups"
+  add_foreign_key "balance_counters", "catalog_versions"
+  add_foreign_key "balance_simulation_runs", "catalog_versions"
   add_foreign_key "battle_phases", "battle_turns"
   add_foreign_key "battle_rounds", "battles"
   add_foreign_key "battle_turns", "battle_rounds"
@@ -278,6 +344,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_08_22_000400) do
   add_foreign_key "game_entity_attachments", "game_entities", column: "hero_entity_id"
   add_foreign_key "game_entity_attachments", "game_entities", column: "unit_entity_id"
   add_foreign_key "game_players", "games"
+  add_foreign_key "hero_upgrades", "factions"
   add_foreign_key "player_actions", "games"
   add_foreign_key "round_matchups", "games"
   add_foreign_key "round_snapshots", "games"

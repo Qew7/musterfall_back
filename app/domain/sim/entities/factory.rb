@@ -53,7 +53,7 @@ module Sim
             pending_draft: [],
             picked_upgrade_ids: []
           },
-          hero: { mounted: template[:mounted], general: general },
+          hero: { mounted: template[:mounted], general: general, transformed: false, mount_id: nil, base_movement: template[:movement] },
           state_extra: { attached_to: nil, attached_slot: nil }
         )
         Footprint.sync_entity!(entity)

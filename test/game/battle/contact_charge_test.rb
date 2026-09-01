@@ -8,6 +8,7 @@ class SimBattleContactChargeTest < ActiveSupport::TestCase
   ENGAGE = Sim::Battle::Pathing::ENGAGE
   MovementPhase = Sim::Battle::Phases::Movement
   DecisionsMovement = Sim::Battle::Decisions::Movement
+  ChargeRange = Sim::Battle::Decisions::ChargeRange
   GroundMovement = Sim::Battle::Rules::Ground::Movement
   Targeting = Sim::Battle::Decisions::Targeting
   Pathing = Sim::Battle::Pathing
@@ -25,7 +26,7 @@ class SimBattleContactChargeTest < ActiveSupport::TestCase
     # Centers 3.92 apart with half-depths 2+1.5 → OBB gap 0.42 (dead zone).
     orks = combatant(
       entity_id: "orks",
-      name: "Орки-бойзы",
+      name: "Орки-громилы",
       x: 17.0,
       y: 12.0,
       facing: 0,
@@ -97,7 +98,7 @@ class SimBattleContactChargeTest < ActiveSupport::TestCase
   test "a lake beside the tray does not cancel a clear frontal charge" do
     marauders = combatant(
       entity_id: "unit-10",
-      name: "Мародеры",
+      name: "Отряд грабителей",
       x: 16.414,
       y: 18.856,
       facing: 346.45,
@@ -157,7 +158,7 @@ class SimBattleContactChargeTest < ActiveSupport::TestCase
   test "charge destination against the target is not treated as a hard footprint conflict" do
     attacker = combatant(
       entity_id: "hero",
-      name: "Варбосс",
+      name: "Вождь орды",
       x: 10,
       y: 12,
       facing: 0,
@@ -191,7 +192,7 @@ class SimBattleContactChargeTest < ActiveSupport::TestCase
   test "resolve_destination_conflicts keeps a solo charge landing in the contact band" do
     attacker = combatant(
       entity_id: "hero",
-      name: "Варбосс",
+      name: "Вождь орды",
       x: 10,
       y: 12,
       facing: 0,
@@ -243,7 +244,7 @@ class SimBattleContactChargeTest < ActiveSupport::TestCase
   test "flank claimer paths on the board after the front claimer has settled" do
     front = combatant(
       entity_id: "orks",
-      name: "Орки-бойзы",
+      name: "Орки-громилы",
       x: 12,
       y: 12,
       facing: 0,
@@ -272,8 +273,8 @@ class SimBattleContactChargeTest < ActiveSupport::TestCase
     )
     # Shared enemy ahead of the orks; skeletons sit on the geometric flank.
     enemy = combatant(
-      entity_id: "warboss",
-      name: "Варбосс",
+      entity_id: "war_chief",
+      name: "Вождь орды",
       x: 18,
       y: 12,
       facing: 180,
@@ -284,7 +285,7 @@ class SimBattleContactChargeTest < ActiveSupport::TestCase
       side_index: 1
     )
 
-    # Put skeletons clearly on the warboss flank geometrically.
+    # Put skeletons clearly on the war_chief flank geometrically.
     flanker[:x] = 20
     flanker[:y] = 7
     flanker[:facing] = 120
@@ -315,15 +316,128 @@ class SimBattleContactChargeTest < ActiveSupport::TestCase
       base_width: 4, base_depth: 4, melee: 4
     )
     enemy = combatant(
-      entity_id: "warboss", name: "Варбосс",
+      entity_id: "war_chief", name: "Вождь орды",
       x: 32, y: 12, facing: 180, movement: 4,
       base_width: 4, base_depth: 4, melee: 4, side_index: 1
     )
 
-    refute DecisionsMovement.this_turn_charge?(actor, enemy, enemies: [ enemy ])
+    refute ChargeRange.within?(actor, enemy, enemies: [ enemy ])
     entries = DecisionsMovement.plan_melee_entries([ actor ], [ enemy ])
     assert_equal "front", entries.first[:contact_slot]
     refute GroundMovement.contact_wave?(entries.first)
+  end
+
+  test "immediate charge gate uses 2x MV not 1x MV" do
+    marauders = combatant(
+      entity_id: "m1", name: "Отряд грабителей",
+      x: 20.891, y: 5.731, facing: 356.58, movement: 3,
+      base_width: 4, base_depth: 1, melee: 4
+    )
+    skeletons = combatant(
+      entity_id: "s1", name: "Скелетный блок",
+      x: 29.748, y: 5.406, facing: 248.27, movement: 3,
+      base_width: 4, base_depth: 2, melee: 3, side_index: 1
+    )
+
+    gap = BF.distance_between_units(marauders, skeletons)
+    assert_operator gap, :>, marauders[:movement] + ENGAGE
+    assert ChargeRange.within?(marauders, skeletons, enemies: [ skeletons ])
+
+    claimed = Hash.new { |hash, key| hash[key] = {} }
+    choice = GroundMovement.choose_immediate_charge(marauders, [ skeletons ], claimed, [])
+    assert choice
+    assert_equal skeletons[:entity_id], choice[:nearest][:entity_id]
+    assert_equal "flank", choice[:contact_slot]
+  end
+
+  test "immediate charge on assigned flank uses charge_destination when already on that side" do
+    skeleton = combatant(
+      entity_id: "unit-9", name: "Скелетный блок",
+      x: 21.38, y: 2.7, facing: 2, movement: 3,
+      base_width: 5, base_depth: 4, melee: 5
+    )
+    ghouls = combatant(
+      entity_id: "unit-5", name: "Упырская стая",
+      x: 20.95, y: 11.11, facing: 172, movement: 4,
+      base_width: 5, base_depth: 4, melee: 4, side_index: 1
+    )
+
+    assert_equal "flank", BF.classify_attack_vector(skeleton, ghouls)
+    assert ChargeRange.within?(skeleton, ghouls, enemies: [ ghouls ])
+    claimed = Hash.new { |hash, key| hash[key] = {} }
+    claimed["unit-5"]["front"] = "unit-8"
+    choice = GroundMovement.choose_immediate_charge(skeleton, [ ghouls ], claimed, [])
+    assert choice
+    assert_equal "flank", choice[:contact_slot]
+    assert_equal :direct, choice[:approach_mode]
+
+    goal = GroundMovement.approach_goal_point(
+      skeleton, ghouls, contact_slot: "flank", approach_mode: :direct, chargeable: true
+    )
+    expected = BF.charge_destination(skeleton, ghouls)
+    assert_in_delta expected[:x], goal[:x], 0.05
+    assert_in_delta expected[:y], goal[:y], 0.05
+  end
+
+  test "immediate charge to rear geo within range closes contact instead of wrap_rear setup" do
+    prince = combatant(
+      entity_id: "hero-1", name: "Принц",
+      x: 29.17, y: 18.72, facing: 0, movement: 7,
+      base_width: 1, base_depth: 2, melee: 5
+    )
+    ghouls = combatant(
+      entity_id: "unit-5", name: "Упырья",
+      x: 21.9, y: 16.26, facing: 192.02, movement: 4,
+      base_width: 4, base_depth: 3, melee: 4, side_index: 1
+    )
+
+    refute BF.in_front_arc?(prince, ghouls, prince[:facing])
+    refute BF.in_flank_arc?(prince, ghouls, prince[:facing])
+    assert_equal "rear", BF.classify_attack_vector(prince, ghouls)
+    assert ChargeRange.within?(prince, ghouls, enemies: [ ghouls ])
+
+    claimed = Hash.new { |hash, key| hash[key] = {} }
+    choice = GroundMovement.choose_immediate_charge(prince, [ ghouls ], claimed, [])
+    assert choice
+    assert_equal "rear", choice[:contact_slot]
+    assert_equal :direct, choice[:approach_mode]
+
+    phase = MovementPhase.play(
+      acting_side: { player_id: "p1", combatants: [ prince ] },
+      target_side: { player_id: "p2", combatants: [ ghouls ] }
+    )
+    action = phase[:actions].find { |row| row[:actor_id] == "hero-1" }
+    assert action, "expected prince to move toward rear-arc target"
+    refute_equal "hold", action.dig(:maneuver, :kind)
+    assert_operator BF.distance_between_units(prince, ghouls), :<=, ENGAGE
+    assert prince[:charged_distance].to_f.positive?
+  end
+
+  test "prince already behind ghouls within charge range contacts on rear assault" do
+    prince = combatant(
+      entity_id: "hero-1", name: "Принц",
+      x: 22.16, y: 17.70, facing: 187.1, movement: 7,
+      base_width: 1, base_depth: 2, melee: 5
+    )
+    ghouls = combatant(
+      entity_id: "unit-5", name: "Упырская стая",
+      x: 14.49, y: 15.18, facing: 240.3, movement: 4,
+      base_width: 4, base_depth: 3, melee: 4, side_index: 1
+    )
+
+    assert_equal "rear", BF.classify_attack_vector(prince, ghouls)
+    assert ChargeRange.within?(prince, ghouls, enemies: [ ghouls ])
+    assert_operator BF.distance_between_units(prince, ghouls), :>, ENGAGE
+
+    phase = MovementPhase.play(
+      acting_side: { player_id: "p1", combatants: [ prince ] },
+      target_side: { player_id: "p2", combatants: [ ghouls ] }
+    )
+    action = phase[:actions].find { |row| row[:actor_id] == "hero-1" }
+    assert action
+    assert_equal :direct, action.dig(:maneuver, :approach_mode).to_sym
+    assert_operator BF.distance_between_units(prince, ghouls), :<=, ENGAGE
+    assert prince[:charged_distance].to_f.positive?
   end
 
   test "this-turn charge spends double MV and can close a gap past 1× movement" do
@@ -340,8 +454,7 @@ class SimBattleContactChargeTest < ActiveSupport::TestCase
 
     gap = BF.distance_between_units(attacker, enemy)
     assert_operator gap, :>, attacker[:movement] + ENGAGE
-    refute DecisionsMovement.this_turn_charge?(attacker, enemy, enemies: [ enemy ])
-    assert DecisionsMovement.within_charge_range?(attacker, enemy, enemies: [ enemy ])
+    assert ChargeRange.within?(attacker, enemy, enemies: [ enemy ])
 
     phase = MovementPhase.play(
       acting_side: { player_id: "p1", combatants: [ attacker ] },
@@ -355,12 +468,12 @@ class SimBattleContactChargeTest < ActiveSupport::TestCase
     assert_operator BF.distance_between_units(attacker, enemy), :<=, ENGAGE
   end
 
-  test "orbit_mode? is ground wrap, not flyer setup" do
-    refute GroundMovement.orbit_mode?(:flyer_setup_rear)
-    refute GroundMovement.orbit_mode?(:flyer_setup_flank)
-    refute GroundMovement.orbit_mode?(:flyer_approach)
-    assert GroundMovement.orbit_mode?(:orbit_flank)
-    assert GroundMovement.orbit_mode?(:wrap_rear)
+  test "slot_path? when assigned side differs from geometry" do
+    origin = combatant(entity_id: "a", x: 10, y: 12, facing: 0, base_width: 1, base_depth: 1)
+    defender = combatant(entity_id: "d", x: 16, y: 12, facing: 180, base_width: 4, base_depth: 3, side_index: 1)
+    assert_equal "front", BF.classify_attack_vector(origin, defender)
+    assert GroundMovement.slot_path?(origin, defender, "flank")
+    refute GroundMovement.slot_path?(origin, defender, "front")
   end
 
   test "flyer wave runs before infantry contact" do
@@ -375,7 +488,7 @@ class SimBattleContactChargeTest < ActiveSupport::TestCase
       base_width: 4, base_depth: 4, melee: 4
     )
     enemy = combatant(
-      entity_id: "warboss", name: "Варбосс",
+      entity_id: "war_chief", name: "Вождь орды",
       x: 16, y: 12, facing: 180, movement: 3,
       base_width: 1, base_depth: 1, melee: 6, side_index: 1
     )
@@ -394,7 +507,7 @@ class SimBattleContactChargeTest < ActiveSupport::TestCase
       movement: 20, abilities: [ "flying" ], side_index: 1
     )
     marauders = combatant(
-      entity_id: "unit-14", name: "Мародеры",
+      entity_id: "unit-14", name: "Отряд грабителей",
       x: 10.33, y: 4.21, facing: 2.9,
       base_width: 4, base_depth: 4, files: 4, ranks: 4,
       movement: 3, side_index: 1
@@ -428,7 +541,7 @@ class SimBattleContactChargeTest < ActiveSupport::TestCase
       movement: 20, abilities: [ "flying" ], melee: 6, side_index: 0
     )
     marauders = combatant(
-      entity_id: "unit-11", name: "Мародеры",
+      entity_id: "unit-11", name: "Отряд грабителей",
       x: 35.0, y: 19.0, facing: 180.0,
       base_width: 4, base_depth: 4, files: 4, ranks: 4,
       movement: 3, melee: 4, side_index: 0
@@ -448,7 +561,7 @@ class SimBattleContactChargeTest < ActiveSupport::TestCase
     assert_operator marauders[:x], :<, 33.0
   end
 
-  test "a flyer sets up behind when the landing fits even if a frontal charge also fits" do
+  test "a flyer rear-charges when a rear charge fits this turn even if rear setup also fits" do
     flyer = combatant(
       entity_id: "flyer",
       name: "Демонический принц",
@@ -479,15 +592,15 @@ class SimBattleContactChargeTest < ActiveSupport::TestCase
     )
 
     assert_equal "front", BF.classify_attack_vector(flyer, enemy)
-    assert DecisionsMovement.this_turn_charge?(flyer, enemy, enemies: [ enemy ])
+    assert ChargeRange.within?(flyer, enemy, enemies: [ enemy ])
 
     entries = DecisionsMovement.plan_melee_entries([ flyer ], [ enemy ])
     assert_equal 1, entries.size
-    assert_includes %i[flyer_setup_rear flyer_setup_flank], entries.first[:approach_mode]
-    assert_includes %w[rear flank], entries.first[:contact_slot]
+    assert_equal :flyer_charge, entries.first[:approach_mode]
+    assert_equal "rear", entries.first[:contact_slot]
   end
 
-  test "a flyer charges a free side when it cannot land behind this turn" do
+  test "a flyer rear-charges this turn when setup behind is out of reach" do
     flyer = combatant(
       entity_id: "flyer",
       name: "Демонический принц",
@@ -517,14 +630,14 @@ class SimBattleContactChargeTest < ActiveSupport::TestCase
       side_index: 1
     )
 
-    assert DecisionsMovement.this_turn_charge?(flyer, enemy, enemies: [ enemy ])
+    assert ChargeRange.within?(flyer, enemy, enemies: [ enemy ])
     refute Sim::Battle::Rules::Flying::Movement.setup_goal_within_budget?(flyer, enemy, "rear", 6)
     refute Sim::Battle::Rules::Flying::Movement.setup_goal_within_budget?(flyer, enemy, "flank", 6)
 
     entries = DecisionsMovement.plan_melee_entries([ flyer ], [ enemy ])
     assert_equal 1, entries.size
     assert_equal :flyer_charge, entries.first[:approach_mode]
-    assert_equal "front", entries.first[:contact_slot]
+    assert_equal "rear", entries.first[:contact_slot]
   end
 
   test "a flyer already on the rear charges instead of leaping to another setup" do
@@ -558,7 +671,7 @@ class SimBattleContactChargeTest < ActiveSupport::TestCase
     )
 
     assert_equal "rear", BF.classify_attack_vector(flyer, enemy)
-    assert DecisionsMovement.this_turn_charge?(flyer, enemy, enemies: [ enemy ])
+    assert ChargeRange.within?(flyer, enemy, enemies: [ enemy ])
 
     entries = DecisionsMovement.plan_melee_entries([ flyer ], [ enemy ])
     assert_equal 1, entries.size
@@ -566,7 +679,7 @@ class SimBattleContactChargeTest < ActiveSupport::TestCase
     assert_equal "rear", entries.first[:contact_slot]
   end
 
-  test "a flyer takes the free flank when a rear pad faces into a packed neighbor" do
+  test "a flyer rear-charges when rear setup pad is blocked but rear contact fits" do
     flyer = combatant(
       entity_id: "unit-88",
       name: "Костяной дракон",
@@ -612,8 +725,8 @@ class SimBattleContactChargeTest < ActiveSupport::TestCase
 
     entries = DecisionsMovement.plan_melee_entries([ flyer ], enemies)
     assert_equal 1, entries.size
-    assert_equal :flyer_setup_flank, entries.first[:approach_mode]
-    assert_equal "flank", entries.first[:contact_slot]
+    assert_equal :flyer_charge, entries.first[:approach_mode]
+    assert_equal "rear", entries.first[:contact_slot]
     assert_equal "unit-61", entries.first[:nearest][:entity_id]
 
     phase = MovementPhase.play(
@@ -644,8 +757,8 @@ class SimBattleContactChargeTest < ActiveSupport::TestCase
       base_width: 2, base_depth: 2, melee: 4, is_routing: true, side_index: 1
     )
 
-    assert DecisionsMovement.this_turn_charge?(actor, blocker, enemies: [ blocker, runner ])
-    refute DecisionsMovement.this_turn_charge?(actor, runner, enemies: [ blocker, runner ])
+    assert ChargeRange.within?(actor, blocker, enemies: [ blocker, runner ])
+    refute ChargeRange.within?(actor, runner, enemies: [ blocker, runner ])
 
     entries = DecisionsMovement.plan_melee_entries([ actor ], [ blocker, runner ])
     assert_equal "blocker", entries.first[:nearest][:entity_id]
@@ -655,6 +768,49 @@ class SimBattleContactChargeTest < ActiveSupport::TestCase
   # ---------------------------------------------------------------------------
   # 4. Contact slots
   # ---------------------------------------------------------------------------
+
+  test "far approach units do not reserve contact slots before charge-ready movers" do
+    enemy = combatant(
+      entity_id: "e1",
+      name: "Цель",
+      x: 20,
+      y: 12,
+      facing: 180,
+      base_width: 3,
+      base_depth: 3,
+      side_index: 1
+    )
+    far_front = combatant(
+      entity_id: "far",
+      name: "Далеко",
+      x: 4,
+      y: 12,
+      facing: 0,
+      base_width: 4,
+      base_depth: 4,
+      movement: 3,
+      melee: 5
+    )
+    close_front = combatant(
+      entity_id: "close",
+      name: "Близко",
+      x: 14,
+      y: 12,
+      facing: 0,
+      base_width: 4,
+      base_depth: 4,
+      movement: 5,
+      melee: 5
+    )
+
+    refute ChargeRange.within?(far_front, enemy, enemies: [ enemy ])
+    assert ChargeRange.within?(close_front, enemy, enemies: [ enemy ])
+
+    entries = DecisionsMovement.plan_melee_entries([ far_front, close_front ], [ enemy ])
+    slots = entries.to_h { |entry| [ entry[:combatant][:entity_id], entry[:contact_slot] ] }
+    assert_equal "front", slots["close"]
+    assert_equal "flank", slots["far"]
+  end
 
   test "assign_contact_slots gives front to the most frontal unit and flank to the rest" do
     enemy = combatant(
@@ -746,23 +902,26 @@ class SimBattleContactChargeTest < ActiveSupport::TestCase
     assert_in_delta expected[:y], goal[:y], 0.01
   end
 
-  test "approach_goal_point returns a rear waypoint for wrap_rear" do
+  test "approach_goal_point returns a rear waypoint when slot differs from geometry" do
     origin = combatant(entity_id: "a", x: 10, y: 12, facing: 0, base_width: 1, base_depth: 1)
     defender = combatant(entity_id: "d", x: 16, y: 12, facing: 180, base_width: 4, base_depth: 3, side_index: 1)
-    point = GroundMovement.approach_goal_point(origin, defender, contact_slot: "rear", approach_mode: :wrap_rear)
+    point = GroundMovement.approach_goal_point(origin, defender, contact_slot: "rear", approach_mode: :direct)
 
     refute_equal defender, point
     assert_operator point[:x], :>, defender[:x]
   end
 
-  test "approach_goal_point for a frontal assignment under direct mode aims at charge_destination" do
+  test "approach_goal_point for mismatched slot uses flank waypoint under direct mode" do
     origin = combatant(entity_id: "a", x: 10, y: 12, facing: 0, base_width: 1, base_depth: 1)
     defender = combatant(entity_id: "d", x: 14, y: 12, facing: 180, base_width: 4, base_depth: 3, side_index: 1)
     assert_equal "front", BF.classify_attack_vector(origin, defender)
     goal = GroundMovement.approach_goal_point(origin, defender, contact_slot: "flank", approach_mode: :direct)
-    expected = BF.charge_destination(origin, defender)
-    assert_in_delta expected[:x], goal[:x], 0.01
-    assert_in_delta expected[:y], goal[:y], 0.01
+    waypoint = GroundMovement.approach_goal_point(
+      origin, defender, contact_slot: "flank", approach_mode: :direct, chargeable: false
+    )
+
+    refute_equal BF.charge_destination(origin, defender)[:x], goal[:x]
+    assert_in_delta waypoint[:x], goal[:x], 0.01
   end
 
   test "approach_goal_point steps along facing when already in the fight" do
@@ -776,10 +935,10 @@ class SimBattleContactChargeTest < ActiveSupport::TestCase
     assert_in_delta stepped[:y], goal[:y], 0.01
   end
 
-  test "approach_goal_point for orbit_flank leaves the defender center" do
+  test "approach_goal_point aims at flank waypoint when slot differs from geometry" do
     origin = combatant(entity_id: "a", x: 10, y: 12, facing: 0, base_width: 1, base_depth: 1)
     defender = combatant(entity_id: "d", x: 16, y: 12, facing: 180, base_width: 4, base_depth: 3, side_index: 1)
-    goal = GroundMovement.approach_goal_point(origin, defender, contact_slot: "flank", approach_mode: :orbit_flank)
+    goal = GroundMovement.approach_goal_point(origin, defender, contact_slot: "flank", approach_mode: :direct)
 
     refute_equal defender, goal
     assert_operator BF.distance_between(goal, defender), :>, 1.0
@@ -802,8 +961,8 @@ class SimBattleContactChargeTest < ActiveSupport::TestCase
       side_index: 0
     )
     ally = combatant(
-      entity_id: "boyz",
-      name: "Орки-бойзы",
+      entity_id: "brutes",
+      name: "Орки-громилы",
       x: 14,
       y: 12,
       facing: 0,
@@ -813,7 +972,7 @@ class SimBattleContactChargeTest < ActiveSupport::TestCase
     )
     enemy = combatant(
       entity_id: "target",
-      name: "Мародеры",
+      name: "Отряд грабителей",
       x: 22,
       y: 12,
       facing: 180,
@@ -846,7 +1005,7 @@ class SimBattleContactChargeTest < ActiveSupport::TestCase
     # Enemy faces west; hero sits due south (true flank). Ally sits on the northbound line.
     origin = combatant(
       entity_id: "hero",
-      name: "Варбосс",
+      name: "Вождь орды",
       x: 18,
       y: 6,
       facing: 90,
@@ -857,8 +1016,8 @@ class SimBattleContactChargeTest < ActiveSupport::TestCase
       side_index: 0
     )
     ally = combatant(
-      entity_id: "boyz",
-      name: "Орки-бойзы",
+      entity_id: "brutes",
+      name: "Орки-громилы",
       x: 18,
       y: 9.5,
       facing: 0,
@@ -958,7 +1117,7 @@ class SimBattleContactChargeTest < ActiveSupport::TestCase
   test "battle jam: almost-touching orks and ghouls engage instead of deadlocking" do
     orks = combatant(
       entity_id: "unit-9",
-      name: "Орки-бойзы",
+      name: "Орки-громилы",
       x: 17.019824912779473,
       y: 11.662088699237485,
       facing: 356.6571949365198,
@@ -970,9 +1129,9 @@ class SimBattleContactChargeTest < ActiveSupport::TestCase
       movement: 3,
       side_index: 0
     )
-    warboss = combatant(
+    war_chief = combatant(
       entity_id: "hero-3",
-      name: "Варбосс",
+      name: "Вождь орды",
       x: 18.245861319604572,
       y: 8.459794183657628,
       facing: 47.794468274607084,
@@ -1020,19 +1179,19 @@ class SimBattleContactChargeTest < ActiveSupport::TestCase
     intent = DecisionsMovement.build_approach_intent(
       combatant: orks,
       nearest: ghouls,
-      obstacles: [ warboss, ghouls, skel ]
+      obstacles: [ war_chief, ghouls, skel ]
     )
     assert_nil intent
 
-    selection = Targeting.choose_target(orks, [ ghouls, skel ], "melee", [ orks, warboss, ghouls, skel ])
+    selection = Targeting.choose_target(orks, [ ghouls, skel ], "melee", [ orks, war_chief, ghouls, skel ])
     assert selection
     assert_equal "unit-13", selection[:target][:entity_id]
   end
 
-  test "battle jam: skeleton on the warboss flank reaches melee" do
-    warboss = combatant(
+  test "battle jam: skeleton on the war_chief flank reaches melee" do
+    war_chief = combatant(
       entity_id: "hero-3",
-      name: "Варбосс",
+      name: "Вождь орды",
       x: 18.25,
       y: 8.46,
       facing: 48,
@@ -1044,7 +1203,7 @@ class SimBattleContactChargeTest < ActiveSupport::TestCase
     )
     orks = combatant(
       entity_id: "unit-9",
-      name: "Орки-бойзы",
+      name: "Орки-громилы",
       x: 17.02,
       y: 11.66,
       facing: 357,
@@ -1099,28 +1258,28 @@ class SimBattleContactChargeTest < ActiveSupport::TestCase
       side_index: 1
     )
 
-    assert_equal "flank", BF.classify_attack_vector(skel, warboss)
-    before = BF.distance_between_units(skel, warboss)
+    assert_equal "flank", BF.classify_attack_vector(skel, war_chief)
+    before = BF.distance_between_units(skel, war_chief)
 
     4.times do
       MovementPhase.play(
         acting_side: { player_id: "undead", combatants: [ ghouls, ghouls_rear, skel ] },
-        target_side: { player_id: "greenskin", combatants: [ warboss, orks ] }
+        target_side: { player_id: "greenskin", combatants: [ war_chief, orks ] }
       )
-      break if Targeting.choose_target(skel, [ warboss, orks ], "melee", [ warboss, orks, ghouls, ghouls_rear, skel ])
+      break if Targeting.choose_target(skel, [ war_chief, orks ], "melee", [ war_chief, orks, ghouls, ghouls_rear, skel ])
     end
 
-    after = BF.distance_between_units(skel, warboss)
+    after = BF.distance_between_units(skel, war_chief)
     assert_operator after, :<, before
     assert_operator after, :<, 1.0, "skeleton flank charge should close (before=#{before.round(3)} after=#{after.round(3)})"
     refute BF.rectangles_overlap?(skel, ghouls)
     refute BF.rectangles_overlap?(skel, ghouls_rear)
   end
 
-  test "battle jam: warboss can progress toward ghouls without being erased by ork conflict" do
-    warboss = combatant(
+  test "battle jam: war_chief can progress toward ghouls without being erased by greenskin conflict" do
+    war_chief = combatant(
       entity_id: "hero-3",
-      name: "Варбосс",
+      name: "Вождь орды",
       x: 18.0846888466,
       y: 8.3146809393,
       facing: 46.174128,
@@ -1133,7 +1292,7 @@ class SimBattleContactChargeTest < ActiveSupport::TestCase
     )
     orks = combatant(
       entity_id: "unit-9",
-      name: "Орки-бойзы",
+      name: "Орки-громилы",
       x: 17.0151976497,
       y: 11.6620499371,
       facing: 356.744795,
@@ -1160,28 +1319,28 @@ class SimBattleContactChargeTest < ActiveSupport::TestCase
       side_index: 1
     )
 
-    before_wb = BF.distance_between_units(warboss, ghouls)
+    before_wb = BF.distance_between_units(war_chief, ghouls)
     before_orks = BF.distance_between_units(orks, ghouls)
 
     MovementPhase.play(
-      acting_side: { player_id: "greenskin", combatants: [ warboss, orks ] },
+      acting_side: { player_id: "greenskin", combatants: [ war_chief, orks ] },
       target_side: { player_id: "undead", combatants: [ ghouls ] }
     )
 
     # Orks in the ENGAGE band should stay put (already fighting).
     if before_orks <= ENGAGE
       assert_in_delta before_orks, BF.distance_between_units(orks, ghouls), 0.05
-      assert Targeting.choose_target(orks, [ ghouls ], "melee", [ warboss, orks, ghouls ])
+      assert Targeting.choose_target(orks, [ ghouls ], "melee", [ war_chief, orks, ghouls ])
     end
 
-    after_wb = BF.distance_between_units(warboss, ghouls)
-    # Soft target + slots: warboss must not be waited off; either engages or closes.
+    after_wb = BF.distance_between_units(war_chief, ghouls)
+    # Soft target + slots: war_chief must not be waited off; either engages or closes.
     assert(
       after_wb <= ENGAGE || after_wb < before_wb - 0.08,
-      "warboss should close meaningfully (before=#{before_wb.round(3)} after=#{after_wb.round(3)})"
+      "war_chief should close meaningfully (before=#{before_wb.round(3)} after=#{after_wb.round(3)})"
     )
-    refute BF.rectangles_overlap?(warboss, orks)
-    assert_operator BF.distance_between_units(warboss, orks), :>=, CONTACT - 0.001
+    refute BF.rectangles_overlap?(war_chief, orks)
+    assert_operator BF.distance_between_units(war_chief, orks), :>=, CONTACT - 0.001
   end
 
   test "contact_slot_points returns side waypoints for flank and a rear point for rear" do
@@ -1228,7 +1387,7 @@ class SimBattleContactChargeTest < ActiveSupport::TestCase
 
     refute BF.in_front_arc?(attacker, enemy, attacker[:facing])
     assert_nil DecisionsMovement.nearest_enemy(attacker, [ enemy ])
-    assert DecisionsMovement.this_turn_charge?(attacker, enemy, enemies: [ enemy ])
+    assert ChargeRange.within?(attacker, enemy, enemies: [ enemy ])
 
     entries = DecisionsMovement.plan_melee_entries([ attacker ], [ enemy ])
     assert_equal 1, entries.size
@@ -1293,8 +1452,36 @@ class SimBattleContactChargeTest < ActiveSupport::TestCase
     assert_equal "ea", by_id["u1"][:nearest][:entity_id]
     assert_equal "front", by_id["u1"][:contact_slot]
     assert_equal :direct, by_id["u1"][:approach_mode]
-    assert_equal "eb", by_id["u2"][:nearest][:entity_id]
+    assert_equal "ea", by_id["u2"][:nearest][:entity_id]
+    assert_equal "flank", by_id["u2"][:contact_slot]
     assert_equal :direct, by_id["u2"][:approach_mode]
+  end
+
+  test "when primary enemy geo slot is taken natural side defers to fallback on same target" do
+    ghouls = combatant(
+      entity_id: "unit-5", name: "Упырская стая",
+      x: 31, y: 11, facing: 180, movement: 4,
+      base_width: 5, base_depth: 4, melee: 4, side_index: 1
+    )
+    vampire = combatant(
+      entity_id: "hero-2", name: "Ночной лорд",
+      x: 31, y: 19, facing: 180, movement: 6,
+      base_width: 1, base_depth: 1, melee: 5, side_index: 1
+    )
+    second_skeleton = combatant(
+      entity_id: "unit-9", name: "Скелетный блок",
+      x: 7, y: 2, facing: 0, movement: 3,
+      base_width: 5, base_depth: 4, melee: 5
+    )
+
+    claimed = Hash.new { |hash, key| hash[key] = {} }
+    claimed["unit-5"]["front"] = "unit-8"
+    refute GroundMovement.choose_natural_side(second_skeleton, [ ghouls, vampire ], claimed, [])
+
+    choice = GroundMovement.choose_fallback_target(second_skeleton, [ ghouls, vampire ], claimed, [])
+    assert choice
+    assert_equal "unit-5", choice[:nearest][:entity_id]
+    assert_equal "flank", choice[:contact_slot]
   end
 
   test "when front is taken and no other enemy exists claimer orbits free flank" do
@@ -1338,7 +1525,7 @@ class SimBattleContactChargeTest < ActiveSupport::TestCase
     assert_equal "front", by_id["u1"][:contact_slot]
     assert_equal :direct, by_id["u1"][:approach_mode]
     assert_equal "flank", by_id["u2"][:contact_slot]
-    assert_equal :orbit_flank, by_id["u2"][:approach_mode]
+    assert_equal :direct, by_id["u2"][:approach_mode]
   end
 
   test "when front and flank are taken claimer wraps free rear" do
@@ -1367,10 +1554,10 @@ class SimBattleContactChargeTest < ActiveSupport::TestCase
     assert_equal "front", by_id["f1"][:contact_slot]
     assert_equal "flank", by_id["k1"][:contact_slot]
     assert_equal "rear", by_id["x1"][:contact_slot]
-    assert_equal :wrap_rear, by_id["x1"][:approach_mode]
+    assert_equal :direct, by_id["x1"][:approach_mode]
   end
 
-  test "when front and rear are taken the extra unit orbits free flank" do
+  test "when front and rear are taken the extra unit paths to free flank" do
     enemy = combatant(
       entity_id: "e1",
       name: "Цель",
@@ -1396,7 +1583,7 @@ class SimBattleContactChargeTest < ActiveSupport::TestCase
     assert_equal "front", by_id["f1"][:contact_slot]
     assert_equal "rear", by_id["r1"][:contact_slot]
     assert_equal "flank", by_id["x1"][:contact_slot]
-    assert_equal :orbit_flank, by_id["x1"][:approach_mode]
+    assert_equal :direct, by_id["x1"][:approach_mode]
   end
 
   test "when all three sides are taken the extra unit does not assault" do
@@ -1451,7 +1638,7 @@ class SimBattleContactChargeTest < ActiveSupport::TestCase
 
     assert_equal "flank", BF.classify_attack_vector(attacker, enemy)
     refute BF.in_front_arc?(attacker, enemy, attacker[:facing])
-    assert DecisionsMovement.this_turn_charge?(attacker, enemy, enemies: [ enemy ])
+    assert ChargeRange.within?(attacker, enemy, enemies: [ enemy ])
 
     entries = DecisionsMovement.plan_melee_entries([ attacker ], [ enemy ])
     assert_equal 1, entries.size
@@ -1498,7 +1685,7 @@ class SimBattleContactChargeTest < ActiveSupport::TestCase
     entries = DecisionsMovement.plan_melee_entries([ attacker ], [ enemy ])
     assert_equal 1, entries.size
     assert_equal :direct, entries.first[:approach_mode]
-    refute_equal :orbit_flank, entries.first[:approach_mode]
+    assert_equal :direct, entries.first[:approach_mode]
 
     before = BF.angle_between(attacker[:facing], attacker, enemy)
     MovementPhase.play(
@@ -1520,9 +1707,9 @@ class SimBattleContactChargeTest < ActiveSupport::TestCase
       movement: 3,
       melee: 5
     )
-    warboss = combatant(
+    war_chief = combatant(
       entity_id: "hero-6",
-      name: "Варбосс",
+      name: "Вождь орды",
       x: 28.2,
       y: 18.4,
       facing: 196.0,
@@ -1532,21 +1719,21 @@ class SimBattleContactChargeTest < ActiveSupport::TestCase
       side_index: 1
     )
 
-    refute BF.in_front_arc?(block, warboss, block[:facing])
-    assert BF.in_flank_arc?(block, warboss, block[:facing])
+    refute BF.in_front_arc?(block, war_chief, block[:facing])
+    assert BF.in_flank_arc?(block, war_chief, block[:facing])
 
-    entries = DecisionsMovement.plan_melee_entries([ block ], [ warboss ])
+    entries = DecisionsMovement.plan_melee_entries([ block ], [ war_chief ])
     assert_equal 1, entries.size
     assert_equal "hero-6", entries.first[:nearest][:entity_id]
     assert_equal :direct, entries.first[:approach_mode]
 
-    before = BF.angle_between(block[:facing], block, warboss)
+    before = BF.angle_between(block[:facing], block, war_chief)
     MovementPhase.play(
       acting_side: { player_id: "p1", combatants: [ block ] },
-      target_side: { player_id: "p2", combatants: [ warboss ] }
+      target_side: { player_id: "p2", combatants: [ war_chief ] }
     )
     refute_in_delta 90.0, block[:facing], 0.5
-    assert_operator BF.angle_between(block[:facing], block, warboss), :<, before
+    assert_operator BF.angle_between(block[:facing], block, war_chief), :<, before
   end
 
   test "an enemy strictly behind does not pull a flank-arc reform" do
@@ -1609,8 +1796,8 @@ class SimBattleContactChargeTest < ActiveSupport::TestCase
 
   test "in-arc wide infantry charges directly without burning MV on a flank waypoint" do
     attacker = combatant(
-      entity_id: "marauders",
-      name: "Мародеры",
+      entity_id: "reavers",
+      name: "Отряд грабителей",
       x: 17.0,
       y: 5.9,
       facing: 45.0,
@@ -1650,7 +1837,7 @@ class SimBattleContactChargeTest < ActiveSupport::TestCase
     after = BF.distance_between_units(attacker, enemy)
 
     assert_operator after, :<, before
-    action = phase[:actions].find { |row| row[:actor_id] == "marauders" }
+    action = phase[:actions].find { |row| row[:actor_id] == "reavers" }
     assert action
     # Must spend some advance/march toward the enemy, not the entire budget on a flank-orbit wheel.
     forward = action.dig(:maneuver, :mv_spent_advance).to_f + action.dig(:maneuver, :mv_spent_march).to_f
@@ -1808,7 +1995,7 @@ class SimBattleContactChargeTest < ActiveSupport::TestCase
   end
 
   test "free align around enemy corner works for wide infantry on a flank corner" do
-    # Battle 28 paid landing: skeletons' front vs orc front-right corner.
+    # Battle 28 paid landing: skeletons' front vs greenskin front-right corner.
     attacker = combatant(
       entity_id: "skeletons",
       x: 15.186967578348623,
@@ -1923,7 +2110,7 @@ class SimBattleContactChargeTest < ActiveSupport::TestCase
     )
     ally = combatant(
       entity_id: "orks",
-      name: "Орки-бойзы",
+      name: "Орки-громилы",
       x: 15.493154665390248,
       y: 8.641356531078802,
       facing: 270.0,
@@ -1952,7 +2139,7 @@ class SimBattleContactChargeTest < ActiveSupport::TestCase
   end
 
   test "free align ignores distant idle allies for free_side scoring" do
-    # Battle 33 R4: routing halberds at north edge; distant boyz must not force a 330° swing.
+    # Battle 33 R4: routing halberds at north edge; distant brutes must not force a 330° swing.
     attacker = combatant(
       entity_id: "unit-10",
       name: "Наездники на кабанах",
@@ -1981,7 +2168,7 @@ class SimBattleContactChargeTest < ActiveSupport::TestCase
     )
     distant_ally = combatant(
       entity_id: "unit-9",
-      name: "Орки-бойзы",
+      name: "Орки-громилы",
       x: 24.487755750001995,
       y: 11.712838098019661,
       facing: 175.98729133234053,
@@ -2012,7 +2199,7 @@ class SimBattleContactChargeTest < ActiveSupport::TestCase
     # Battle 60 R5: grave guards free-align into skeletons; nearby lich must not force ~83° sideways.
     attacker = combatant(
       entity_id: "unit-15",
-      name: "Стража могил",
+      name: "Криптовая стража",
       x: 22.324,
       y: 13.513,
       facing: 142.72495616837273,
@@ -2038,7 +2225,7 @@ class SimBattleContactChargeTest < ActiveSupport::TestCase
     )
     idle_hero = combatant(
       entity_id: "hero-3",
-      name: "Король-лич",
+      name: "Король курганов",
       x: 26.853,
       y: 15.390,
       facing: 199.19,

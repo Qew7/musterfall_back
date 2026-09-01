@@ -10,7 +10,7 @@ module Api
         units: Unit.includes(:faction, :abilities_records).order(:name).map { |template| serialize_template(template) },
         heroes: Hero.includes(:faction, :abilities_records).order(:name).map { |template| serialize_template(template) },
         abilities: Ability.order(:key).map { |ability| serialize_ability(ability) },
-        hero_upgrades: HeroUpgrade.order(:position).map { |upgrade| serialize_upgrade(upgrade) },
+        hero_upgrades: HeroUpgrade.includes(:faction).order(:position).map { |upgrade| serialize_upgrade(upgrade) },
         magicSchools: serialize_magic_schools
       }
     end
@@ -87,7 +87,11 @@ module Api
         id: upgrade.upgrade_key,
         name: upgrade.name,
         category: upgrade.category,
-        summary: upgrade.summary
+        summary: upgrade.summary,
+        factionId: upgrade.faction&.slug,
+        repeatable: upgrade.repeatable,
+        minLevel: upgrade.min_level,
+        generalOnly: upgrade.general_only
       }
     end
 

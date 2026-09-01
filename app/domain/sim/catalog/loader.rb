@@ -2,7 +2,11 @@ module Sim
   class Catalog
     class Loader
       def self.load
-        new.load
+        @cache ||= new.load
+      end
+
+      def self.reset!
+        @cache = nil
       end
 
       def load
@@ -13,7 +17,7 @@ module Sim
           units: Unit.includes(:faction, :abilities_records).order(:name).map { |template| serialize_template(template) },
           heroes: Hero.includes(:faction, :abilities_records).order(:name).map { |template| serialize_template(template) },
           abilities: Ability.order(:key).map { |ability| serialize_ability(ability) },
-          hero_upgrades: HeroUpgrade.order(:position).map { |upgrade| serialize_upgrade(upgrade) }
+          hero_upgrades: HeroUpgrade.includes(:faction).order(:position).map { |upgrade| serialize_upgrade(upgrade) }
         )
       end
 
@@ -88,7 +92,11 @@ module Sim
           id: upgrade.upgrade_key,
           name: upgrade.name,
           category: upgrade.category,
-          summary: upgrade.summary
+          summary: upgrade.summary,
+          faction_id: upgrade.faction&.slug,
+          repeatable: upgrade.repeatable,
+          min_level: upgrade.min_level,
+          general_only: upgrade.general_only
         }
       end
     end

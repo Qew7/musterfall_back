@@ -24,18 +24,19 @@ module Games
       matchups = find_matchups!
       payloads = matchups.map { |matchup| replay_payload(matchup) }
 
-      ActiveRecord::Base.transaction do
-        payloads.each do |matchup, fresh|
-          Sim::Persistence::BattleWriter.persist!(
+      persisted = ActiveRecord::Base.transaction do
+        payloads.map do |matchup, fresh|
+          battle = Sim::Persistence::BattleWriter.persist!(
             @game,
             fresh,
             round_number: matchup.campaign_round,
             as_new: true
           )
+          [ matchup, fresh, battle ]
         end
       end
 
-      battles = payloads.map { |matchup, fresh| present(matchup, fresh) }
+      battles = persisted.map { |matchup, fresh, battle| present(matchup, fresh, battle) }
       focused = focused_battle(battles)
       Sim::Result.ok(battle: focused, battles: battles)
     rescue ActiveRecord::RecordNotFound
@@ -70,10 +71,10 @@ module Games
       [ matchup, Sim::Battle::Replay.call(matchup: matchup, compare: false)[:result] ]
     end
 
-    def present(matchup, fresh)
-      battle = camelize_battle(fresh.merge(matchup_id: matchup.id, seed: matchup.seed))
-      battle[:terrain] = camelize_terrain(fresh[:terrain])
-      battle
+    def present(matchup, fresh, battle)
+      payload = camelize_battle(fresh.merge(matchup_id: matchup.id, seed: matchup.seed, battle_id: battle.id))
+      payload[:terrain] = camelize_terrain(fresh[:terrain])
+      payload
     end
 
     def focused_battle(battles)

@@ -3,7 +3,7 @@ module Sim
     module Pathing
       module Maneuvers
         # March: double distance, straight along facing, only when no enemy
-        # sits within 8" of the tray. Cannot mix with a wheel or turn.
+        # sits within 8" of the tray.
         module March
           module_function
 
@@ -53,7 +53,8 @@ module Sim
               maneuver: key,
               mv_spent_advance: 0.0,
               mv_spent_march: cost,
-              march_multiplier: rate
+              march_multiplier: rate,
+              cost_spent: cost
             )
             plan.merge(steps: Maneuvers.steps_for(plan))
           end

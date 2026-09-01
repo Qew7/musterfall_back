@@ -53,12 +53,10 @@ module Sim
             player_id: player[:id],
             rng: @rng
           )
-          @campaign = result.value if result.ok?
+          next if result.failure?
 
           auto_level_general!(player[:id])
-
-          deploy = Deploy.call(campaign: @campaign, player_id: player[:id], action: "auto")
-          @campaign = deploy.value if deploy.ok?
+          auto_deploy_bot!(player[:id])
         end
       end
 
@@ -68,29 +66,52 @@ module Sim
           general = Array(player&.dig(:roster)).find { |entry| entry.dig(:components, :hero, :general) }
           break unless general && Upgrades::Draft.level_ready?(general)
 
-          prepared = HeroDraft.prepare(
-            campaign: @campaign,
-            catalog: @catalog,
-            player_id: player_id,
-            hero_id: general[:id],
-            rng: @rng
-          )
-          break unless prepared.ok?
-
-          @campaign = prepared.value
-          upgrade_id = @campaign.find_entity(player_id, general[:id]).dig(:components, :progression, :pending_draft).first
+          general[:components][:progression][:pending_draft] = Upgrades::Draft.roll(general, @catalog, @rng)
+          upgrade_id = general.dig(:components, :progression, :pending_draft)&.first
           break unless upgrade_id
+          break unless Upgrades::Draft.apply!(general, upgrade_id, catalog: @catalog)
 
-          picked = HeroDraft.pick(
-            campaign: @campaign,
-            player_id: player_id,
-            hero_id: general[:id],
-            upgrade_id: upgrade_id
-          )
-          break unless picked.ok?
-
-          @campaign = picked.value
+          Entities::Footprint.sync_entity!(general)
         end
+      end
+
+      def auto_deploy_bot!(player_id)
+        player = @campaign.find_player(player_id)
+        return unless player
+
+        deployable = player[:roster]
+          .select { |entry| entry.dig(:state, :current_health).to_i > 0 }
+          .reject { |entry| entry[:kind] == "hero" && entry[:state][:attached_to] }
+          .sort_by { |entity| bot_deploy_sort_key(entity) }
+
+        deployable.each_with_index do |entity, index|
+          row = Constants::BATTLE_ROWS[[ 2, index / 3 ].min]
+          lane = Constants::LANE_ORDER[index % Constants::LANE_ORDER.length]
+          clear = Geometry::Deployment.find_clear_position(entity, row, lane, player[:roster], ignore_id: entity[:id])
+          next unless clear
+
+          formation = entity[:components][:formation]
+          formation[:facing] = clear[:facing] if clear[:facing]
+          formation[:x] = clear[:x]
+          formation[:y] = clear[:y]
+          slots = Geometry::Battlefield.sync_formation_slots_from_deployment(formation)
+          formation[:lane] = slots[:lane]
+          formation[:row] = slots[:row]
+        end
+      end
+
+      def bot_deploy_sort_key(entity)
+        Entities::Footprint.sync_entity!(entity)
+        formation = entity[:components][:formation]
+        area = -(formation[:width].to_f * formation[:depth].to_f)
+
+        if entity[:kind] == "hero"
+          return [ 0, 0, area ] if entity.dig(:components, :hero, :general)
+
+          return [ 1, 0, area ]
+        end
+
+        [ 2, 0, area ]
       end
     end
   end

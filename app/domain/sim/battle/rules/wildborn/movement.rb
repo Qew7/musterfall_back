@@ -1,0 +1,23 @@
+module Sim
+  module Battle
+    module Rules
+      module Wildborn
+        module Movement
+          module_function
+
+          def can_charge_through_terrain?(attacker, defender, terrain)
+            return false unless Array(attacker[:abilities]).include?("wildborn")
+
+            Geometry::Battlefield.in_forest?(defender, terrain)
+          end
+
+          def undaunted?(combatant, terrain: [])
+            return false unless Array(combatant[:abilities]).include?("wildborn")
+
+            Geometry::Battlefield.in_forest?(combatant, terrain)
+          end
+        end
+      end
+    end
+  end
+end

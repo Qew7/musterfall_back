@@ -45,6 +45,8 @@ module Sim
 
         names = removed.map { |feature| feature[:name].presence || feature[:type] }
         summary = names.size == 1 ? "С поля исчезает #{names.first}." : "С поля исчезает ландшафт заклинаний: #{names.join(', ')}."
+        delta = []
+        removed.each { |feature| TerrainDelta.append!(delta, :remove, feature) }
         record_expiry_action!(
           phase,
           sides,
@@ -52,7 +54,7 @@ module Sim
           details: removed.map do |feature|
             "terrain remove id=#{feature[:id]} type=#{feature[:type]} x=#{feature[:x]} y=#{feature[:y]} reason=expire"
           end,
-          terrain_delta: removed.map { |feature| { operation: "remove", feature: feature } },
+          terrain_delta: delta,
           rule_keys: [ "terrain" ],
           prepend: prepend
         )

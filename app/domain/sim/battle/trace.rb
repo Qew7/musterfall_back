@@ -3,11 +3,12 @@ module Sim
     module Trace
       VERSION = 1
       PHASE_RULE_KEYS = {
-        movement: %w[flying march],
-        melee: %w[charge ferocious steadfast skirmisher],
-        shooting: %w[breath volley blast machine steadfast skirmisher],
-        magic: %w[breath volley blast machine steadfast skirmisher],
-        morale: %w[undead fear disciplined muster]
+        movement: %w[flying march outrider forestborn wildborn throwRocks],
+        melee: %w[charge momentumCharge boarCharge ferocious supportRank shieldwall antiLarge armorPiercing dodge poison toxin runeArmor skirmisher forestkin],
+        shooting: %w[breath common volley blast line machine slingCatapult corpseTrail armorPiercing dodge toxin runeArmor forestborn skirmisher],
+        magic: %w[breath common volley blast line machine armorPiercing dodge toxin runeArmor skirmisher],
+        morale: %w[undead fear undaunted wildborn disciplined resolute muster],
+        round: %w[regen forestkin]
       }.freeze
 
       module_function

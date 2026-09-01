@@ -50,9 +50,9 @@ class SimBattleFootprintSyncTest < ActiveSupport::TestCase
   end
 
   test "shrink does not create overlap with a unit already at the front" do
-    warboss = {
+    war_chief = {
       entity_id: "hero-2",
-      name: "Варбосс",
+      name: "Вождь орды",
       x: 22.18,
       y: 16.44,
       facing: 237.0,
@@ -81,19 +81,19 @@ class SimBattleFootprintSyncTest < ActiveSupport::TestCase
       starting_models: 6
     }
 
-    refute BF.rectangles_overlap?(warboss, boars)
-    dist_before = BF.distance_between_units(warboss, boars)
+    refute BF.rectangles_overlap?(war_chief, boars)
+    dist_before = BF.distance_between_units(war_chief, boars)
 
     boars[:current_health] = 3
     Sim::Battle::State.sync_combatant_footprint!(boars)
 
-    refute BF.rectangles_overlap?(warboss, boars)
-    dist_after = BF.distance_between_units(warboss, boars)
+    refute BF.rectangles_overlap?(war_chief, boars)
+    dist_after = BF.distance_between_units(war_chief, boars)
     assert_in_delta dist_before, dist_after, 0.05
   end
 
   test "shrink while in melee does not reopen a charge gap" do
-    spawn = chaos_spawn
+    spawn = rift_mutant
     swords = imperial_swordsmen
     land_in_contact!(swords, spawn)
 
@@ -120,7 +120,7 @@ class SimBattleFootprintSyncTest < ActiveSupport::TestCase
   end
 
   test "multi-rank casualties in contact never reopen approach or melee_charge" do
-    spawn = chaos_spawn
+    spawn = rift_mutant
     swords = imperial_swordsmen
     land_in_contact!(swords, spawn)
     gap0 = BF.distance_between_units(swords, spawn)
@@ -229,7 +229,7 @@ class SimBattleFootprintSyncTest < ActiveSupport::TestCase
   end
 
   test "movement phase stays put after casualty shrink in contact" do
-    spawn = chaos_spawn
+    spawn = rift_mutant
     swords = imperial_swordsmen
     land_in_contact!(swords, spawn)
 
@@ -249,10 +249,10 @@ class SimBattleFootprintSyncTest < ActiveSupport::TestCase
 
   private
 
-  def chaos_spawn
+  def rift_mutant
     {
       entity_id: "spawn",
-      name: "Отродье Хаоса",
+      name: "Мутант разлома",
       x: 16,
       y: 12,
       facing: 180,

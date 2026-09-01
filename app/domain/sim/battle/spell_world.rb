@@ -5,7 +5,11 @@ module Sim
         "forest" => { width: 4.0, depth: 3.0, impassable: false, blocks_los: false, move_cost: 1.0 },
         "difficult" => { width: 3.0, depth: 3.0, impassable: false, blocks_los: false, move_cost: 2.0 },
         "mist" => { width: 4.0, depth: 3.0, impassable: false, blocks_los: true, move_cost: 1.0 },
-        "fire" => { width: 5.0, depth: 1.0, impassable: false, blocks_los: false, move_cost: 2.0, entry_damage: 1 }
+        "fire" => { width: 5.0, depth: 1.0, impassable: false, blocks_los: false, move_cost: 2.0, entry_damage: 1 },
+        "corpse_mire" => {
+          width: 3.0, depth: 3.0, impassable: false, blocks_los: false, move_cost: 1.0,
+          entry_damage: 2, damage_type: "magic", rule_key: "corpseTrail"
+        }
       }.freeze
 
       SUMMONS = {
@@ -13,16 +17,16 @@ module Sim
         "fey" => { name: "Феи", health: 4, models: 4, melee: 4, movement: 6, armor_type: "light", weapon_type: "puncture", abilities: %w[skirmisher] },
         "great_beast" => { name: "Великий зверь", health: 8, models: 1, melee: 7, movement: 7, armor_type: "medium", weapon_type: "blunt", abilities: %w[monster fear] },
         "spectral_hounds" => { name: "Призрачные псы", health: 6, models: 3, melee: 4, movement: 7, armor_type: "light", weapon_type: "puncture", abilities: %w[skirmisher] },
-        "zombies" => { name: "Поднятые мертвецы", health: 5, models: 5, melee: 2, movement: 3, armor_type: "light", weapon_type: "blunt", abilities: %w[undead steadfast] },
-        "skeletons" => { name: "Призванные скелеты", health: 6, models: 6, melee: 3, movement: 4, armor_type: "light", weapon_type: "slash", abilities: %w[undead steadfast] },
+        "zombies" => { name: "Поднятые мертвецы", health: 5, models: 5, melee: 2, movement: 3, armor_type: "light", weapon_type: "blunt", abilities: %w[undead resolute] },
+        "skeletons" => { name: "Призванные скелеты", health: 6, models: 6, melee: 3, movement: 4, armor_type: "light", weapon_type: "slash", abilities: %w[undead resolute] },
         "revenants" => { name: "Ревенанты", health: 6, models: 3, melee: 5, movement: 5, armor_type: "medium", weapon_type: "slash", abilities: %w[undead fear] },
         "goblins" => { name: "Туннельные гоблины", health: 5, models: 5, melee: 3, movement: 5, armor_type: "light", weapon_type: "puncture", abilities: %w[skirmisher] },
-        "chaos_spawn" => { name: "Отродье Хаоса", health: 8, models: 1, melee: 6, movement: 5, armor_type: "magic", weapon_type: "blunt", abilities: %w[monster fear] }
+        "rift_mutant" => { name: "Мутант разлома", health: 8, models: 1, melee: 6, movement: 5, armor_type: "magic", weapon_type: "blunt", abilities: %w[monster fear] }
       }.freeze
 
       module_function
 
-      def add_terrain!(terrain, type:, x:, y:, all_combatants:, **overrides)
+      def add_terrain!(terrain, type:, x:, y:, all_combatants:, allow_occupied: false, **overrides)
         defaults = TERRAIN_DEFAULTS.fetch(type.to_s, TERRAIN_DEFAULTS.fetch("difficult"))
         feature = defaults.merge(
           id: next_terrain_id(terrain),
@@ -30,7 +34,7 @@ module Sim
           x: x.to_f.round(3),
           y: y.to_f.round(3)
         ).merge(overrides)
-        return nil unless feature_clear?(feature, terrain, all_combatants)
+        return nil unless feature_clear?(feature, terrain, allow_occupied ? [] : all_combatants)
 
         terrain << feature
         feature

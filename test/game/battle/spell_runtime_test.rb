@@ -218,6 +218,74 @@ class SimBattleSpellRuntimeTest < ActiveSupport::TestCase
     assert_empty player[:roster]
   end
 
+  test "summons and teleports face the nearest enemy at destination" do
+    host = BattleScenarios.combatant(entity_id: "mage", x: 8.0, y: 12.0, spell: 10)
+    ally = BattleScenarios.combatant(entity_id: "ally", x: 12.0, y: 12.0)
+    enemy = BattleScenarios.enemy(entity_id: "enemy", x: 30.0, y: 12.0)
+    acting_side = { side_key: "left", combatants: [ host, ally ] }
+    target_side = { side_key: "right", combatants: [ enemy ] }
+    summon_context = Sim::Battle::SpellContext.new(
+      caster: host.merge(actor_id: "mage", spell_range: 24),
+      host: host,
+      acting_side: acting_side,
+      target_side: target_side,
+      terrain: [],
+      rng: Sim::Rng::Seeded.new(42),
+      round_number: 1,
+      spell: Sim::Battle::Spells::Necromancy::RaiseDead
+    )
+    summon_context.summon!(:zombies, near: { x: 16.0, y: 18.0 }, count: 5)
+    summoned = acting_side[:combatants].find { |entry| entry[:summoned] }
+    assert summoned
+    assert_in_delta Sim::Geometry::Battlefield.heading_to(summoned, enemy), summoned[:facing], 0.1
+
+    teleport_context = Sim::Battle::SpellContext.new(
+      caster: host.merge(actor_id: "mage", spell_range: 24),
+      host: host,
+      acting_side: acting_side,
+      target_side: target_side,
+      terrain: [],
+      rng: Sim::Rng::Seeded.new(42),
+      round_number: 1,
+      spell: Sim::Battle::Spells::Shadow::Shadowstep
+    )
+    teleport_context.teleport!(ally, to: teleport_context.destination_for(ally, profile: :flank))
+    assert_in_delta Sim::Geometry::Battlefield.heading_to(ally, enemy), ally[:facing], 0.1
+  end
+
+  test "enemy facing after teleport avoids impassable terrain" do
+    house = BattleScenarios.terrain(id: "house", x: 18.0, y: 12.0, width: 3.0, depth: 3.0, impassable: true)
+    host = BattleScenarios.combatant(entity_id: "mage", x: 8.0, y: 12.0)
+    ally = BattleScenarios.combatant(
+      entity_id: "ally",
+      x: 16.0,
+      y: 9.5,
+      facing: 90.0,
+      base_width: 4.0,
+      base_depth: 2.0
+    )
+    enemy = BattleScenarios.enemy(entity_id: "enemy", x: 30.0, y: 12.0)
+    acting_side = { side_key: "left", combatants: [ host, ally ] }
+    target_side = { side_key: "right", combatants: [ enemy ] }
+    context = Sim::Battle::SpellContext.new(
+      caster: host.merge(actor_id: "mage", spell_range: 24),
+      host: host,
+      acting_side: acting_side,
+      target_side: target_side,
+      terrain: [ house ],
+      rng: Sim::Rng::Seeded.new(1),
+      round_number: 1,
+      spell: Sim::Battle::Spells::Shadow::Shadowstep
+    )
+
+    context.teleport!(ally, to: { x: 16.0, y: 9.5, facing: 90.0 })
+    world = Sim::Battle::Pathing::Obstacles.around(ally, units: acting_side[:combatants] + target_side[:combatants], terrain: [ house ])
+    toward_enemy = Sim::Geometry::Battlefield.heading_to(ally, enemy)
+    assert world.clear?(ally)
+    refute world.clear?(ally.merge(facing: toward_enemy))
+    refute_in_delta toward_enemy, ally[:facing], 0.1
+  end
+
   test "melee buff prefers the ally nearer the enemy over a healthier rear ally" do
     host = BattleScenarios.combatant(
       entity_id: "mage",
@@ -534,7 +602,7 @@ class SimBattleSpellRuntimeTest < ActiveSupport::TestCase
         ranged: [
           {
             entity_id: "vampire",
-            name: "Лорд-вампир",
+            name: "Ночной лорд",
             kind: "hero",
             spell: 4,
             spell_range: 24,
@@ -551,7 +619,7 @@ class SimBattleSpellRuntimeTest < ActiveSupport::TestCase
       caster: host.merge(actor_id: "vampire", spell_range: 24),
       host: host,
       acting_side: acting_side,
-      target_side: { side_key: "left", combatants: [ BattleScenarios.combatant(entity_id: "marauders", x: 8.0, y: 18.0) ] },
+      target_side: { side_key: "left", combatants: [ BattleScenarios.combatant(entity_id: "reavers", x: 8.0, y: 18.0) ] },
       terrain: [],
       rng: Sim::Rng::Seeded.new(1),
       round_number: 1,

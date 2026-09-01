@@ -27,37 +27,36 @@ class SimBattleDamageTest < ActiveSupport::TestCase
     assert_operator Attack.damage(attacker, defender, "melee", "front", 1), :>=, 1
   end
 
-  test "charge boosts first-round melee only" do
-    attacker = { melee: 6, abilities: [ "charge" ], weapon_type: "slash" }
+  test "charge boosts only a strike made after actual charge movement" do
+    attacker = { melee: 6, abilities: [], weapon_type: "slash", charged_distance: 5 }
     defender = { armor_type: "medium", abilities: [] }
 
-    r1 = Attack.damage(attacker, defender, "melee", "front", 1)
-    r2 = Attack.damage(attacker, defender, "melee", "front", 2)
-    plain = Attack.damage(attacker.merge(abilities: []), defender, "melee", "front", 1)
+    charged = Attack.damage(attacker, defender, "melee", "front", 2)
+    standing = Attack.damage(attacker.except(:charged_distance), defender, "melee", "front", 2)
 
-    assert_operator r1, :>, r2
-    assert_equal r2, plain
+    assert_operator charged, :>, standing
+    assert_equal standing, Attack.damage(attacker.merge(charged_distance: 0), defender, "melee", "front", 2)
   end
 
-  test "ferocious boosts melee damage" do
+  test "ferocious no longer adds flat melee damage" do
     attacker = { melee: 6, abilities: [ "ferocious" ], weapon_type: "slash" }
     defender = { armor_type: "medium", abilities: [] }
 
     boosted = Attack.damage(attacker, defender, "melee", "front", 2)
     plain = Attack.damage(attacker.merge(abilities: []), defender, "melee", "front", 2)
 
-    assert_operator boosted, :>=, plain
+    assert_equal plain, boosted
   end
 
-  test "steadfast reduces frontal damage" do
+  test "resolute no longer reduces frontal damage" do
     attacker = { melee: 6, abilities: [], weapon_type: "slash" }
-    defender = { armor_type: "medium", abilities: [ "steadfast" ] }
+    defender = { armor_type: "medium", abilities: [ "resolute" ] }
 
     front = Attack.damage(attacker, defender, "melee", "front", 1)
     flank = Attack.damage(attacker, defender, "melee", "flank", 1)
     plain_front = Attack.damage(attacker, defender.merge(abilities: []), "melee", "front", 1)
 
-    assert_operator front, :<=, plain_front
+    assert_equal plain_front, front
     assert_operator flank, :>, front
   end
 

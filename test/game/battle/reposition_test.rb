@@ -79,48 +79,43 @@ class SimBattleRepositionTest < ActiveSupport::TestCase
     assert plan.any? { |entry| entry[:attack_type] == "shooting" && entry[:host_id] == "archer-1" }
   end
 
-  test "weak missile unit leaves charge arc of enemy melee when possible" do
-    archer = missile_host(
-      entity_id: "archer-1",
-      name: "Лучники",
-      x: 14,
-      y: 12,
-      facing: 90,
-      melee: 1,
-      ranged: 5,
-      spell: 0,
-      movement: 4,
-      side_index: 0
+  test "throw rocks unit closes on enemy when out of range" do
+    treeman = missile_host(
+      entity_id: "treeman",
+      name: "Древочеловек",
+      x: 8,
+      y: 14,
+      facing: 0,
+      melee: 6,
+      ranged: 2,
+      movement: 3,
+      shooting_range: 8,
+      abilities: [ "throwRocks", "ranged" ]
     )
     enemy = combatant(
       entity_id: "enemy-1",
-      name: "Рыцари",
-      x: 18,
-      y: 12,
+      name: "Мечники",
+      x: 31,
+      y: 14,
       facing: 180,
-      base_width: 2,
-      base_depth: 1,
-      melee: 8,
-      ranged: 0,
-      spell: 0,
-      movement: 4,
-      attacks: 2,
-      side_index: 1
+      side_index: 1,
+      melee: 4,
+      movement: 3
     )
 
-    acting_side = { player_id: "p1", combatants: [ archer ] }
+    acting_side = { player_id: "p1", combatants: [ treeman ] }
     target_side = { player_id: "p2", combatants: [ enemy ] }
+    before = Sim::Geometry::Battlefield.distance_between_units(treeman, enemy)
 
-    assert Sim::Battle::Decisions::Reposition.in_charge_danger?(archer, [ enemy ])
-
-    Sim::Battle::Phases::Movement.play(
+    phase = Sim::Battle::Phases::Movement.play(
       acting_side: acting_side,
       target_side: target_side,
       round_number: 1
     )
 
-    refute Sim::Battle::Decisions::Reposition.in_charge_danger?(archer, [ enemy ]),
-           "archer still in charge arc at (#{archer[:x]}, #{archer[:y]})"
+    after = Sim::Geometry::Battlefield.distance_between_units(treeman, enemy)
+    assert after < before - 0.05, "expected treeman to close; before=#{before} after=#{after}"
+    assert phase[:actions].any? { |entry| entry[:actor_id] == "treeman" && entry[:type] == "movement" }
   end
 
   test "archer leaves enemy shooting arc when threatened and has no shot" do
@@ -181,6 +176,124 @@ class SimBattleRepositionTest < ActiveSupport::TestCase
 
     refute Sim::Geometry::Battlefield.in_front_arc?(enemy_shooter, archer, enemy_shooter[:facing]),
            "expected to leave shooting arc; pose=(#{archer[:x]}, #{archer[:y]})"
+  end
+
+  test "archer out of range advances toward enemy instead of holding" do
+    archer = missile_host(
+      entity_id: "archer-1",
+      name: "Лучники",
+      x: 2,
+      y: 12,
+      facing: 0,
+      melee: 1,
+      ranged: 4,
+      spell: 0,
+      movement: 4,
+      shooting_range: 9,
+      side_index: 0,
+      row: "rear",
+      lane: "right"
+    )
+    target = combatant(
+      entity_id: "enemy-1",
+      name: "Орки",
+      x: 28,
+      y: 12,
+      facing: 180,
+      melee: 2,
+      ranged: 0,
+      spell: 0,
+      movement: 2,
+      side_index: 1
+    )
+
+    acting_side = { player_id: "p1", combatants: [ archer ] }
+    target_side = { player_id: "p2", combatants: [ target ] }
+    all = acting_side[:combatants] + target_side[:combatants]
+    start_x = archer[:x]
+
+    refute Sim::Battle::Decisions::Reposition.cheap_opens_shot?(
+      archer, [ target ], all,
+      acting_side: acting_side, target_side: target_side, round_number: 1
+    )
+
+    Sim::Battle::Phases::Movement.play(
+      acting_side: acting_side,
+      target_side: target_side,
+      round_number: 1
+    )
+
+    assert archer[:x] > start_x + 0.5, "expected archer to advance; pose=(#{archer[:x]}, #{archer[:y]})"
+    assert archer[:x] < start_x + archer[:movement] + 0.5,
+           "advance should respect MV budget, not teleport"
+  end
+
+  test "waiting reposition seeker still blocks subsequent ally seekers" do
+    contact = Sim::Battle::Pathing::CONTACT
+    front = treeman_seeker(entity_id: "front", x: 7, y: 8, initiative: 10, row: "front")
+    rear = treeman_seeker(
+      entity_id: "rear",
+      x: 6.39,
+      y: 12.27,
+      facing: 350.85,
+      initiative: 4,
+      row: "rear"
+    )
+    enemy_unit = combatant(
+      entity_id: "enemy-1",
+      name: "Двойник",
+      x: 12,
+      y: 4,
+      facing: 180,
+      side_index: 1,
+      movement: 4,
+      melee: 8
+    )
+
+    acting_side = { player_id: "p1", combatants: [ front, rear ] }
+    target_side = { player_id: "p2", combatants: [ enemy_unit ] }
+    seeker_ids = acting_side[:combatants].map { |entry| entry[:entity_id] }.to_set
+    open_obstacles = Sim::Battle::Phases::Movement.send(
+      :movement_obstacles, acting_side, target_side, seeker_ids, []
+    )
+
+    refute_includes open_obstacles.map { |entry| entry[:entity_id] }, front[:entity_id],
+                    "seekers are excluded from initial reposition obstacles"
+
+    closed_obstacles = open_obstacles.reject { |entry| entry[:entity_id] == front[:entity_id] }
+    closed_obstacles << Sim::Battle::Phases::Movement.send(:freeze_obstacle, front)
+
+    without_guard = Sim::Battle::Decisions::Reposition.build_intent(
+      combatant: Marshal.load(Marshal.dump(rear)),
+      acting_side: acting_side,
+      target_side: target_side,
+      obstacles: open_obstacles,
+      round_number: 6,
+      terrain: []
+    )
+    assert without_guard, "expected rear to find a plan when front tray is omitted from obstacles"
+
+    without_dist = Sim::Geometry::Battlefield.distance_between_units(
+      rear.merge(without_guard[:destination]), front
+    )
+    assert_operator without_dist, :<, contact,
+                    "sanity: omitted guard lets rear plan stack on front; dist=#{without_dist.round(3)}"
+
+    with_guard = Sim::Battle::Decisions::Reposition.build_intent(
+      combatant: Marshal.load(Marshal.dump(rear)),
+      acting_side: acting_side,
+      target_side: target_side,
+      obstacles: closed_obstacles,
+      round_number: 6,
+      terrain: []
+    )
+    if with_guard
+      with_dist = Sim::Geometry::Battlefield.distance_between_units(
+        rear.merge(with_guard[:destination]), front
+      )
+      assert_operator with_dist, :>=, contact,
+                      "waiting front must block later seeker; dist=#{with_dist.round(3)}"
+    end
   end
 
   test "reposition does not permanently block ally LoS when an open lane exists" do
@@ -280,6 +393,30 @@ class SimBattleRepositionTest < ActiveSupport::TestCase
       abilities: [],
       contributors: { melee: [], ranged: [] }
     }.merge(overrides)
+  end
+
+  def treeman_seeker(**overrides)
+    missile_host(
+      entity_id: "treeman",
+      name: "Древочеловек",
+      base_width: 6,
+      base_depth: 2,
+      model_width: 2,
+      model_depth: 2,
+      files: 3,
+      ranks: 1,
+      frontage: 3,
+      max_files: 5,
+      models_remaining: 3,
+      starting_models: 3,
+      current_health: 12,
+      max_health: 12,
+      model_health: 4,
+      shooting_range: 8,
+      movement: 3,
+      ranged: 2,
+      abilities: %w[throwRocks ranged]
+    ).merge(overrides)
   end
 
   def missile_host(**overrides)

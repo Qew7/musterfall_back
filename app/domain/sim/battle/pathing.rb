@@ -4,6 +4,8 @@ module Sim
       CONTACT = Geometry::Battlefield::CONFIG[:melee_contact_tolerance]
       CONTACT_SNAP = Geometry::Battlefield::CONFIG[:contact_snap]
       ENGAGE = CONTACT + CONTACT_SNAP
+      # Clearance around impassable terrain: wrap vertices and collision queries share one pad.
+      TERRAIN_WRAP_PAD = 0.35
       ALIGNED_MARCH_DOT = 0.999
       ObstacleKernel = Struct.new(:id, :x, :y, :hw, :hd, :c, :s, :radius, :source)
 
@@ -94,15 +96,16 @@ module Sim
 
       # Run toward an edge (or preferred flee heading). Face the run direction.
       # Never orbit/slide around blockers — stop short or pick another straight edge.
-      def plan_retreat(origin:, distance:, obstacles:, ally_ids: nil, preferred_heading: nil)
+      def plan_retreat(origin:, distance:, obstacles:, ally_ids: nil, preferred_heading: nil, contact_exempt_ids: nil)
         ally_id_list = Array(ally_ids).compact
+        exempt_ids = Array(contact_exempt_ids).compact
         edges = ordered_edges(origin)
         candidates = []
         world = Obstacles.coerce(obstacles)
         kernels = world.kernels
 
         if preferred_heading
-          preferred = simulate_retreat(origin, preferred_heading, distance, world, kernels: kernels)
+          preferred = simulate_retreat(origin, preferred_heading, distance, world, kernels: kernels, contact_exempt_ids: exempt_ids)
           candidates << preferred.merge(
             edge: "away",
             avoided: false,
@@ -112,7 +115,7 @@ module Sim
         end
 
         edges.each do |edge|
-          plan = simulate_retreat(origin, edge[:heading], distance, obstacles, kernels: kernels)
+          plan = simulate_retreat(origin, edge[:heading], distance, obstacles, kernels: kernels, contact_exempt_ids: exempt_ids)
           next unless plan[:pose]
 
           candidates << plan.merge(
@@ -190,16 +193,19 @@ module Sim
         Geometry::Battlefield.move_along_facing(wheeled, remaining)
       end
 
-      def simulate_retreat(origin, heading, distance, obstacles, kernels: nil)
+      def simulate_retreat(origin, heading, distance, obstacles, kernels: nil, contact_exempt_ids: nil)
         world = Obstacles.coerce(obstacles, kernels)
         kernels = world.kernels
+        exempt_ids = Array(contact_exempt_ids).compact
+        turn_check = exempt_ids.any? ? world.except(*exempt_ids) : world
         # March along heading and face that way — no crab-walk with a mismatched footprint.
         run_facing = Geometry::Battlefield.normalize_facing(heading)
         desired = Geometry::Battlefield.move_along_facing(origin.merge(facing: run_facing), distance)
         steps = [ 8, (Geometry::Battlefield.distance_between(origin, desired) / 0.25).ceil ].max
-        # Face the run immediately (free about-face). Start may already be in contact after melee;
-        # only stepped poses are collision-tested so the unit can still peel away.
-        last_clear = origin.merge(x: origin[:x].to_f, y: origin[:y].to_f, facing: run_facing)
+        # Free about-face only when the turned tray is clear (engaged targets exempt so melee can peel).
+        last_clear = origin.merge(x: origin[:x].to_f, y: origin[:y].to_f, facing: origin[:facing].to_f)
+        turned = last_clear.merge(facing: run_facing)
+        last_clear = turned if turn_check.clear?(turned)
         blocker = nil
         steps.times do |index|
           t = (index + 1).to_f / steps

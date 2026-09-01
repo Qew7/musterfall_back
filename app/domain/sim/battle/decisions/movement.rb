@@ -92,12 +92,7 @@ module Sim
           ([ geo ] + %w[front flank rear]).uniq.find { |side| !taken.key?(side) }
         end
 
-        def approach_mode_for(side, combatant, enemy)
-          geo = Geometry::Battlefield.classify_attack_vector(combatant, enemy)
-          return :direct if side == geo
-          return :orbit_flank if side == "flank"
-          return :wrap_rear if side == "rear"
-
+        def approach_mode_for(_side, _combatant, _enemy)
           :direct
         end
 

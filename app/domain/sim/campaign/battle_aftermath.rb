@@ -1,6 +1,6 @@
 module Sim
   module Campaign
-    # Apply post-battle roster mutations: casualty rolls + keep survivors for restore.
+    # Apply post-battle roster mutations: casualty rolls + auto-restore non-permanent losses.
     module BattleAftermath
       module_function
 
@@ -50,21 +50,31 @@ module Sim
         model_health = health[:model_health].to_i
         return if model_health <= 0
 
-        old_permanent = health[:permanent_losses].to_i
-        new_permanent = old_permanent + permanent
-        template_models = entity[:components][:formation][:models].to_i + old_permanent
-        max_models = [ template_models - new_permanent, 0 ].max
-
-        health[:permanent_losses] = new_permanent
+        max_models = entity[:components][:formation][:models].to_i
         health[:max] = max_models * model_health
-        entity[:components][:formation][:models] = max_models
 
-        current_models = [ remaining, max_models ].min
+        if entity[:kind] == "hero"
+          apply_hero_aftermath!(player, entity, remaining:, permanent:, model_health:)
+          return
+        end
+
+        current_models = remaining + (lost - permanent)
         entity[:state][:current_health] = current_models * model_health
         entity[:state][:is_routing] = false
         Entities::Footprint.sync_entity!(entity)
 
-        player[:roster].delete(entity) if max_models <= 0
+        player[:roster].delete(entity) if current_models <= 0
+      end
+
+      def apply_hero_aftermath!(player, entity, remaining:, permanent:, model_health:)
+        if remaining <= 0 && permanent.positive?
+          player[:roster].delete(entity)
+          return
+        end
+
+        entity[:state][:current_health] = remaining * model_health
+        entity[:state][:is_routing] = false
+        Entities::Footprint.sync_entity!(entity)
       end
 
       def general?(entity)

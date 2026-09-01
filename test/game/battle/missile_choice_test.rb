@@ -25,8 +25,16 @@ class SimBattleMissileChoiceTest < ActiveSupport::TestCase
 
     choice = Sim::Battle::Decisions::MissileChoice.choose_action(actor, enemies, enemies, 1)
 
-    refute_equal "magic", choice&.dig(:attack_type)
-    assert_equal "shooting", choice[:attack_type]
+    assert_nil choice
+  end
+
+  test "shooting beyond shooting_range is not chosen" do
+    actor = missile_actor(ranged: 5, spell: 0, skill: 4, weapon_type: "ranged")
+    enemies = [ enemy(armor_type: "light", models_remaining: 10, x: 30) ]
+
+    choice = Sim::Battle::Decisions::MissileChoice.choose_action(actor, enemies, enemies, 1)
+
+    assert_nil choice
   end
 
   test "prefers magic when expected damage is higher" do
@@ -47,7 +55,7 @@ class SimBattleMissileChoiceTest < ActiveSupport::TestCase
       abilities: [ "machine" ],
       shooting_template: "blast"
     )
-    enemies = [ enemy(armor_type: "machine", models_remaining: 2, current_health: 8, max_health: 8) ]
+    enemies = [ enemy(armor_type: "machine", models_remaining: 1, current_health: 8, max_health: 8) ]
 
     choice = Sim::Battle::Decisions::MissileChoice.choose_action(actor, enemies, enemies, 1)
 

@@ -32,13 +32,21 @@ module Sim
             rng: rng,
             terrain: terrain
           )
-          Morale.resolve_post_melee!(
+          result = Morale.resolve_post_melee!(
             phase: phase,
             acting_side: acting_side,
             target_side: target_side,
             round_number: round_number,
             terrain: terrain
           )
+          Rules.for(:melee).after_play!(
+            phase: result,
+            acting_side: acting_side,
+            target_side: target_side,
+            round_number: round_number,
+            terrain: terrain
+          )
+          result
         end
       end
     end

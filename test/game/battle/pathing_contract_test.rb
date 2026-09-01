@@ -130,7 +130,7 @@ class SimBattlePathingContractTest < ActiveSupport::TestCase
       entity_id: "boars", x: 8.0, y: 12.0, facing: 0.0, base_width: 3.0, base_depth: 3.0, side_index: 0
     )
     ally = BattleScenarios.combatant(
-      entity_id: "boyz", x: 14.0, y: 12.0, facing: 0.0, base_width: 4.0, base_depth: 4.0, side_index: 0
+      entity_id: "brutes", x: 14.0, y: 12.0, facing: 0.0, base_width: 4.0, base_depth: 4.0, side_index: 0
     )
     enemy = BattleScenarios.enemy(x: 22.0, y: 12.0, facing: 180.0, base_width: 2.0, base_depth: 2.0)
     plan = Pathing.plan_approach(

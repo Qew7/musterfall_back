@@ -1,9 +1,9 @@
 class ArmyTemplate < ApplicationRecord
-  # `attacks` — только ближний бой. Для стрельбы/магии — `missile_attacks` (по умолчанию 1).
+  # `attacks` — только ближний бой. `missile_attacks` — залпы (volley/single) или выстрелы на модель (common).
   validates :attacks, :missile_attacks, numericality: { greater_than: 0 }
   KINDS = %w[unit hero].freeze
   RECRUIT_TIERS = %w[line elite rare].freeze
-  ATTACK_TEMPLATES = %w[single volley blast breath].freeze
+  ATTACK_TEMPLATES = %w[single common volley blast breath line].freeze
   MAX_FORMATION_FILES = 5
   MODEL_CLASSES = {
     "infantry" => { width: 1, depth: 1 },

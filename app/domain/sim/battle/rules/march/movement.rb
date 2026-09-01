@@ -8,7 +8,7 @@ module Sim
 
           def applies?(combatant)
             abilities = Array(combatant[:abilities])
-            !abilities.include?("flying") && !abilities.include?("machine")
+            !abilities.include?("flying") && !abilities.include?("machine") && !abilities.include?("undead")
           end
 
           def movement_multiplier(_combatant, _ctx)

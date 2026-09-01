@@ -1,203 +1,164 @@
 require "test_helper"
 
 class SimBattleActionResultTest < ActiveSupport::TestCase
-  test "spell that lowers MV reports the characteristic change" do
-    swordsmen = snapshot(entity_id: "swords", name: "Мечники", movement: 4)
-    text = Sim::Battle::ActionResult.text_for(
-      actor: { actor_role: "hero", actor_name: "Чародей Хаоса" },
-      action: Sim::Battle::Spells::Shadow::Miasma,
-      before: [ swordsmen ],
-      after: [ swordsmen.merge(movement: 3) ]
-    )
-
-    assert_equal "Герой Чародей Хаоса окутывает Мечники миазмой: у Мечники MV уменьшился с 4 до 3.", text
-  end
-
-  test "buff on several allies reports each SK change" do
-    first = snapshot(entity_id: "a", name: "Отряд 1", skill: 2)
-    second = snapshot(entity_id: "b", name: "Отряд 2", skill: 3)
-    text = Sim::Battle::ActionResult.text_for(
-      actor: { actor_role: "hero", actor_name: "Заклинательница" },
-      action: Sim::Battle::Spells::Celestial::Foresight,
-      before: [ first, second ],
-      after: [ first.merge(skill: 3), second.merge(skill: 4) ]
-    )
-
-    assert_equal "Герой Заклинательница дарует цели предвидение: у Отряд 1 SK увеличился с 2 до 3; у Отряд 2 SK увеличился с 3 до 4.", text
-  end
-
-  test "melee strike names weapon, armor, damage and remaining models" do
-    marauders = snapshot(
-      entity_id: "marauders",
-      name: "Мародёры Хаоса",
-      armor_type: "light",
-      current_health: 10,
-      models_remaining: 10
-    )
-    text = Sim::Battle::ActionResult.text_for(
-      actor: { actor_role: "unit", actor_name: "Воины Хаоса", weapon_type: "slash" },
+  test "strike summary appends rule clauses after after-hit effects" do
+    before = {
+      entity_id: "swords", name: "Мечники", armor_type: "medium",
+      current_health: 8, models_remaining: 8, skill: 4, melee: 5
+    }
+    after = before.merge(current_health: 4, models_remaining: 4, skill: 3, melee: 4)
+    line = Sim::Battle::ActionResult.text_for(
+      actor: { actor_name: "Генерал", actor_role: "hero", weapon_type: "slash" },
       action: { type: "melee" },
-      before: [ marauders ],
-      after: [ marauders.merge(current_health: 7, models_remaining: 7) ],
+      before: [ before ],
+      after: [ after ],
+      damage: 4,
+      vector: "front",
+      clauses: [ "токсин снижает SK и ML цели на 1 до конца боя" ]
+    )
+
+    assert_match(/Герой Генерал наносит Мечники/, line)
+    assert_match(/4 урона/, line)
+    assert_match(/осталось 4 моделей/, line)
+    assert_match(/токсин снижает SK и ML цели на 1 до конца боя/, line)
+  end
+
+  test "strike summary includes attack roll when not all attacks land" do
+    before = {
+      entity_id: "spears", name: "Копейщики", armor_type: "medium",
+      current_health: 10, models_remaining: 10, skill: 3, melee: 4
+    }
+    after = before.merge(current_health: 7, models_remaining: 7)
+    line = Sim::Battle::ActionResult.text_for(
+      actor: { actor_name: "Копейщики", actor_role: "unit", weapon_type: "puncture" },
+      action: { type: "melee" },
+      before: [ before ],
+      after: [ after ],
       damage: 3,
+      vector: "front",
+      hits_landed: 2,
+      attacks_attempted: 3
+    )
+
+    assert_match(/попало 2 из 3 атак/, line)
+    assert_match(/3 урона/, line)
+  end
+
+  test "strike summary includes attack roll for a clean single hit" do
+    before = {
+      entity_id: "spears", name: "Копейщики", armor_type: "medium",
+      current_health: 10, models_remaining: 10
+    }
+    after = before.merge(current_health: 9, models_remaining: 9)
+    line = Sim::Battle::ActionResult.text_for(
+      actor: { actor_name: "Копейщики", actor_role: "unit", weapon_type: "puncture" },
+      action: { type: "melee" },
+      before: [ before ],
+      after: [ after ],
+      damage: 1,
+      vector: "front",
+      hits_landed: 1,
+      attacks_attempted: 1
+    )
+
+    assert_match(/попало 1 из 1 атак/, line)
+  end
+
+  test "miss roll text reports zero hits from attempted attacks" do
+    line = Sim::Battle::ActionResult.miss_roll_text(
+      actor: { actor_name: "Лучники", actor_role: "unit" },
+      target_name: "Орки",
+      hits_landed: 0,
+      attacks_attempted: 2
+    )
+
+    assert_equal "Отряд Лучники атакует Орки: попало 0 из 2 атак.", line
+  end
+
+  test "strike summary shows total damage from health delta and model health for multi-wound units" do
+    before = {
+      entity_id: "cannon", name: "Пушка", armor_type: "machine",
+      current_health: 8, max_health: 8, model_health: 8, models_remaining: 1
+    }
+    after = before.merge(current_health: 5, models_remaining: 1)
+    line = Sim::Battle::ActionResult.text_for(
+      actor: { actor_name: "Генерал", actor_role: "hero", weapon_type: "demolish" },
+      action: { type: "shooting" },
+      before: [ before ],
+      after: [ after ],
+      damage: 1,
       vector: "front"
     )
 
+    assert_match(/3 урона/, line)
+    assert_match(/осталось 1 моделей, здоровье 5\/8/, line)
+  end
+
+  test "remaining models text shows per-model health when one model is left" do
+    state = {
+      models_remaining: 1,
+      model_health: 4,
+      current_health: 3,
+      max_health: 8
+    }
+
     assert_equal(
-      "Отряд Воины Хаоса наносит Мародёры Хаоса рубящим оружием по лёгкой броне (фронт): 3 урона, осталось 7 моделей.",
-      text
+      "осталось 1 моделей, здоровье 3/4",
+      Sim::Battle::ActionResult.send(:new, actor: {}, action: {}, before: [], after: [], meta: {}).send(:remaining_models_text, state)
     )
   end
 
-  test "successful miasma writes the MV drop into the battlefield log" do
-    host = BattleScenarios.combatant(entity_id: "mage", name: "Чародей Хаоса", x: 8.0, y: 12.0, spell: 10)
-    enemy = BattleScenarios.enemy(entity_id: "swords", name: "Мечники", x: 20.0, y: 12.0, movement: 4.0)
-    caster = host.merge(
-      actor_id: "mage",
-      actor_name: "Чародей Хаоса",
-      actor_role: "hero",
-      spell: 10,
-      spell_range: 24,
-      magic_school: "shadow"
-    )
-    phase = Sim::Battle::Phases::AttackResolution.create_phase("magic", "Фаза магии")
-
-    Sim::Battle::SpellCasting.resolve_choice!(
-      phase: phase,
-      choice: { spell: Sim::Battle::Spells::Shadow::Miasma, target: enemy },
-      caster: caster,
-      host: host,
-      acting_side: { side_key: "left", combatants: [ host ] },
-      target_side: { side_key: "right", combatants: [ enemy ] },
-      round_number: 1,
-      rng: high_cast_rng,
-      terrain: []
+  test "toxin after_hit writes a clause instead of a side event" do
+    attacker = combatant(abilities: [ "toxin" ])
+    defender = combatant(side_index: 1, skill: 4, melee: 5)
+    phase = Sim::Battle::Phases::AttackResolution.create_phase("melee", "Фаза боя")
+    action = { details: [] }
+    Sim::Battle::Rules::Toxin::Melee.after_hit!(
+      phase: phase, attacker: attacker, defender: defender, action: action
     )
 
-    summary = phase[:actions].last[:summary]
-    assert_match(/Чародей Хаоса/, summary)
-    assert_match(/у Мечники MV уменьшился с 4 до 2/, summary)
-    assert_equal 2.0, enemy[:movement]
+    assert_empty phase[:events]
+    assert_match(/токсин/, action[:clauses].join)
+    assert_includes action[:details].join, "toxin"
   end
 
-  test "melee resolution logs weapon versus armor and remaining models" do
-    warriors = BattleScenarios.combatant(
-      entity_id: "warriors",
-      name: "Воины Хаоса",
-      x: 10.0,
-      y: 12.0,
-      facing: 0,
-      weapon_type: "slash",
-      attacks: 1,
-      skill: 6,
-      contributors: {
-        melee: [ { entity_id: "warriors", name: "Воины Хаоса", kind: "unit", power: 4, weapon_type: "slash" } ],
-        ranged: []
-      }
-    )
-    marauders = BattleScenarios.enemy(
-      entity_id: "marauders",
-      name: "Мародёры Хаоса",
-      x: 12.2,
-      y: 12.0,
-      facing: 180,
-      armor_type: "light",
-      current_health: 8,
-      max_health: 8,
-      models_remaining: 8,
-      skill: 1
-    )
-    phase = Sim::Battle::Phases::AttackResolution.create_phase("melee", "Ближний бой")
-    rng = Object.new
-    def rng.rand(_max = nil) = 0.0
-
-    Sim::Battle::Phases::AttackResolution.resolve_melee_strike!(
-      phase: phase,
-      attacker: warriors,
-      target: marauders,
-      vector: "front",
-      acting_side: { side_key: "left", combatants: [ warriors ] },
-      target_side: { side_key: "right", combatants: [ marauders ] },
-      round_number: 1,
-      rng: rng
+  test "movement summary lists maneuvers in order without coordinates" do
+    line = Sim::Battle::ActionResult.movement_summary(
+      actor: { actor_name: "Скелетный блок", actor_role: "unit" },
+      motions: [
+        { kind: "turn" },
+        { kind: "advance" },
+        { kind: "wheel" },
+        { kind: "advance" }
+      ],
+      target_name: "Катапульта-камикадзе",
+      note: ", обходит Гоблины-лучники"
     )
 
-    summary = phase[:actions].first[:summary]
-    assert_match(/Воины Хаоса/, summary)
-    assert_match(/рубящим оружием по лёгкой броне/, summary)
-    assert_match(/осталось #{marauders[:models_remaining]} моделей/, summary)
-    assert marauders[:current_health] < 8
+    assert_equal "Отряд Скелетный блок совершил поворот, затем продвижение, затем колесо, затем продвижение к Катапульта-камикадзе, обходит Гоблины-лучники.", line
   end
 
-  test "spell cast line includes roll, damage and target changes" do
-    fireball = Sim::Battle::Spells.fetch(:fireball)
-    cast = Sim::Battle::ActionResult.text_for(
-      actor: { actor_role: "hero", actor_name: "Боевой маг" },
-      action: fireball,
-      target_label: "Мечники",
-      outcome: "success",
-      dice: [ 4, 5 ],
-      spell_power: 5,
-      casting_total: 14,
-      casting_value: 8,
-      damage: 3
+  test "movement summary uses hero label" do
+    line = Sim::Battle::ActionResult.movement_summary(
+      actor: { actor_name: "Шаман", actor_role: "hero" },
+      motions: [ { kind: "wheel" }, { kind: "march" } ],
+      target_name: "Орки"
     )
-    assert_equal "Герой Боевой маг швыряет огненный шар в Мечники: успех (4+5+5=14 против 8), 3 урона.", cast
 
-    failed = Sim::Battle::ActionResult.text_for(
-      actor: { actor_role: "hero", actor_name: "Боевой маг" },
-      action: fireball,
-      target_label: "Мечники",
-      outcome: "failed",
-      dice: [ 1, 2 ],
-      spell_power: 5,
-      casting_total: 8,
-      casting_value: 10
-    )
-    assert_match(/провал \(1\+2\+5=8 против 10\)/, failed)
-
-    delayed = Sim::Battle::ActionResult.text_for(
-      action: Sim::Battle::Spells.fetch(:comet),
-      target_label: "поле боя",
-      outcome: "delayed",
-      damage: 6
-    )
-    assert_equal "Комета обрушивается на поле боя: 6 урона.", delayed
-
-    bolt = Sim::Battle::ActionResult.text_for(
-      actor: { actor_role: "hero", actor_name: "Боевой маг" },
-      action: { type: "magic", magic_school: "pyromancy" },
-      target_name: "Мечники",
-      vector: "flank",
-      damage: 3
-    )
-    assert_match(/Герой Боевой маг направляет силу школы «Пиромантия» на Мечники \(фланг\): 3 урона\./, bolt)
+    assert_equal "Герой Шаман совершил колесо, затем марш к Орки.", line
   end
 
   private
 
-  def snapshot(**overrides)
+  def combatant(**overrides)
     {
-      entity_id: "u",
-      name: "Отряд",
-      movement: 4,
+      entity_id: "unit-1",
+      name: "Unit",
+      kind: "unit",
       skill: 3,
       melee: 4,
-      ranged: 0,
-      morale: 6,
-      spell: 0,
-      current_health: 8,
-      models_remaining: 8,
-      armor_type: "medium",
-      weapon_type: "slash"
+      abilities: [],
+      contributors: { melee: [] }
     }.merge(overrides)
-  end
-
-  def high_cast_rng
-    rng = Object.new
-    def rng.rand(max = nil)
-      max ? [ max.to_i - 1, 0 ].max : 0.5
-    end
-    rng
   end
 end

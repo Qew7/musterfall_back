@@ -378,6 +378,73 @@ class SimBattleMoraleTest < ActiveSupport::TestCase
     assert_includes action[:details].join(" "), "avoided=false"
   end
 
+  test "breaking morale does not turn in place onto a neighboring ally" do
+    combatant = {
+      entity_id: "u1",
+      name: "Копейщики",
+      kind: "unit",
+      morale: 1,
+      abilities: [],
+      x: 11.0,
+      y: 9.5,
+      facing: 45,
+      movement: 4,
+      current_health: 8,
+      max_health: 8,
+      model_health: 1,
+      models_remaining: 8,
+      starting_models: 8,
+      is_routing: false,
+      side_index: 0,
+      base_width: 2,
+      base_depth: 4,
+      model_width: 1,
+      model_depth: 1,
+      frontage: 2,
+      max_files: 2,
+      files: 2,
+      ranks: 4
+    }
+    ally = {
+      entity_id: "ally-1",
+      name: "Союзник",
+      current_health: 8,
+      x: 8.0,
+      y: 12.0,
+      facing: 0,
+      side_index: 0,
+      base_width: 4,
+      base_depth: 4,
+      is_routing: false,
+      abilities: []
+    }
+    enemy = {
+      entity_id: "e1",
+      current_health: 8,
+      x: 22.0,
+      y: 12.0,
+      facing: 0,
+      is_routing: false,
+      abilities: [],
+      base_width: 4,
+      base_depth: 4
+    }
+
+    action = Sim::Battle::Phases::Morale.resolve_action(
+      combatant: combatant,
+      allies: [ combatant, ally ],
+      enemies: [ enemy ],
+      round_number: 1,
+      phase_type: "melee",
+      combat_score_delta: 20,
+      sequence: 0,
+      engaged_enemies: [ enemy ]
+    )
+
+    assert combatant[:is_routing]
+    refute Sim::Geometry::Battlefield.rectangles_overlap?(combatant, ally)
+  end
+
   test "disciplined raises morale threshold" do
     combatant = { entity_id: "u1", name: "Spearmen", kind: "unit", morale: 6, abilities: [ "disciplined" ], x: 5, y: 5 }
     plain = { entity_id: "u2", name: "Rabble", kind: "unit", morale: 6, abilities: [], x: 5, y: 5 }
@@ -391,7 +458,7 @@ class SimBattleMoraleTest < ActiveSupport::TestCase
     assert_equal plain_check[:threshold] + 1, check[:threshold]
   end
 
-  test "undead lose health instead of fleeing on morale failure" do
+  test "non-hero undead crumble instead of fleeing on morale failure" do
     combatant = {
       entity_id: "skel",
       name: "Скелеты",
@@ -429,9 +496,69 @@ class SimBattleMoraleTest < ActiveSupport::TestCase
     )
 
     refute combatant[:is_routing]
+    assert_equal 8, action[:damage]
+    assert_equal 0, combatant[:current_health]
+    assert_match(/рассыпается/, action[:summary])
+  end
+
+  test "undead hero loses failure margin instead of crumbling" do
+    hero = {
+      entity_id: "king",
+      name: "Король курганов",
+      kind: "hero",
+      morale: 1,
+      abilities: [ "undead" ],
+      x: 10,
+      y: 12,
+      facing: 0,
+      movement: 4,
+      current_health: 8,
+      max_health: 8,
+      model_health: 8,
+      models_remaining: 1,
+      starting_models: 1,
+      is_routing: false,
+      base_width: 1,
+      base_depth: 1,
+      model_width: 1,
+      model_depth: 1,
+      frontage: 1,
+      max_files: 1,
+      files: 1,
+      ranks: 1
+    }
+
+    action = Sim::Battle::Phases::Morale.resolve_action(
+      combatant: hero,
+      allies: [ hero ],
+      enemies: [ { abilities: [ "fear" ], x: 12, y: 12, current_health: 4 } ],
+      round_number: 1,
+      phase_type: "melee",
+      combat_score_delta: 20,
+      sequence: 0
+    )
+
+    refute hero[:is_routing]
     assert_operator action[:damage], :>, 0
-    assert_operator combatant[:current_health], :<, 8
-    assert_match(/здоровья вместо бегства/, action[:summary])
+    assert_operator hero[:current_health], :>, 0
+    assert_operator hero[:current_health], :<, 8
+    assert_match(/вместо бегства/, action[:summary])
+  end
+
+  test "resolute raises a losing melee morale threshold by two" do
+    resolute = { entity_id: "u1", name: "Guard", kind: "unit", morale: 6, abilities: [ "resolute" ], x: 5, y: 5 }
+    plain = resolute.merge(entity_id: "u2", abilities: [])
+
+    check = Sim::Battle::Phases::Morale.resolve_check(
+      combatant: resolute, allies: [ resolute ], enemies: [], round_number: 1,
+      phase_type: "melee", combat_score_delta: 2, sequence: 0
+    )
+    plain_check = Sim::Battle::Phases::Morale.resolve_check(
+      combatant: plain, allies: [ plain ], enemies: [], round_number: 1,
+      phase_type: "melee", combat_score_delta: 2, sequence: 0
+    )
+
+    assert_equal plain_check[:threshold] + 2, check[:threshold]
   end
 
   test "muster lets nearby unit use hero morale" do

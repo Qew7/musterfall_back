@@ -72,6 +72,8 @@ module Games
           Sim::Persistence::BattleWriter.persist!(@game, battle, round_number: plan_payload[:campaign].round)
         end
 
+        finished.each { |matchup| Balance::Record.from_matchup!(matchup) }
+
         persist_snapshot!(next_campaign, "post_round")
         @game.update!(status: next_campaign.winner_id ? "finished" : "active")
         @game.reload

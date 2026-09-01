@@ -62,8 +62,8 @@ class ApiGameCommandsControllerTest < ActionDispatch::IntegrationTest
     post "/api/games/#{game_id}/advance_round", params: { base_version: 0 }, as: :json
     assert_response :success
     body = JSON.parse(response.body)
-    assert body["battles"].any?
-    assert body["campaign"]["winnerId"].present?
+    assert body["battles"].present? && body["battles"].any?, body.keys.inspect
+    assert_nil body.dig("campaign", "winnerId")
   end
 
   test "deploy auto and transform persist formation" do

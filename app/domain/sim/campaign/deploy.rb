@@ -74,15 +74,33 @@ module Sim
       end
 
       def auto_deploy!(player)
-        living = player[:roster].select { |entry| entry.dig(:state, :current_health).to_i > 0 }
-        living.each_with_index do |entity, index|
-          next if entity[:kind] == "hero" && entity[:state][:attached_to]
-
+        deployable_entities(player).each_with_index do |entity, index|
           row = Constants::BATTLE_ROWS[[ 2, index / 3 ].min]
           lane = Constants::LANE_ORDER[index % Constants::LANE_ORDER.length]
           place_in_slot!(entity, row, lane, player[:roster])
         end
         Result.ok(@campaign)
+      end
+
+      def deployable_entities(player)
+        player[:roster]
+          .select { |entry| entry.dig(:state, :current_health).to_i > 0 }
+          .reject { |entry| entry[:kind] == "hero" && entry[:state][:attached_to] }
+          .sort_by { |entity| auto_deploy_sort_key(entity) }
+      end
+
+      def auto_deploy_sort_key(entity)
+        Entities::Footprint.sync_entity!(entity)
+        formation = entity[:components][:formation]
+        area = -(formation[:width].to_f * formation[:depth].to_f)
+
+        if entity[:kind] == "hero"
+          return [ 0, 0, area ] if entity.dig(:components, :hero, :general)
+
+          return [ 1, 0, area ]
+        end
+
+        [ 2, 0, area ]
       end
 
       def place_in_slot!(entity, row, lane, roster)

@@ -22,12 +22,12 @@ class SimCampaignAssignFactionTest < ActiveSupport::TestCase
 
   test "starter hero follows seed order, not localized name sort" do
     assert_equal "captain_general", catalog.hero_templates("empire").first[:id]
-    assert_equal "vampire_lord", catalog.hero_templates("undead").first[:id]
+    assert_equal "night_lord", catalog.hero_templates("undead").first[:id]
   end
 
   test "assigns a chosen starter hero from the faction pool" do
     campaign = Sim::Campaign::Create.call(player_count: 2).value
-    hero = catalog.hero_templates("empire").find { |entry| entry[:id] == "griffon_marshal" }
+    hero = catalog.hero_templates("empire").find { |entry| entry[:id] == "captain_general" }
     result = Sim::Campaign::AssignFaction.call(
       campaign: campaign,
       catalog: catalog,
@@ -38,7 +38,7 @@ class SimCampaignAssignFactionTest < ActiveSupport::TestCase
 
     assert result.ok?
     granted = result.value.find_player("player-1")[:roster].first
-    assert_equal "griffon_marshal", granted[:template_id]
+    assert_equal "captain_general", granted[:template_id]
   end
 
   test "rejects a starter from another faction" do
@@ -48,7 +48,7 @@ class SimCampaignAssignFactionTest < ActiveSupport::TestCase
       catalog: catalog,
       player_id: "player-1",
       faction_id: "empire",
-      template_id: "warboss"
+      template_id: "war_chief"
     )
 
     assert_equal "starter hero is not in faction", result.error

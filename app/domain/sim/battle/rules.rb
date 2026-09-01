@@ -11,18 +11,36 @@ module Sim
             Fear::Melee,
             Charge::Melee,
             Ferocious::Melee,
-            Steadfast::Melee,
+            SupportRank::Melee,
+            Shieldwall::Melee,
+            AntiLarge::Melee,
+            ArmorPiercing::Melee,
+            Dodge::Melee,
+            Poison::Melee,
+            Toxin::Melee,
+            RuneArmor::Melee,
+            MomentumCharge::Melee,
+            Boar::Melee,
             Skirmisher::Melee,
+            Forestkin::Melee,
             MagicEffects::Melee
           ]
         },
         shooting: -> {
           [
+            SlingCatapult::Shooting,
+            CorpseTrail::Shooting,
+            Line::Shooting,
             Breath::Shooting,
             Volley::Shooting,
+            Common::Shooting,
             Blast::Shooting,
             Machine::Shooting,
-            Steadfast::Melee,
+            ArmorPiercing::Shooting,
+            Dodge::Shooting,
+            Toxin::Shooting,
+            RuneArmor::Shooting,
+            Forestborn::Shooting,
             Skirmisher::Melee,
             MagicEffects::Shooting
           ]
@@ -31,14 +49,29 @@ module Sim
           [
             Undead::Morale,
             Fear::Morale,
+            Wildborn::Morale,
             Disciplined::Morale,
+            Resolute::Morale,
             Muster::Morale
           ]
         },
-        setup: -> { [ BannerAura::Setup, SteadfastAura::Setup ] },
-        round: -> { [ Undead::Round ] },
+        setup: -> { [ BannerAura::Setup, ResoluteAura::Setup ] },
+        round: -> { [ Undead::Round, Regen::Round, Forestkin::Round ] },
         turn: -> { [ MagicEffects::Turn ] },
-        movement: -> { [ March::Movement, Flying::Movement, Wizard::Movement, MagicEffects::Movement ] }
+        movement: -> {
+          [
+            Fear::Movement,
+            March::Movement,
+            Flying::Movement,
+            Wizard::Movement,
+            Outrider::Movement,
+            Forestborn::Movement,
+            Wildborn::Movement,
+            ThrowRocks::Movement,
+            CorpseTrail::Movement,
+            MagicEffects::Movement
+          ]
+        }
       }.freeze
 
       def for(phase)
@@ -66,6 +99,12 @@ module Sim
           end
         end
 
+        def prepare_melee_intents!(ctx)
+          @rules.each do |rule|
+            rule.prepare_melee_intents!(ctx) if rule.respond_to?(:prepare_melee_intents!)
+          end
+        end
+
         def after_play!(ctx)
           @rules.each do |rule|
             rule.after_play!(ctx) if rule.respond_to?(:after_play!)
@@ -75,6 +114,14 @@ module Sim
         def after_hit!(ctx)
           @rules.each do |rule|
             rule.after_hit!(ctx) if rule.respond_to?(:after_hit!)
+          end
+        end
+
+        def log_clauses(ctx)
+          @rules.flat_map do |rule|
+            next [] unless rule.respond_to?(:log_clauses)
+
+            Array(rule.log_clauses(ctx))
           end
         end
 
@@ -110,11 +157,24 @@ module Sim
           nil
         end
 
-        def morale_threshold_delta(combatant, allies, enemies, combat_score_delta)
+        def morale_threshold_delta(combatant, allies, enemies, combat_score_delta, terrain: [])
           @rules.sum do |rule|
             next 0 unless rule.respond_to?(:morale_threshold_delta)
 
-            rule.morale_threshold_delta(combatant, allies, enemies, combat_score_delta).to_i
+            rule.morale_threshold_delta(combatant, allies, enemies, combat_score_delta, terrain: terrain).to_i
+          end
+        end
+
+        def undaunted?(combatant, terrain: [])
+          @rules.any? do |rule|
+            rule.respond_to?(:undaunted?) && rule.undaunted?(combatant, terrain: terrain)
+          end
+        end
+
+        def can_charge_through_terrain?(attacker, defender, terrain)
+          @rules.any? do |rule|
+            rule.respond_to?(:can_charge_through_terrain?) &&
+              rule.can_charge_through_terrain?(attacker, defender, terrain)
           end
         end
 
@@ -161,18 +221,98 @@ module Sim
           end
         end
 
+        def shooting_skill(attacker, defender, terrain, skill)
+          @rules.reduce(skill.to_i) do |value, rule|
+            next value unless rule.respond_to?(:shooting_skill)
+
+            rule.shooting_skill(attacker, defender, terrain, value).to_i
+          end
+        end
+
+        def armor_factor(attacker, defender, attack_type, factor)
+          @rules.reduce(factor.to_f) do |value, rule|
+            next value unless rule.respond_to?(:armor_factor)
+
+            rule.armor_factor(attacker, defender, attack_type, value).to_f
+          end
+        end
+
+        def attacking_model_count(attacker, defender, contact_side, count)
+          @rules.reduce(count.to_i) do |value, rule|
+            next value unless rule.respond_to?(:attacking_model_count)
+
+            rule.attacking_model_count(attacker, defender, contact_side, value).to_i
+          end
+        end
+
+        def prepare_profile(profile, host, defender, attack_type)
+          @rules.reduce(profile) do |value, rule|
+            next value unless rule.respond_to?(:prepare_profile)
+
+            rule.prepare_profile(value, host, defender, attack_type)
+          end
+        end
+
+        def terrain_damage_factor(combatant, feature)
+          @rules.reduce(1.0) do |factor, rule|
+            next factor unless rule.respond_to?(:terrain_damage_factor)
+
+            factor * rule.terrain_damage_factor(combatant, feature).to_f
+          end
+        end
+
+        def reposition_mode(combatant, ctx)
+          @rules.each do |rule|
+            next unless rule.respond_to?(:reposition_mode)
+
+            mode = rule.reposition_mode(combatant, ctx)
+            return mode if mode
+          end
+          nil
+        end
+
+        def melee_mover?(combatant)
+          @rules.each do |rule|
+            next unless rule.respond_to?(:melee_mover?)
+
+            result = rule.melee_mover?(combatant)
+            return result unless result.nil?
+          end
+          nil
+        end
+
+        def reposition_goals(combatant, mode, ctx)
+          @rules.each do |rule|
+            next unless rule.respond_to?(:reposition_goals)
+
+            goals = rule.reposition_goals(combatant, mode, ctx)
+            return goals if goals
+          end
+          nil
+        end
+
+        def reposition_improves?(origin, candidate, mode, ctx)
+          @rules.each do |rule|
+            next unless rule.respond_to?(:reposition_improves?)
+
+            result = rule.reposition_improves?(origin, candidate, mode, ctx)
+            return result unless result.nil?
+          end
+          nil
+        end
+
         def apply_attach!(host_ctx)
           @rules.each do |rule|
             rule.apply_attach!(host_ctx) if rule.respond_to?(:apply_attach!)
           end
         end
 
-        def apply_passives!(side)
+        def apply_passives!(side, terrain: side[:terrain])
           events = []
           @rules.each do |rule|
             next unless rule.respond_to?(:apply_passives!)
 
-            events.concat(Array(rule.apply_passives!(side)))
+            events.concat(Array(rule.apply_passives!(side.merge(terrain: Array(terrain)))))
           end
           events
         end

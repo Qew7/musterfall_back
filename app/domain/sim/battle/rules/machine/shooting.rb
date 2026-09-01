@@ -11,6 +11,11 @@ module Sim
 
             1.25
           end
+
+          def log_clauses(ctx)
+            factor = damage_factor(ctx[:attacker], ctx[:defender], ctx[:attack_type], ctx[:vector], 1)
+            factor == 1.0 ? [] : [ "осадная машина ×1.25" ]
+          end
         end
       end
     end

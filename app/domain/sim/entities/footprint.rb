@@ -10,8 +10,16 @@ module Sim
         [ (entity.dig(:state, :current_health).to_f / model_health).ceil, 0 ].max
       end
 
+      def formation_models_remaining(entity)
+        return 0 if entity.dig(:state, :current_health).to_i <= 0
+        return entity.dig(:components, :formation, :models).to_i if entity[:kind] == "hero"
+        return 1 if entity.dig(:components, :formation, :model_class).to_s == "machine"
+
+        health_to_models(entity)
+      end
+
       def sync_entity!(entity)
-        models_remaining = health_to_models(entity)
+        models_remaining = formation_models_remaining(entity)
         formation = entity[:components][:formation]
         metrics = Geometry::Formation.metrics(
           models_remaining: models_remaining,

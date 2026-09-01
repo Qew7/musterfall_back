@@ -190,8 +190,9 @@ module Sim
         target[:x] = pose[:x]
         target[:y] = pose[:y]
         target[:facing] = pose[:facing]
+        apply_enemy_facing!(target)
         affect!(target)
-        @effect_log << { kind: "teleport", target_id: target[:entity_id], from: from, to: pose.slice(:x, :y, :facing) }
+        @effect_log << { kind: "teleport", target_id: target[:entity_id], from: from, to: target.slice(:x, :y, :facing) }
         target
       end
 
@@ -241,8 +242,9 @@ module Sim
       def add_terrain!(type:, point:, duration: :battle, **overrides)
         feature = nil
         terrain_candidate_points(point).each do |x, y|
-          feature = SpellWorld.add_terrain!(
+          feature = TerrainDelta.add!(
             terrain,
+            @terrain_delta,
             type: type,
             x: x,
             y: y,
@@ -254,14 +256,11 @@ module Sim
         return nil unless feature
 
         feature[:spell_expires] = expiry_for(host, duration) unless duration == :battle
-        @terrain_delta << { operation: "add", feature: feature }
         feature
       end
 
       def remove_terrain!(feature)
-        removed = SpellWorld.remove_terrain!(terrain, feature)
-        @terrain_delta << { operation: "remove", feature: removed }
-        removed
+        TerrainDelta.remove!(terrain, feature, holder: @terrain_delta)
       end
 
       def summon!(kind = nil, point: nil, near: nil, target: nil, contact: nil, count: nil, expires: :battle, **options)
@@ -281,6 +280,7 @@ module Sim
         end
         return nil unless pose
 
+        apply_enemy_facing!(pose)
         summon = SpellWorld.summon!(side: acting_side, kind: kind, pose: pose, expires: expires)
         summon[:current_health] = [ summon[:current_health], count.to_i ].min if count.to_i.positive?
         record_summon!(summon)
@@ -299,6 +299,7 @@ module Sim
         )
         return nil unless pose
 
+        apply_enemy_facing!(pose)
         summon = SpellWorld.clone_combatant!(
           side: acting_side,
           source: source,
@@ -326,7 +327,7 @@ module Sim
 
       def clip_spell_pose(unit, desired)
         obstacles = Pathing::Obstacles.around(unit, units: all_combatants, terrain: terrain)
-        ok = ->(pose) { SpellWorld.inside_battlefield?(pose) && obstacles.clear?(pose) }
+        ok = ->(pose) { spell_pose_viable?(unit, pose, obstacles) }
         return desired if ok.call(desired)
 
         origin = unit.merge(facing: desired[:facing])
@@ -531,6 +532,53 @@ module Sim
         else
           { moment: :start_turn, side_key: acting_side[:side_key] }
         end
+      end
+
+      def apply_enemy_facing!(unit)
+        enemy = nearest(unit, enemies)
+        return unit unless enemy
+
+        desired = Geometry::Battlefield.heading_to(unit, enemy)
+        obstacles = Pathing::Obstacles.around(unit, units: all_combatants, terrain: terrain)
+        facing = nearest_clear_facing(unit, desired, obstacles, unit[:entity_id])
+        unit[:facing] = facing if facing
+        unit
+      end
+
+      def nearest_clear_facing(unit, desired, obstacles, contact_id)
+        return desired if facing_clear?(unit, desired, obstacles, contact_id)
+
+        best = nil
+        best_gap = Float::INFINITY
+        (1..18).each do |step|
+          offset = step * 10.0
+          [ offset, -offset ].each do |delta|
+            gap = delta.abs
+            next if gap >= best_gap
+
+            facing = Geometry::Battlefield.normalize_facing(desired + delta)
+            next unless facing_clear?(unit, facing, obstacles, contact_id)
+
+            best = facing
+            best_gap = gap
+          end
+        end
+        best
+      end
+
+      def facing_clear?(unit, facing, obstacles, contact_id)
+        obstacles.clear?(unit.merge(facing: facing), contact_id: contact_id)
+      end
+
+      def spell_pose_viable?(unit, pose, obstacles)
+        return false unless SpellWorld.inside_battlefield?(pose)
+
+        nearest_clear_facing(
+          unit.merge(x: pose[:x], y: pose[:y]),
+          pose[:facing] || unit[:facing],
+          obstacles,
+          unit[:entity_id]
+        )
       end
 
       def summon_prototype(kind)

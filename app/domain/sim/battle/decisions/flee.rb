@@ -23,13 +23,14 @@ module Sim
           Geometry::Battlefield.heading_to(average, combatant)
         end
 
-        def retreat_toward_edge(combatant, distance, obstacles: [], ally_ids: nil, preferred_heading: nil)
+        def retreat_toward_edge(combatant, distance, obstacles: [], ally_ids: nil, preferred_heading: nil, contact_exempt_ids: nil)
           plan = Pathing.plan_retreat(
             origin: combatant,
             distance: distance,
             obstacles: obstacles,
             ally_ids: ally_ids,
-            preferred_heading: preferred_heading
+            preferred_heading: preferred_heading,
+            contact_exempt_ids: contact_exempt_ids
           )
           destination = plan[:pose] || { x: combatant[:x], y: combatant[:y], facing: combatant[:facing] }
           {

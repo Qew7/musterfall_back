@@ -22,7 +22,7 @@ module Sim
             .sort.to_h,
           contacts: actions.filter_map { |entry| contact_fingerprint(entry) },
           rule_effects: actions.flat_map { |entry| Array(entry.dig(:trace, :rule_keys)) }
-            .map(&:to_s)
+            .map { |key| key.to_s.underscore }
             .tally
             .sort.to_h,
           actions: actions.map { |entry| action_fingerprint(entry) }

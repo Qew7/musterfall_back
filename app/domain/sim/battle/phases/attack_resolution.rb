@@ -75,8 +75,8 @@ module Sim
           custom_resolve = shooting_rule&.respond_to?(:resolve_missile_strike!)
           strikes = custom_resolve ? 1 : [ profile[:missile_attacks].to_i, 1 ].max
 
-          strikes.times do
-            if custom_resolve
+          if custom_resolve
+            strikes.times do
               shooting_rule.resolve_missile_strike!(
                 phase: phase,
                 actor: actor,
@@ -89,25 +89,36 @@ module Sim
                 acting_side: acting_side,
                 target_side: target_side,
                 round_number: round_number,
-                blockers: blockers
+                blockers: blockers,
+                rng: rng,
+                terrain: terrain
               )
-              next
             end
+            return phase
+          end
 
-            victims.each do |victim_entry|
-              victim = victim_entry[:target]
-              next if victim[:current_health].to_i <= 0
+          victims.each do |victim_entry|
+            victim = victim_entry[:target]
+            next if victim[:current_health].to_i <= 0
+
+            batch_actions = []
+            attempts = 0
+            hits = 0
+
+            strikes.times do
+              break if victim[:current_health].to_i <= 0
 
               strike_damage = damage(profile, victim, attack_type, vector, round_number)
               strike_damage = [ 1, (strike_damage * victim_entry[:multiplier].to_f).round ].max if victim_entry[:multiplier]
               next if strike_damage <= 0
 
+              attempts += 1
               unless hit?(profile, victim, attack_type, rng, terrain: terrain)
-                add_event(phase, "#{format_actor(actor[:actor_role], actor[:actor_name])} промахивается по #{victim[:name]}.")
                 next
               end
 
-              record_missile_hit!(
+              hits += 1
+              batch_actions << record_missile_hit!(
                 phase: phase,
                 actor: actor,
                 host: host,
@@ -120,30 +131,34 @@ module Sim
                 target_side: target_side,
                 blockers: blockers,
                 victims: victims,
-                models_hit: victim_entry[:models_hit]
+                models_hit: victim_entry[:models_hit],
+                terrain: terrain,
+                defer_log: true
               )
             end
+
+            finalize_strike_batch!(
+              phase: phase,
+              actions: batch_actions,
+              attempts: attempts,
+              hits: hits,
+              actor: actor.merge(weapon_type: profile[:weapon_type] || actor[:weapon_type]),
+              victim: victim,
+              attack_type: attack_type,
+              vector: vector,
+              acting_side: acting_side,
+              target_side: target_side
+            )
           end
           phase
         end
 
-        def record_missile_hit!(phase:, actor:, host:, profile:, victim:, vector:, strike_damage:, attack_type:, acting_side:, target_side:, blockers:, victims:, models_hit: nil)
+        def record_missile_hit!(phase:, actor:, host:, profile:, victim:, vector:, strike_damage:, attack_type:, acting_side:, target_side:, blockers:, victims:, models_hit: nil, terrain: [], defer_log: false)
           actor_state = State.snapshot_combatant(host)
           before = State.snapshot_combatant(victim)
           victim[:current_health] = [ 0, victim[:current_health] - strike_damage ].max
           State.sync_combatant_footprint!(victim)
-          after = State.snapshot_combatant(victim)
-
-          player_line = ActionResult.text_for(
-            actor: actor.merge(weapon_type: profile[:weapon_type] || actor[:weapon_type]),
-            action: { type: attack_type, magic_school: actor[:magic_school] },
-            before: [ before ],
-            after: [ after ],
-            damage: strike_damage,
-            vector: vector,
-            target_name: victim[:name]
-          )
-          add_event(phase, player_line)
+          actor_for_text = actor.merge(weapon_type: profile[:weapon_type] || actor[:weapon_type])
           action = {
             type: attack_type,
             actor_id: actor[:actor_id],
@@ -157,102 +172,172 @@ module Sim
             models_hit: models_hit,
             blockers: blockers.map { |blocker| blocker[:entity_id] },
             requires_line_of_sight: profile[:requires_line_of_sight],
+            shooting_range: attack_type == "shooting" ? profile[:shooting_range] : nil,
             template: template_descriptor(profile, victim, victims, attack_type),
             affected_ids: victims.map { |entry| entry[:target][:entity_id] },
             magic_school: actor[:magic_school],
             spell_keys: Array(actor[:spell_keys]),
             actor_state: actor_state,
             target_state_before: before,
-            target_state_after: after,
             charge: nil,
+            details: [],
+            clauses: Rules.for(Rules.damage_phase_for(attack_type)).log_clauses(
+              attacker: profile,
+              host: host,
+              defender: victim,
+              attack_type: attack_type,
+              vector: vector,
+              terrain: terrain
+            ),
             trace: Trace.build(
               rule_keys: Trace.attack_rule_keys(host, attack_type, profile: profile),
               trigger: attack_type,
               result: "hit",
               target_ids: victims.map { |entry| entry[:target][:entity_id] }
-            ),
-            snapshot: State.snapshot_battlefield([ acting_side, target_side ])
+            )
           }
-          action[:summary] = player_line
-          action[:details] = details(action)
           phase[:actions] << action
+          Rules.for(Rules.damage_phase_for(attack_type)).after_hit!(
+            phase: phase,
+            attacker: profile,
+            host: host,
+            defender: victim,
+            action: action,
+            acting_side: acting_side,
+            target_side: target_side,
+            attack_type: attack_type,
+            terrain: terrain
+          )
+          action[:snapshot] = State.snapshot_battlefield([ acting_side, target_side ])
+          unless defer_log
+            finalize_strike_batch!(
+              phase: phase,
+              actions: [ action ],
+              attempts: 1,
+              hits: 1,
+              actor: actor_for_text,
+              victim: victim,
+              attack_type: attack_type,
+              vector: vector,
+              acting_side: acting_side,
+              target_side: target_side
+            )
+          end
+          action
         end
 
         def resolve_melee_strike!(phase:, attacker:, target:, vector:, acting_side:, target_side:, round_number:, rng:, terrain: [])
           blockers = []
           victims = [ { target: target, multiplier: 1 } ]
           entries = melee_entries(attacker, target, vector, round_number)
+          contact_side = detailed_contact_side(attacker, target)
+          kill_budget = defender_engaged_model_count(attacker, target)
 
           entries.each do |entry|
             next if attacker[:current_health].to_i <= 0 || target[:current_health].to_i <= 0 || entry[:damage].to_i <= 0
 
-            attacks = entry.dig(:profile, :attacks) || attacker[:attacks] || 1
-            attacks.times do
-              break if attacker[:current_health].to_i <= 0
+            engaged = [ entry[:engaged].to_i, 1 ].max
+            attacks_per_model = entry.dig(:profile, :attacks) || attacker[:attacks] || 1
+            damage_per_hit = entry[:damage]
+            attempts = engaged * attacks_per_model
+            hits = 0
 
-              unless hit?(entry[:profile], target, "melee", rng)
-                add_event(phase, "#{format_actor(entry[:actor_role], entry[:actor_name])} промахивается по #{target[:name]}.")
-                next
-              end
+            attempts.times do
+              break if attacker[:current_health].to_i <= 0 || target[:current_health].to_i <= 0
 
-              actor_state = State.snapshot_combatant(attacker)
-              before = State.snapshot_combatant(target)
-              target[:current_health] = [ 0, target[:current_health] - entry[:damage] ].max
-              State.sync_combatant_footprint!(target)
-              after = State.snapshot_combatant(target)
+              hits += 1 if hit?(entry[:profile], target, "melee", rng)
+            end
 
-              player_line = ActionResult.text_for(
-                actor: {
-                  actor_role: entry[:actor_role],
-                  actor_name: entry[:actor_name],
-                  weapon_type: entry.dig(:profile, :weapon_type) || attacker[:weapon_type]
-                },
-                action: { type: "melee" },
-                before: [ before ],
-                after: [ after ],
-                damage: entry[:damage],
-                vector: vector
-              )
-              add_event(phase, player_line)
-              action = {
-                type: "melee",
-                actor_id: entry[:actor_id],
-                actor_unit_id: entry[:actor_unit_id],
-                actor_name: entry[:actor_name],
-                actor_role: entry[:actor_role],
-                target_id: target[:entity_id],
-                target_name: target[:name],
+            actor_for_log = {
+              actor_role: entry[:actor_role],
+              actor_name: entry[:actor_name],
+              weapon_type: entry.dig(:profile, :weapon_type) || attacker[:weapon_type]
+            }
+
+            unless hits.positive?
+              finalize_strike_batch!(
+                phase: phase,
+                actions: [],
+                attempts: attempts,
+                hits: 0,
+                actor: actor_for_log,
+                victim: target,
+                attack_type: "melee",
                 vector: vector,
-                damage: entry[:damage],
-                blockers: blockers.map { |blocker| blocker[:entity_id] },
-                requires_line_of_sight: attacker[:requires_line_of_sight],
-                template: nil,
-                affected_ids: victims.map { |victim| victim[:target][:entity_id] },
-                actor_state: actor_state,
-                target_state_before: before,
-                target_state_after: after,
-                charge: melee_charge(attacker, target, "melee", vector),
-                trace: Trace.build(
-                  rule_keys: Trace.attack_rule_keys(attacker, "melee", profile: entry[:profile]),
-                  trigger: "melee_strike",
-                  result: "hit",
-                  target_ids: [ target[:entity_id] ]
-                ),
-                snapshot: State.snapshot_battlefield([ acting_side, target_side ])
-              }
-              action[:summary] = player_line
-              action[:details] = details(action)
-              phase[:actions] << action
+                acting_side: acting_side,
+                target_side: target_side
+              )
+              next
+            end
+
+            actor_state = State.snapshot_combatant(attacker)
+            before = State.snapshot_combatant(target)
+            total_damage = [ hits * damage_per_hit, melee_kill_damage_cap(target, kill_budget) ].min
+            target[:current_health] = [ 0, target[:current_health] - total_damage ].max
+            State.sync_combatant_footprint!(target)
+            kill_budget -= before[:models_remaining].to_i - State.combatant_models_remaining(target)
+            action = {
+              type: "melee",
+              actor_id: entry[:actor_id],
+              actor_unit_id: entry[:actor_unit_id],
+              actor_name: entry[:actor_name],
+              actor_role: entry[:actor_role],
+              target_id: target[:entity_id],
+              target_name: target[:name],
+              vector: vector,
+              damage: total_damage,
+              blockers: blockers.map { |blocker| blocker[:entity_id] },
+              requires_line_of_sight: attacker[:requires_line_of_sight],
+              template: nil,
+              affected_ids: victims.map { |victim| victim[:target][:entity_id] },
+              actor_state: actor_state,
+              target_state_before: before,
+              charge: melee_charge(attacker, target, "melee", vector),
+              details: [],
+              clauses: Rules.for(:melee).log_clauses(
+                attacker: entry[:profile],
+                host: attacker,
+                defender: target,
+                attack_type: "melee",
+                vector: vector,
+                contact_side: contact_side
+              ),
+              trace: Trace.build(
+                rule_keys: Trace.attack_rule_keys(attacker, "melee", profile: entry[:profile]),
+                trigger: "melee_strike",
+                result: "hit",
+                target_ids: [ target[:entity_id] ]
+              )
+            }
+            phase[:actions] << action
+            hits.times do
               Rules.for(:melee).after_hit!(
                 phase: phase,
-                attacker: attacker,
+                attacker: entry[:profile],
+                host: attacker,
                 defender: target,
                 action: action,
                 acting_side: acting_side,
                 target_side: target_side,
-                round_number: round_number
+                round_number: round_number,
+                attack_type: "melee",
+                terrain: terrain
               )
             end
+            action[:snapshot] = State.snapshot_battlefield([ acting_side, target_side ])
+
+            finalize_strike_batch!(
+              phase: phase,
+              actions: [ action ],
+              attempts: attempts,
+              hits: hits,
+              actor: actor_for_log,
+              victim: target,
+              attack_type: "melee",
+              vector: vector,
+              acting_side: acting_side,
+              target_side: target_side
+            )
           end
         end
 
@@ -264,6 +349,7 @@ module Sim
           armor_factor = Constants::WEAPON_VS_ARMOR.dig(defender[:armor_type], weapon_type) || 1
           armor_factor *= SpellEffects.armor_factor(defender)
           rules = Rules.for(Rules.damage_phase_for(attack_type))
+          armor_factor = rules.armor_factor(attacker, defender, attack_type, armor_factor)
           facing_factor = rules.facing_damage_factor(defender, vector)
           facing_factor = default_facing_damage_factor(vector) if facing_factor.nil?
           phase_factor = attack_type == "shooting" ? 0.9 : 1
@@ -295,6 +381,7 @@ module Sim
           when "shooting"
             skill = (attacker[:skill] || 3).to_i
             skill -= 1 if Geometry::Battlefield.in_forest?(defender, terrain)
+            skill = Rules.for(:shooting).shooting_skill(attacker, defender, terrain, skill)
             [ skill, 1 ].max / 7.0
           when "magic"
             SpellCasting.hit_chance(attacker, defender)
@@ -349,29 +436,34 @@ module Sim
 
           contact_side = detailed_contact_side(attacker, defender)
           primary, *attached = attacker[:contributors][:melee]
+          charge = attacker.slice(:charged_distance, :charged_vector, :charged_target_id)
           entries = []
           if primary
-            profile = primary.merge(melee: primary[:power] * engaged, attacks: attacker[:attacks])
+            single_profile = primary.merge(melee: primary[:power], attacks: attacker[:attacks], **charge)
+            single_profile = Rules.for(:melee).prepare_profile(single_profile, attacker, defender, "melee")
             entries << {
               actor_id: primary[:entity_id],
               actor_unit_id: attacker[:entity_id],
               actor_name: primary[:kind] == "unit" && engaged > 1 ? "#{attacker[:name]} (#{engaged} моделей)" : primary[:name],
               actor_role: primary[:kind] == "hero" ? "hero" : "unit",
-              profile: profile,
-              damage: damage(profile, defender, "melee", vector, round_number)
+              profile: single_profile,
+              engaged: engaged,
+              damage: damage(single_profile, defender, "melee", vector, round_number)
             }
           end
 
           attached.select { |contributor| contributor[:kind] == "hero" }
             .select { |contributor| hero_eligible?(contributor, contact_side) }
             .each do |contributor|
-              profile = contributor.merge(melee: contributor[:power])
+              profile = contributor.merge(melee: contributor[:power], attacks: contributor[:attacks] || attacker[:attacks], **charge)
+              profile = Rules.for(:melee).prepare_profile(profile, attacker, defender, "melee")
               entries << {
                 actor_id: contributor[:entity_id],
                 actor_unit_id: attacker[:entity_id],
                 actor_name: contributor[:name],
                 actor_role: "hero",
                 profile: profile,
+                engaged: 1,
                 damage: damage(profile, defender, "melee", vector, round_number)
               }
             end
@@ -381,14 +473,45 @@ module Sim
         def engaged_model_count(attacker, defender)
           contact_side = detailed_contact_side(attacker, defender)
           capacity = side_model_capacity(attacker, contact_side)
+          capacity = Rules.for(:melee).attacking_model_count(attacker, defender, contact_side, capacity)
+          models_in_contact_span(attacker, defender, contact_side, capacity)
+        end
+
+        def defender_engaged_model_count(attacker, defender)
+          contact_side = detailed_contact_side(defender, attacker)
+          capacity = side_model_capacity(defender, contact_side)
+          models_in_contact_span(
+            defender,
+            attacker,
+            contact_side,
+            capacity,
+            span: contact_span(attacker, defender, detailed_contact_side(attacker, defender))
+          )
+        end
+
+        def models_in_contact_span(unit, _opponent, contact_side, capacity, span: nil)
           return 0 if capacity <= 0
 
-          span = contact_span(attacker, defender, contact_side)
-          model_span = model_span(attacker, contact_side)
+          span ||= contact_span(unit, _opponent, contact_side)
+          model_span = model_span(unit, contact_side)
           return [ 1, capacity ].max if model_span <= 0
 
           engaged = ((span + CONTACT) / model_span).ceil
           [ [ engaged, capacity ].min, 1 ].max
+        end
+
+        def melee_kill_damage_cap(defender, max_models_killed)
+          return 0 if max_models_killed.to_i <= 0
+
+          health = defender[:current_health].to_i
+          return 0 if health <= 0
+
+          model_health = [ defender[:model_health].to_i, 1 ].max
+          models_before = State.combatant_models_remaining(defender)
+          max_models_killed = [ max_models_killed, models_before ].min
+          min_models = models_before - max_models_killed
+          min_health = min_models <= 0 ? 0 : ((min_models - 1) * model_health) + 1
+          [ health - min_health, 0 ].max
         end
 
         def side_model_capacity(unit, contact_side)
@@ -464,6 +587,71 @@ module Sim
           }
         end
 
+        def finalize_strike_batch!(phase:, actions:, attempts:, hits:, actor:, victim:, attack_type:, vector:, acting_side:, target_side:)
+          return if attempts <= 0
+
+          if hits <= 0
+            add_event(
+              phase,
+              ActionResult.miss_roll_text(
+                actor: actor,
+                target_name: victim[:name],
+                hits_landed: 0,
+                attacks_attempted: attempts
+              )
+            )
+            return
+          end
+
+          first = actions.first
+          last = actions.last
+          last[:damage] = actions.sum { |entry| entry[:damage].to_i }
+          last[:clauses] = actions.flat_map { |entry| Array(entry[:clauses]) }.uniq
+          actions[0...-1].each do |entry|
+            entry[:summary] = nil
+            entry[:log_suppressed] = true
+          end
+          finalize_hit_log!(
+            phase: phase,
+            action: last,
+            actor: actor,
+            before: first[:target_state_before],
+            victim: victim,
+            attack_type: attack_type,
+            vector: vector,
+            acting_side: acting_side,
+            target_side: target_side,
+            hits_landed: hits,
+            attacks_attempted: attempts
+          )
+        end
+
+        def finalize_hit_log!(phase:, action:, actor:, before:, victim:, attack_type:, vector:, acting_side:, target_side:, hits_landed: nil, attacks_attempted: nil)
+          after = State.snapshot_combatant(victim)
+          action[:target_state_after] = after
+          action[:snapshot] = State.snapshot_battlefield([ acting_side, target_side ])
+          extra_details = Array(action[:details])
+          player_line = ActionResult.text_for(
+            actor: actor,
+            action: { type: attack_type, magic_school: actor[:magic_school] || action[:magic_school] },
+            before: [ before ],
+            after: [ after ],
+            damage: action[:damage],
+            vector: vector,
+            target_name: victim[:name],
+            clauses: action[:clauses],
+            terrain_delta: action[:terrain_delta],
+            summon_ids: action[:summon_ids],
+            hits_landed: hits_landed,
+            attacks_attempted: attacks_attempted
+          )
+          action[:summary] = player_line
+          action[:details] = details(action) + extra_details
+          action[:hits_landed] = hits_landed if hits_landed
+          action[:attacks_attempted] = attacks_attempted if attacks_attempted
+          add_event(phase, player_line)
+        end
+
         def details(action)
           before = action[:target_state_before]
           after = action[:target_state_after]
@@ -477,6 +665,7 @@ module Sim
             lines << "attacker pose/state: #{format_state(actor)}"
           end
           lines << "affected_ids=#{Array(action[:affected_ids]).join(",")}"
+          lines << "attacks=#{action[:hits_landed]}/#{action[:attacks_attempted]}" if action[:attacks_attempted]
           lines << "models_hit=#{action[:models_hit]}" if action[:models_hit]
           lines << "blockers=#{Array(action[:blockers]).join(",")}" if Array(action[:blockers]).any?
           if action[:template]

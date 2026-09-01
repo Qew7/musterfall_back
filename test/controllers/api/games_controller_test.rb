@@ -39,6 +39,7 @@ class Api::GamesControllerTest < ActionDispatch::IntegrationTest
       player_id: "player-1",
       faction_id: faction[:id]
     }
+    Game.find(game_id).game_players.find_by!(external_key: "player-1").update!(treasury: wizard[:cost], recruit_access: 1)
 
     with_spell_api(
       schools: %i[pyromancy celestial],

@@ -88,7 +88,7 @@ class SimBattlePathingThreadTest < ActiveSupport::TestCase
 
   test "follow wraps an ally with wheel or turn then advance" do
     actor = BattleScenarios.combatant(x: 8.0, y: 12.0, facing: 0.0, movement: 5.0, base_width: 3.0, base_depth: 3.0)
-    ally = BattleScenarios.combatant(entity_id: "boyz", x: 14.0, y: 12.0, facing: 0.0, base_width: 4.0, base_depth: 4.0)
+    ally = BattleScenarios.combatant(entity_id: "brutes", x: 14.0, y: 12.0, facing: 0.0, base_width: 4.0, base_depth: 4.0)
     enemy = BattleScenarios.enemy(x: 26.0, y: 12.0, facing: 180.0)
     plan = Pathing.plan_approach(
       origin: actor,

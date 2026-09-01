@@ -30,8 +30,9 @@ module Sim
         hero = @campaign.find_entity(@player_id, @hero_id)
         return Result.failure("hero not found", code: :not_found) unless hero && hero[:kind] == "hero"
         return Result.failure("upgrade not in draft") unless Array(hero.dig(:components, :progression, :pending_draft)).include?(upgrade_id)
-        return Result.failure("unknown upgrade effect") unless Upgrades::Draft.apply!(hero, upgrade_id)
+        return Result.failure("unknown upgrade effect") unless Upgrades::Draft.apply!(hero, upgrade_id, catalog: @catalog)
 
+        Entities::Footprint.sync_entity!(hero)
         Result.ok(@campaign)
       end
     end

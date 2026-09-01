@@ -1,0 +1,47 @@
+#!/usr/bin/env bash
+# Watch db/seeds.rb and re-run idempotent db:seed on save (Docker seed-watcher or local).
+set -euo pipefail
+
+cd "$(dirname "$0")/.."
+
+SEEDS="db/seeds.rb"
+if [ ! -f "$SEEDS" ]; then
+  echo "watch-seeds: missing $SEEDS" >&2
+  exit 1
+fi
+
+file_mtime() {
+  if stat -c %Y "$1" 2>/dev/null; then
+    stat -c %Y "$1"
+  else
+    stat -f %m "$1"
+  fi
+}
+
+run_seed() {
+  sleep 0.4
+  printf '\n[watch-seeds] %s db:seed…\n' "$(date '+%H:%M:%S')"
+  if bin/rails db:seed; then
+    echo '[watch-seeds] ok'
+  else
+    echo '[watch-seeds] failed' >&2
+  fi
+}
+
+echo "watch-seeds: watching $SEEDS"
+if command -v fswatch >/dev/null 2>&1; then
+  fswatch -o "$SEEDS" | while read -r _; do
+    run_seed
+  done
+else
+  echo "watch-seeds: fswatch not found, polling every 1s"
+  last_mtime="$(file_mtime "$SEEDS")"
+  while true; do
+    sleep 1
+    mtime="$(file_mtime "$SEEDS")"
+    if [ "$mtime" != "$last_mtime" ]; then
+      last_mtime="$mtime"
+      run_seed
+    fi
+  done
+fi

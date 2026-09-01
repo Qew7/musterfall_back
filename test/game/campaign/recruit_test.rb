@@ -105,4 +105,70 @@ class SimCampaignRecruitTest < ActiveSupport::TestCase
     assert result.failure?
     assert_equal "recruit slot unavailable", result.error
   end
+
+  test "chaos spawn spends all treasury and keeps bounded seeded mutations" do
+    campaign = Sim::Campaign::Create.call(player_count: 2).value
+    campaign = Sim::Campaign::AssignFaction.call(
+      campaign: campaign,
+      catalog: catalog,
+      player_id: "player-1",
+      faction_id: "chaos",
+      rng: Sim::Rng::Seeded.new(2)
+    ).value
+    player = campaign.find_player("player-1")
+    player[:recruit_access] = 0
+    blocked = Sim::Campaign::Recruit.call(
+      campaign: campaign,
+      catalog: catalog,
+      player_id: player[:id],
+      template_id: "rift_mutant",
+      rng: Sim::Rng::Seeded.new(9)
+    )
+    assert blocked.failure?
+
+    player[:recruit_access] = 2
+    player[:treasury] = 1000
+
+    result = Sim::Campaign::Recruit.call(
+      campaign: campaign,
+      catalog: catalog,
+      player_id: player[:id],
+      template_id: "rift_mutant",
+      rng: Sim::Rng::Seeded.new(9)
+    )
+
+    assert result.ok?, result.error
+    recruited = result.value.find_player(player[:id])
+    spawn = recruited[:roster].find { |entity| entity[:template_id] == "rift_mutant" }
+    assert_equal 0, recruited[:treasury]
+    assert_equal 1000, spawn.dig(:components, :economy, :cost)
+    assert_operator spawn.dig(:components, :health, :max), :<=, 12
+    assert_operator spawn.dig(:components, :combat, :melee), :<=, 8
+    assert_operator spawn.dig(:components, :combat, :skill), :<=, 6
+    assert_operator spawn.dig(:components, :combat, :attacks), :<=, 4
+    assert_operator spawn.dig(:components, :combat, :movement), :<=, 8
+    extras = spawn.dig(:components, :abilities) - %w[monster fear]
+    assert_operator extras.length, :<=, 2
+
+    replay = Sim::Campaign::Create.call(player_count: 2).value
+    replay = Sim::Campaign::AssignFaction.call(
+      campaign: replay,
+      catalog: catalog,
+      player_id: "player-1",
+      faction_id: "chaos",
+      rng: Sim::Rng::Seeded.new(2)
+    ).value
+    replay.find_player("player-1")[:recruit_access] = 2
+    replay.find_player("player-1")[:treasury] = 1000
+    again = Sim::Campaign::Recruit.call(
+      campaign: replay,
+      catalog: catalog,
+      player_id: "player-1",
+      template_id: "rift_mutant",
+      rng: Sim::Rng::Seeded.new(9)
+    ).value.find_player("player-1")[:roster].find { |entity| entity[:template_id] == "rift_mutant" }
+    assert_equal spawn.dig(:components, :abilities), again.dig(:components, :abilities)
+    assert_equal spawn.dig(:components, :combat), again.dig(:components, :combat)
+    assert_equal spawn.dig(:components, :health, :max), again.dig(:components, :health, :max)
+  end
 end
