@@ -14,8 +14,8 @@ module Sim
         "dragon_mount" => { model_class: "monster", movement: 20, melee: 2, health: 1, abilities: %w[flying fear ferocious] },
         "dread_steed" => { model_class: "cavalry", movement: 7, melee: 1, abilities: %w[fast fear momentumCharge] },
         "giant_bat" => { model_class: "monster", movement: 20, melee: 1, health: 1, abilities: %w[flying fear undead] },
-        "forest_stag" => { model_class: "cavalry", movement: 7, melee: 2, health: 1, abilities: %w[fast undaunted wildborn momentumCharge] },
-        "sky_hart" => { model_class: "monster", movement: 20, melee: 1, health: 1, abilities: %w[flying forestborn wildborn undaunted] },
+        "forest_stag" => { model_class: "cavalry", movement: 7, melee: 2, health: 1, abilities: %w[fast fearless wildborn momentumCharge] },
+        "sky_hart" => { model_class: "monster", movement: 20, melee: 1, health: 1, abilities: %w[flying forestborn wildborn fearless] },
         "chaos_steed" => { model_class: "cavalry", movement: 7, melee: 1, health: 1, abilities: %w[fast fear momentumCharge] }
       }.freeze
 

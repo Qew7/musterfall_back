@@ -7,7 +7,7 @@ module Sim
         melee: %w[charge momentumCharge boarCharge ferocious supportRank shieldwall antiLarge armorPiercing dodge poison toxin runeArmor skirmisher forestkin],
         shooting: %w[breath common volley blast line machine slingCatapult corpseTrail armorPiercing dodge toxin runeArmor forestborn skirmisher],
         magic: %w[breath common volley blast line machine armorPiercing dodge toxin runeArmor skirmisher],
-        morale: %w[undead fear undaunted wildborn disciplined resolute muster],
+        morale: %w[undead fear fearless wildborn disciplined resolute muster],
         round: %w[regen forestkin]
       }.freeze
 

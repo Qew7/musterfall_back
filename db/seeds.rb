@@ -9,7 +9,7 @@ abilities = [
   { key: "slingCatapult", name: "Катапульта-камикадзе", category: "siege", description: "Перед выстрелом тратит 1 модель союзных расходников в 6″. Тогда атака идёт взрывным шаблоном. Без расходника — обычный выстрел." },
   { key: "fast", name: "Fast", category: "mobility", description: "Кавалерийский профиль: MV 7, база cavalry." },
   { key: "fear", name: "Fear", category: "trait", description: "Проверки страха только при заряде в контакт: не-fear vs fear — атакующий, провал — стоп на полпути; fear vs не-fear — защитник, провал — не бьёт в раунде. Уже в рубке — без проверок. −1 к порогу морали врагов рядом." },
-  { key: "undaunted", name: "Иммунитет к страху", category: "trait", description: "Не проходит проверки страха и не даёт штраф страха. Сам не устрашает." },
+  { key: "fearless", name: "Иммунитет к страху", category: "trait", description: "Не проходит проверки страха и не даёт штраф страха. Сам не устрашает." },
   { key: "ferocious", name: "Ferocious", category: "trait", description: "Каждый следующий раунд той же рубки: SK +1, максимум 6. Сброс, если вышел из контакта." },
   { key: "flying", name: "Flying", category: "mobility", description: "Летает на полный MV; садится вне чужих баз; facing свободный; может заходить во фланг и тыл." },
   { key: "forestborn", name: "Forestborn", category: "trait", description: "Не получает штраф стрельбы по цели в лесу. Стрелок стремится занять лес." },
@@ -230,7 +230,7 @@ templates = [
   { template_key: "war_dancers", kind: "unit", recruit_tier: "line", faction_slug: "wildwood", name: "Танцоры войны", cost: 9, models: 8, model_health: 1, width: 4, armor_type: "light", weapon_type: "slash", melee: 5, ranged: 0, spell: 0, initiative: 3, abilities: [ "skirmisher", "dodge", "wildborn" ], skill: 4, mounted: false, attacks: 1 },
   # elite
   { template_key: "dryad_grove", kind: "unit", recruit_tier: "elite", faction_slug: "wildwood", name: "Стайка дриад", cost: 10, models: 8, model_health: 2, width: 4, armor_type: "magic", weapon_type: "slash", melee: 4, ranged: 0, spell: 0, initiative: 3, abilities: [ "fear", "forestkin" ], skill: 3, mounted: false, attacks: 1 },
-  { template_key: "stag_knights", kind: "unit", recruit_tier: "elite", faction_slug: "wildwood", name: "Рыцари на оленях", cost: 12, models: 6, model_health: 1, width: 3, armor_type: "medium", weapon_type: "puncture", melee: 6, ranged: 0, spell: 0, initiative: 3, abilities: [ "fast", "undaunted", "momentumCharge", "wildborn" ], skill: 4, mounted: false, attacks: 1 },
+  { template_key: "stag_knights", kind: "unit", recruit_tier: "elite", faction_slug: "wildwood", name: "Рыцари на оленях", cost: 12, models: 6, model_health: 1, width: 3, armor_type: "medium", weapon_type: "puncture", melee: 6, ranged: 0, spell: 0, initiative: 3, abilities: [ "fast", "fearless", "momentumCharge", "wildborn" ], skill: 4, mounted: false, attacks: 1 },
   # rare
   { template_key: "treeman", kind: "unit", recruit_tier: "rare", faction_slug: "wildwood", name: "Древочеловек", cost: 14, models: 3, model_health: 4, width: 3, armor_type: "heavy", weapon_type: "blunt", melee: 6, ranged: 2, spell: 0, initiative: 4, abilities: [ "fear", "ranged", "throwRocks", "forestkin" ], skill: 5, mounted: false, attacks: 2, shooting_range: 8 },
   { template_key: "grove_hawk", kind: "unit", recruit_tier: "rare", faction_slug: "wildwood", name: "Великий ястреб рощи", cost: 12, models: 1, model_health: 5, width: 2, armor_type: "medium", weapon_type: "puncture", melee: 5, ranged: 0, spell: 0, initiative: 5, abilities: [ "flying", "fast", "forestborn", "wildborn" ], skill: 4, mounted: false, attacks: 2 },
@@ -243,7 +243,7 @@ templates = [
   # line
   { template_key: "reaver_band", kind: "unit", recruit_tier: "line", faction_slug: "chaos", name: "Отряд грабителей", cost: 7, models: 14, model_health: 1, width: 4, armor_type: "medium", weapon_type: "slash", melee: 4, ranged: 0, spell: 0, initiative: 3, abilities: [], skill: 3, mounted: false, attacks: 1 },
   # elite
-  { template_key: "rift_heavies", kind: "unit", recruit_tier: "elite", faction_slug: "chaos", name: "Тяжёлая гвардия", cost: 11, models: 12, model_health: 1, width: 4, armor_type: "heavy", weapon_type: "slash", melee: 6, ranged: 0, spell: 0, initiative: 3, abilities: [ "disciplined", "undaunted", "runeArmor" ], skill: 5, mounted: false, attacks: 1 },
+  { template_key: "rift_heavies", kind: "unit", recruit_tier: "elite", faction_slug: "chaos", name: "Тяжёлая гвардия", cost: 11, models: 12, model_health: 1, width: 4, armor_type: "heavy", weapon_type: "slash", melee: 6, ranged: 0, spell: 0, initiative: 3, abilities: [ "disciplined", "fearless", "runeArmor" ], skill: 5, mounted: false, attacks: 1 },
   { template_key: "rift_knights", kind: "unit", recruit_tier: "elite", faction_slug: "chaos", name: "Рыцари разлома", cost: 13, models: 6, model_health: 1, width: 3, armor_type: "heavy", weapon_type: "puncture", melee: 7, ranged: 0, spell: 0, initiative: 3, abilities: [ "fast", "momentumCharge" ], skill: 5, mounted: false, attacks: 1 },
   # rare
   { template_key: "rift_mutant", kind: "unit", recruit_tier: "rare", faction_slug: "chaos", name: "Мутант разлома", cost: 12, models: 1, model_health: 6, width: 1, armor_type: "magic", weapon_type: "blunt", melee: 5, ranged: 0, spell: 0, initiative: 3, abilities: [ "fear" ], skill: 4, mounted: false, attacks: 2 },
@@ -251,7 +251,7 @@ templates = [
   # heroes
   { template_key: "rift_lord", kind: "hero", recruit_tier: "line", faction_slug: "chaos", name: "Лорд разлома", cost: 12, models: 1, model_health: 4, width: 1, armor_type: "heavy", weapon_type: "slash", melee: 6, ranged: 0, spell: 0, initiative: 5, abilities: [ "leader", "fear" ], skill: 6, mounted: false, attacks: 2 },
   { template_key: "sorcerer", kind: "hero", recruit_tier: "line", faction_slug: "chaos", name: "Чародей Хаоса", cost: 14, models: 1, model_health: 2, width: 1, armor_type: "magic", weapon_type: "magic", melee: 2, ranged: 5, spell: 5, initiative: 5, abilities: [ "wizard" ], skill: 5, mounted: false, attacks: 2 },
-  { template_key: "blood_champion", kind: "hero", recruit_tier: "line", faction_slug: "chaos", name: "Чемпион крови", cost: 13, models: 1, model_health: 3, width: 1, armor_type: "heavy", weapon_type: "slash", melee: 6, ranged: 0, spell: 0, initiative: 5, abilities: [ "undaunted", "runeArmor" ], skill: 5, mounted: false, attacks: 2 }
+  { template_key: "blood_champion", kind: "hero", recruit_tier: "line", faction_slug: "chaos", name: "Чемпион крови", cost: 13, models: 1, model_health: 3, width: 1, armor_type: "heavy", weapon_type: "slash", melee: 6, ranged: 0, spell: 0, initiative: 5, abilities: [ "fearless", "runeArmor" ], skill: 5, mounted: false, attacks: 2 }
 ]
 
 templates.map! do |attributes|
@@ -300,7 +300,7 @@ upgrades = [
   { upgrade_key: "heartwood_bow", faction_slug: "wildwood", name: "Лук из сердцевины", category: "weapon", summary: "Ranged +3, precision, forestborn и ranged.", repeatable: false, min_level: 1, general_only: false },
   { upgrade_key: "wild_growth", faction_slug: "wildwood", name: "Дикий рост", category: "trait", summary: "Здоровье +1, melee +1 и ranged +1.", repeatable: true, min_level: 1, general_only: false },
   { upgrade_key: "spirit_bark", faction_slug: "wildwood", name: "Духовная кора", category: "ability", summary: "forestkin и regen.", repeatable: false, min_level: 1, general_only: false },
-  { upgrade_key: "forest_stag", faction_slug: "wildwood", name: "Лесной олень", category: "mount", summary: "Кавалерийская база (MV 7), wildborn, undaunted, momentumCharge, +2 melee и +1 здоровье.", repeatable: false, min_level: 1, general_only: false },
+  { upgrade_key: "forest_stag", faction_slug: "wildwood", name: "Лесной олень", category: "mount", summary: "Кавалерийская база (MV 7), wildborn, fearless, momentumCharge, +2 melee и +1 здоровье.", repeatable: false, min_level: 1, general_only: false },
   { upgrade_key: "sky_hart", faction_slug: "wildwood", name: "Небесный олень", category: "mount", summary: "Только генерал, с 3 уровня. Летает (MV 20), monster-база, +1 melee, +1 здоровье, forestborn и wildborn.", repeatable: false, min_level: 3, general_only: true },
 
   # ── Хаос ───────────────────────────────────────────────────

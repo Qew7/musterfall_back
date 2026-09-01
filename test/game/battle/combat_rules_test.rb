@@ -220,16 +220,16 @@ class SimBattleCombatRulesTest < ActiveSupport::TestCase
     assert_empty phase[:actions].select { |row| row[:type] == "fear_check" }
   end
 
-  test "undaunted unit ignores enemy fear on charge" do
-    undaunted = charge_combatant(entity_id: "a", x: 12, y: 12, abilities: [ "undaunted" ], movement: 6)
+  test "fearless unit ignores enemy fear on charge" do
+    fearless = charge_combatant(entity_id: "a", x: 12, y: 12, abilities: [ "fearless" ], movement: 6)
     scary = charge_combatant(entity_id: "b", x: 22, y: 12, facing: 180, abilities: [ "fear" ], side_index: 1)
     phase = Attack.create_phase("movement", "Фаза движения")
-    intent = charge_intent_for(undaunted, scary)
+    intent = charge_intent_for(fearless, scary)
 
     FearMovement.prepare_melee_intents!(
       phase: phase,
       intents: [ intent ],
-      acting_side: { combatants: [ undaunted ] },
+      acting_side: { combatants: [ fearless ] },
       target_side: { combatants: [ scary ] },
       round_number: 1
     )

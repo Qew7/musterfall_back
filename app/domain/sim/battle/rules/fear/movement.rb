@@ -12,10 +12,10 @@ module Sim
             Array(combatant[:abilities]).include?("fear")
           end
 
-          def undaunted?(combatant, terrain: [])
-            return true if Array(combatant[:abilities]).include?("undaunted")
+          def fearless?(combatant, terrain: [])
+            return true if Array(combatant[:abilities]).include?("fearless")
 
-            Wildborn::Movement.undaunted?(combatant, terrain: terrain)
+            Wildborn::Movement.fearless?(combatant, terrain: terrain)
           end
 
           def prepare_melee_intents!(ctx)
@@ -81,7 +81,7 @@ module Sim
           end
 
           def charge_into_fear?(combatant, target, terrain: [])
-            return false if has_fear?(combatant) || undaunted?(combatant, terrain: terrain)
+            return false if has_fear?(combatant) || fearless?(combatant, terrain: terrain)
             return false unless has_fear?(target)
 
             true
@@ -89,7 +89,7 @@ module Sim
 
           def fear_charges_defender?(combatant, target, terrain: [])
             return false unless has_fear?(combatant)
-            return false if has_fear?(target) || undaunted?(target, terrain: terrain)
+            return false if has_fear?(target) || fearless?(target, terrain: terrain)
 
             true
           end
@@ -124,7 +124,7 @@ module Sim
           end
 
           def apply_defender_check!(phase:, subject:, source:, subject_allies:, source_allies:, battle_sides:, round_number:, sequence:, terrain: [])
-            return if has_fear?(subject) || undaunted?(subject, terrain: terrain)
+            return if has_fear?(subject) || fearless?(subject, terrain: terrain)
 
             before = State.snapshot_combatant(subject)
             check = Phases::Morale.resolve_check(

@@ -11,7 +11,7 @@ module Sim
             Geometry::Battlefield.in_forest?(defender, terrain)
           end
 
-          def undaunted?(combatant, terrain: [])
+          def fearless?(combatant, terrain: [])
             return false unless Array(combatant[:abilities]).include?("wildborn")
 
             Geometry::Battlefield.in_forest?(combatant, terrain)

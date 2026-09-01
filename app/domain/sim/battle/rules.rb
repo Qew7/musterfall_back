@@ -165,9 +165,9 @@ module Sim
           end
         end
 
-        def undaunted?(combatant, terrain: [])
+        def fearless?(combatant, terrain: [])
           @rules.any? do |rule|
-            rule.respond_to?(:undaunted?) && rule.undaunted?(combatant, terrain: terrain)
+            rule.respond_to?(:fearless?) && rule.fearless?(combatant, terrain: terrain)
           end
         end
 
