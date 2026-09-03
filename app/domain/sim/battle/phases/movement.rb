@@ -592,20 +592,12 @@ module Sim
           intent[:wait] = false
         end
 
-        # Soft-contact: the charge target may sit in the contact band (padding..CONTACT).
-        # Hard-block only true OBB overlap against that target; everyone else uses CONTACT.
+        # Thin adapter over the single Pathing::Obstacles#blocks_pose? kernel (SAT via
+        # Geometry::Obb): charge target soft-contacts via contact_id (OBB overlap only),
+        # terrain uses TERRAIN_WRAP_PAD, everyone else uses the CONTACT gap. The kernel's
+        # own id-skip and health filter cover the self / dead-obstacle guards.
         def footprints_conflict?(left, right, contact_id: nil)
-          return false if left[:entity_id] == right[:entity_id]
-          return false if right[:current_health].to_i <= 0
-
-          if contact_id && right[:entity_id] == contact_id
-            return Geometry::Battlefield.rectangles_overlap?(left, right)
-          end
-          if Pathing.terrain_obstacle?(right)
-            return Geometry::Battlefield.rectangles_overlap?(left, right)
-          end
-
-          Geometry::Battlefield.distance_between_units(left, right) < CONTACT
+          !Pathing::Obstacles.new([ right ]).clear?(left, contact_id: contact_id)
         end
 
         def wait_blocker_label(plan)

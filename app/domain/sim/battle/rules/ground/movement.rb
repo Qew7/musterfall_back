@@ -305,19 +305,17 @@ module Sim
             meaningful_move = destination && (facing_changed || traveled > 0.05)
             return nil unless meaningful_move
 
-            {
-              kind: "approach",
+            Decisions::Movement.approach_intent(
               combatant: combatant,
               nearest: nearest,
               plan: plan,
               budget: budget,
               march_meta: march_meta,
               destination: destination,
-              wait: false,
               contact_slot: contact_slot,
               approach_mode: approach_mode,
               charge_contact_id: contact_id
-            }
+            )
           end
 
           def approach_goal_point(origin, defender, contact_slot:, approach_mode:, chargeable: true)

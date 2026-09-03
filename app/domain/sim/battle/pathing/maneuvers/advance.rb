@@ -35,7 +35,7 @@ module Sim
               flying: flying,
               kernels: kernels
             )
-            spent = pose_travel(origin, clearance[:pose])
+            spent = Maneuvers.pose_travel(origin, clearance[:pose])
             plan = clearance.merge(
               wheel: idle,
               turn: nil,
@@ -44,13 +44,7 @@ module Sim
               mv_spent_advance: spent,
               mv_spent_march: 0.0
             )
-            plan.merge(steps: Maneuvers.steps_for(plan))
-          end
-
-          def pose_travel(origin, pose)
-            return 0.0 unless pose
-
-            Geometry::Battlefield.distance_between(origin, pose)
+            Maneuvers.finish_plan(plan)
           end
         end
       end

@@ -6,7 +6,6 @@ module Sim
       ENGAGE = CONTACT + CONTACT_SNAP
       # Clearance around impassable terrain: wrap vertices and collision queries share one pad.
       TERRAIN_WRAP_PAD = 0.35
-      ALIGNED_MARCH_DOT = 0.999
       ObstacleKernel = Struct.new(:id, :x, :y, :hw, :hd, :c, :s, :radius, :source)
 
       module_function
@@ -282,16 +281,12 @@ module Sim
           march_samples << wheeled.merge(x: destination[:x], y: destination[:y], facing: destination[:facing])
         end
 
-        march_collision = march_samples.empty? ||
-          !aligned_translation?(wheeled, destination) ||
-          !translation_clear?(wheeled, wheeled, destination, kernels, contact_id)
         samples = wheel_samples + march_samples
-        wheel_count = wheel_samples.length
 
         blocker = nil
         budget_limit = budget.nil? ? nil : budget.to_f + 0.05
 
-        samples.each_with_index do |pose, index|
+        samples.each do |pose|
           segment = Geometry::Battlefield.distance_between(prev, pose)
           multiplier = Geometry::Battlefield.move_cost_multiplier_at(pose, terrain, flying: flying)
           cost_spent += segment * multiplier
@@ -299,12 +294,10 @@ module Sim
             break
           end
 
-          if index < wheel_count || march_collision
-            hit = first_blocker(pose, obstacles, contact_id: contact_id, origin: origin, kernels: kernels)
-            if hit
-              blocker = hit
-              break
-            end
+          hit = first_blocker(pose, obstacles, contact_id: contact_id, origin: origin, kernels: kernels)
+          if hit
+            blocker = hit
+            break
           end
 
           last_clear = pose
@@ -324,20 +317,6 @@ module Sim
         end
 
         { pose: last_clear, truncated: !!truncated, blocker: blocker, cost_spent: cost_spent }
-      end
-
-      def aligned_translation?(from, to)
-        dx = to[:x].to_f - from[:x].to_f
-        dy = to[:y].to_f - from[:y].to_f
-        length = Geometry::Battlefield.distance_between(from, to)
-        return true if length <= 0.05
-
-        c, s = Geometry::Obb.trig(to[:facing])
-        ((dx * c) + (dy * s)) >= (length * ALIGNED_MARCH_DOT)
-      end
-
-      def translation_clear?(mover, from, to, kernels, contact_id)
-        Obstacles.coerce(nil, kernels).translation_clear?(mover, from, to, contact_id: contact_id)
       end
 
       def ally_blocker?(origin, blocker)

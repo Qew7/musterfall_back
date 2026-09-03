@@ -11,9 +11,36 @@ module Sim
         ADVANCING = { "rear" => "support", "support" => "front" }.freeze
         SLOT_RANK = { "front" => 0, "flank" => 1, "rear" => 2 }.freeze
         # Charge range and spend: ×MV. March is the same rate but straight-only.
-        SETUP_RANGE_MV = 2.0
+        # ChargeRange is the single source of truth for the charge multiplier.
+        SETUP_RANGE_MV = ChargeRange::SETUP_MV
+
+        # Sentinel so `march_meta` is only emitted when a caller sets it (ground
+        # approach carries it; flying intents omit the key entirely).
+        NO_MARCH_META = Object.new.freeze
 
         module_function
+
+        # Shared "approach" intent hash built by the movement rules (ground / flying).
+        # Pure data factory: each rule decides its own values and passes them in;
+        # this must not branch on ability/flyer state.
+        def approach_intent(combatant:, nearest:, plan:, budget:, destination:, contact_slot:, approach_mode:, charge_contact_id:, march_meta: NO_MARCH_META)
+          intent = {
+            kind: "approach",
+            combatant: combatant,
+            nearest: nearest,
+            plan: plan,
+            budget: budget
+          }
+          intent[:march_meta] = march_meta unless march_meta.equal?(NO_MARCH_META)
+          intent.merge!(
+            destination: destination,
+            wait: false,
+            contact_slot: contact_slot,
+            approach_mode: approach_mode,
+            charge_contact_id: charge_contact_id
+          )
+          intent
+        end
 
         def flying?(combatant)
           Array(combatant[:abilities]).include?("flying")
@@ -32,7 +59,7 @@ module Sim
         end
 
         def charge_budget_for(combatant, enemies:)
-          budget_for(combatant, enemies: enemies) * SETUP_RANGE_MV
+          ChargeRange.budget(combatant, enemies: enemies)
         end
 
         def budget_meta(combatant, enemies:)

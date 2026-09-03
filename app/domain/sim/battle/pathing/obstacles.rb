@@ -42,6 +42,16 @@ module Sim
           @kernels = @entries.map { |entry| compile(entry) }
         end
 
+        # Build directly from already-compiled kernels — skips coerce/compile so
+        # except/+ can filter or concat the existing @kernels without rebuilding
+        # from source. @entries mirrors the kernels' sources to stay consistent
+        # with each/size, which are the only other readers of @entries.
+        def self.from_compiled(kernels)
+          instance = allocate
+          instance.send(:init_from_compiled, Array(kernels))
+          instance
+        end
+
         def each(&block)
           @entries.each(&block)
         end
@@ -56,11 +66,12 @@ module Sim
 
         def except(*ids)
           skip = ids.flatten.compact
-          self.class.new(@entries.reject { |entry| skip.include?(entry[:entity_id]) })
+          self.class.from_compiled(@kernels.reject { |kernel| skip.include?(kernel.id) })
         end
 
         def +(other)
-          self.class.new(@entries + Array(other))
+          other_kernels = other.is_a?(self.class) ? other.kernels : self.class.new(Array(other)).kernels
+          self.class.from_compiled(@kernels + other_kernels)
         end
 
         def first_blocker(pose, contact_id: nil)
@@ -232,6 +243,11 @@ module Sim
         end
 
         private
+
+        def init_from_compiled(kernels)
+          @kernels = kernels
+          @entries = kernels.map(&:source)
+        end
 
         def usable?(entry)
           entry && !entry[:x].nil? && !entry[:y].nil? && entry[:current_health].to_i > 0

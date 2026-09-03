@@ -66,6 +66,19 @@ module Sim
           pivot_cost + Geometry::Battlefield.distance_between(from, plan[:pose] || origin)
         end
 
+        # Straight-line MV spent between two poses (0 when the pose is missing).
+        # Shared by Advance / March / Turn, which all measure the same way.
+        def pose_travel(origin, pose)
+          return 0.0 unless pose
+
+          Geometry::Battlefield.distance_between(origin, pose)
+        end
+
+        # Attach replay steps to a completed segment plan.
+        def finish_plan(plan)
+          plan.merge(steps: steps_for(plan))
+        end
+
         def steps_for(plan)
           steps = []
           if plan[:turn] && plan[:turn][:cost].to_f > 0.05

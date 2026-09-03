@@ -201,18 +201,16 @@ module Sim
             end
             return nil unless best
 
-            {
-              kind: "approach",
+            Decisions::Movement.approach_intent(
               combatant: combatant,
               nearest: nearest,
               plan: best[:plan].merge(leap: true, charge: true, kind: "flyer_charge", heading: best[:destination][:facing]),
               budget: budget,
               destination: best[:destination],
-              wait: false,
               contact_slot: contact_slot,
               approach_mode: approach_mode,
               charge_contact_id: nearest[:entity_id]
-            }
+            )
           end
 
           def build_setup_intent(combatant, nearest, obstacles, contact_slot, budget, approach_mode)
@@ -235,18 +233,16 @@ module Sim
             return nil unless best
 
             mode = best[:slot] == "rear" ? :flyer_setup_rear : :flyer_setup_flank
-            {
-              kind: "approach",
+            Decisions::Movement.approach_intent(
               combatant: combatant,
               nearest: nearest,
               plan: best[:plan].merge(leap: true, charge: false, kind: "flyer_leap", heading: best[:destination][:facing]),
               budget: budget,
               destination: best[:destination],
-              wait: false,
               contact_slot: best[:slot],
               approach_mode: mode,
               charge_contact_id: nil
-            }
+            )
           end
 
           def score_setup_landing(combatant, nearest, point, budget, obstacles)
@@ -329,18 +325,16 @@ module Sim
             end
             return nil unless best
 
-            {
-              kind: "approach",
+            Decisions::Movement.approach_intent(
               combatant: combatant,
               nearest: nearest,
               plan: best[:plan].merge(leap: true, charge: false, kind: "flyer_leap", heading: best[:destination][:facing]),
               budget: budget,
               destination: best[:destination],
-              wait: false,
               contact_slot: contact_slot,
               approach_mode: approach_mode,
               charge_contact_id: nil
-            }
+            )
           end
 
           def closing_candidate_points(origin, goal, budget)
