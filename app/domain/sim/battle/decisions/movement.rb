@@ -10,9 +10,6 @@ module Sim
         ENGAGE = CONTACT + CONTACT_SNAP
         ADVANCING = { "rear" => "support", "support" => "front" }.freeze
         SLOT_RANK = { "front" => 0, "flank" => 1, "rear" => 2 }.freeze
-        # Charge range and spend: ×MV. March is the same rate but straight-only.
-        # ChargeRange is the single source of truth for the charge multiplier.
-        SETUP_RANGE_MV = ChargeRange::SETUP_MV
 
         # Sentinel so `march_meta` is only emitted when a caller sets it (ground
         # approach carries it; flying intents omit the key entirely).
