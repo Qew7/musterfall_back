@@ -32,7 +32,6 @@ class SimBattlePathingRetreatTest < ActiveSupport::TestCase
       ally_ids: [ ally[:entity_id] ]
     )
 
-    refute plan[:avoided]
     assert plan[:pose]
     refute Sim::Geometry::Battlefield.rectangles_overlap?(
       origin.merge(x: plan[:pose][:x], y: plan[:pose][:y], facing: plan[:pose][:facing]),
@@ -72,7 +71,6 @@ class SimBattlePathingRetreatTest < ActiveSupport::TestCase
       ally_ids: []
     )
 
-    refute plan[:avoided]
     assert plan[:pose]
     assert_in_delta plan[:heading], plan[:pose][:facing], 0.001
     assert_operator Sim::Geometry::Battlefield.distance_between(origin, plan[:pose]), :>, 0.5

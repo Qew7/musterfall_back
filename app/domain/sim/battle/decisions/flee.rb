@@ -38,7 +38,6 @@ module Sim
             destination: destination,
             facing: destination[:facing],
             escaped: outside?(destination),
-            avoided: plan[:avoided],
             blocked_by_ally: !!plan[:blocked_by_ally],
             blocker: plan[:blocker]
           }

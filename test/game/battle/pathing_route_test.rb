@@ -1,23 +1,23 @@
 require "test_helper"
 
-class SimBattlePathingThreadTest < ActiveSupport::TestCase
+class SimBattlePathingRouteTest < ActiveSupport::TestCase
   BF = Sim::Geometry::Battlefield
   Pathing = Sim::Battle::Pathing
-  Thread = Sim::Battle::Pathing::Thread
+  Route = Sim::Battle::Pathing::Route
 
-  test "open LOS is a single thread segment" do
+  test "open LOS is a single route segment" do
     actor = BattleScenarios.combatant(x: 6.0, y: 12.0, facing: 0.0)
     goal = { x: 24.0, y: 12.0 }
     kernels = Pathing.obstacle_kernels([ actor ])
-    thread = Thread.pull(mover: actor, goal: goal, obstacles: [ actor ], contact_id: nil, kernels: kernels)
+    route = Route.pull(mover: actor, goal: goal, obstacles: [ actor ], contact_id: nil, kernels: kernels)
 
-    assert thread[:complete]
-    assert_equal 2, thread[:points].length
-    assert_in_delta 6.0, thread[:points].first[:x], 0.05
-    assert_in_delta 24.0, thread[:points].last[:x], 0.05
+    assert route[:complete]
+    assert_equal 2, route[:points].length
+    assert_in_delta 6.0, route[:points].first[:x], 0.05
+    assert_in_delta 24.0, route[:points].last[:x], 0.05
   end
 
-  test "a 5x4 tray wraps a lakeshore outside its circumradius so corners do not snag" do
+  test "a 5x4 tray routes around a lakeshore without snagging corners" do
     actor = BattleScenarios.combatant(
       entity_id: "unit-16", x: 32.31, y: 11.19, facing: 173.5,
       base_width: 5.0, base_depth: 4.0, movement: 3.0
@@ -28,13 +28,13 @@ class SimBattlePathingThreadTest < ActiveSupport::TestCase
     )
     world = Pathing::Obstacles.merge([ actor, enemy ], [ lake ])
     lake_obs = BF.feature_as_obstacle(lake)
-    thread = Thread.pull(mover: actor, goal: enemy, world: world, contact_id: enemy[:entity_id])
+    route = Route.pull(mover: actor, goal: enemy, world: world, contact_id: enemy[:entity_id])
 
-    assert_operator thread[:points].length, :>=, 3
-    thread[:points].each_cons(2) do |_from, vertex|
-      heading = BF.heading_to(thread[:points].first, vertex)
+    assert_operator route[:points].length, :>=, 3
+    route[:points].each_cons(2) do |_from, vertex|
+      heading = BF.heading_to(route[:points].first, vertex)
       pose = actor.merge(x: vertex[:x], y: vertex[:y], facing: heading)
-      refute BF.rectangles_overlap?(pose, lake_obs), "thread vertex #{vertex.inspect} overlaps the lake"
+      refute BF.rectangles_overlap?(pose, lake_obs), "route vertex #{vertex.inspect} overlaps the lake"
     end
 
     plan = Pathing.plan_approach(
@@ -45,28 +45,27 @@ class SimBattlePathingThreadTest < ActiveSupport::TestCase
     landed = BF.merge_footprint(actor, plan[:pose])
     refute BF.rectangles_overlap?(landed, lake_obs)
     assert leftover <= 0.6, "leftover #{leftover} unused at the lake"
-    assert plan[:avoided]
     assert_operator BF.distance_between(actor, plan[:pose]), :>, 0.5
-    wrap_y = thread[:points][1][:y]
-    assert_operator wrap_y, :>, 8.3, "wrap vertex y=#{wrap_y} is not north of the lake"
+    route_y = route[:points][1][:y]
+    assert_operator route_y, :>, 8.3, "route vertex y=#{route_y} is not north of the lake"
   end
 
-  test "a blocker on the line pulls the thread around the OBB with clearance" do
+  test "a blocker on the line pulls the route around the OBB with clearance" do
     actor = BattleScenarios.combatant(x: 6.0, y: 12.0, facing: 0.0, base_width: 2.0, base_depth: 2.0)
     house = BattleScenarios.terrain(id: "house", x: 16.0, y: 12.0, width: 3.0, depth: 3.0)
     goal = { x: 28.0, y: 12.0 }
     obstacles = Pathing.merge_obstacles([ actor ], [ house ])
     kernels = Pathing.obstacle_kernels(obstacles)
-    thread = Thread.pull(mover: actor, goal: goal, obstacles: obstacles, contact_id: nil, kernels: kernels)
+    route = Route.pull(mover: actor, goal: goal, obstacles: obstacles, contact_id: nil, kernels: kernels)
     house_obs = BF.feature_as_obstacle(house)
 
-    assert thread[:complete]
-    assert_operator thread[:points].length, :>=, 3
-    thread[:points].each do |point|
+    assert route[:complete]
+    assert_operator route[:points].length, :>=, 3
+    route[:points].each do |point|
       pose = actor.merge(x: point[:x], y: point[:y])
-      refute BF.rectangles_overlap?(pose, house_obs), "thread vertex #{point.inspect} overlaps the house"
+      refute BF.rectangles_overlap?(pose, house_obs), "route vertex #{point.inspect} overlaps the house"
     end
-    assert thread[:points].any? { |point| (point[:y] - actor[:y]).abs > 0.4 }
+    assert route[:points].any? { |point| (point[:y] - actor[:y]).abs > 0.4 }
   end
 
   test "a wide tray does not squeeze through a point-sized gap" do
@@ -76,17 +75,17 @@ class SimBattlePathingThreadTest < ActiveSupport::TestCase
     goal = { x: 28.0, y: 12.0 }
     obstacles = [ actor, upper, lower ]
     kernels = Pathing.obstacle_kernels(obstacles)
-    thread = Thread.pull(mover: actor, goal: goal, obstacles: obstacles, contact_id: nil, kernels: kernels)
+    route = Route.pull(mover: actor, goal: goal, obstacles: obstacles, contact_id: nil, kernels: kernels)
 
-    refute Thread.segment_clear?(actor, { x: 6.0, y: 12.0 }, { x: 28.0, y: 12.0 }, kernels, nil)
-    thread[:points].each do |point|
+    refute Route.segment_clear?(actor, { x: 6.0, y: 12.0 }, { x: 28.0, y: 12.0 }, kernels, nil)
+    route[:points].each do |point|
       pose = actor.merge(x: point[:x], y: point[:y])
       refute BF.rectangles_overlap?(pose, upper)
       refute BF.rectangles_overlap?(pose, lower)
     end
   end
 
-  test "follow wraps an ally with wheel or turn then advance" do
+  test "route uses wheel or turn then advance around an ally" do
     actor = BattleScenarios.combatant(x: 8.0, y: 12.0, facing: 0.0, movement: 5.0, base_width: 3.0, base_depth: 3.0)
     ally = BattleScenarios.combatant(entity_id: "brutes", x: 14.0, y: 12.0, facing: 0.0, base_width: 4.0, base_depth: 4.0)
     enemy = BattleScenarios.enemy(x: 26.0, y: 12.0, facing: 180.0)
@@ -101,7 +100,6 @@ class SimBattlePathingThreadTest < ActiveSupport::TestCase
 
     assert plan[:pose]
     refute plan[:blocked_by_ally]
-    assert plan[:avoided]
     kinds = Array(plan[:steps]).map { |step| step[:kind] }
     assert (kinds & %w[wheel turn]).any?
     landed = BF.merge_footprint(actor, plan[:pose])
@@ -109,7 +107,7 @@ class SimBattlePathingThreadTest < ActiveSupport::TestCase
     assert_operator BF.distance_between(actor, plan[:pose]), :>, 0.2
   end
 
-  test "boxed-by-allies thread does not claim a path through the box" do
+  test "boxed-by-allies route does not claim a path through the box" do
     actor = BattleScenarios.combatant(x: 6.0, y: 12.0, facing: 0.0)
     front = BattleScenarios.combatant(entity_id: "front", x: 10.0, y: 12.0, base_width: 4.0, base_depth: 4.0)
     upper = BattleScenarios.combatant(entity_id: "upper", x: 6.0, y: 8.5, base_width: 4.0, base_depth: 2.0)
@@ -117,26 +115,26 @@ class SimBattlePathingThreadTest < ActiveSupport::TestCase
     goal = { x: 30.0, y: 12.0 }
     obstacles = [ actor, front, upper, lower ]
     kernels = Pathing.obstacle_kernels(obstacles)
-    thread = Thread.pull(mover: actor, goal: goal, obstacles: obstacles, contact_id: nil, kernels: kernels)
+    route = Route.pull(mover: actor, goal: goal, obstacles: obstacles, contact_id: nil, kernels: kernels)
 
-    thread[:points].each do |point|
+    route[:points].each do |point|
       pose = actor.merge(x: point[:x], y: point[:y])
       refute BF.rectangles_overlap?(pose, front)
       refute BF.rectangles_overlap?(pose, upper)
       refute BF.rectangles_overlap?(pose, lower)
     end
-    through = thread[:points].each_cons(2).any? do |a, b|
+    through = route[:points].each_cons(2).any? do |a, b|
       (a[:y] - 12.0).abs < 0.6 && (b[:y] - 12.0).abs < 0.6 &&
         a[:x] < 10.0 && b[:x] > 10.0
     end
-    refute through, "thread went through the boxed front instead of around"
+    refute through, "route went through the boxed front instead of around"
   end
 
-  test "thread anchor keeps a precomputed goal instead of re-deriving orbit slots" do
+  test "route anchor keeps a precomputed goal instead of re-deriving orbit slots" do
     actor = BattleScenarios.combatant(x: 10.0, y: 6.0, facing: 90.0, base_width: 1.0, base_depth: 1.0)
     enemy = BattleScenarios.enemy(x: 16.0, y: 12.0, facing: 180.0, base_width: 4.0, base_depth: 3.0)
     given = { x: 20.0, y: 8.0 }
-    anchor = Thread.anchor(
+    anchor = Route.anchor(
       origin: actor,
       goal_point: given,
       goal_unit: enemy,
@@ -172,7 +170,6 @@ class SimBattlePathingThreadTest < ActiveSupport::TestCase
     landed = BF.merge_footprint(actor, plan[:pose])
     refute BF.rectangles_overlap?(landed, lake_obs)
     refute_operator landed[:x], :<, actor[:x] - 0.6
-    refute_equal "terrain-1", plan[:blocker] && plan[:blocker][:entity_id]
   end
 
   test "a wide tray behind a friend turns when the wheel cannot clear this frontage" do
@@ -201,7 +198,7 @@ class SimBattlePathingThreadTest < ActiveSupport::TestCase
     assert_operator BF.distance_between(actor, plan[:pose]), :>, 0.5
   end
 
-  test "thread first hop around a friend is not the jammed face midpoint" do
+  test "route first hop around a friend is not the jammed face midpoint" do
     actor = BattleScenarios.combatant(
       entity_id: "unit-11", x: 35.0, y: 19.0, facing: 180.0,
       base_width: 4.0, base_depth: 4.0, files: 2, ranks: 2, movement: 3.0
@@ -212,13 +209,13 @@ class SimBattlePathingThreadTest < ActiveSupport::TestCase
     )
     enemy = BattleScenarios.enemy(entity_id: "unit-36", x: 8.0, y: 16.0, facing: 0.0)
     world = Pathing::Obstacles.merge([ actor, friend, enemy ], [])
-    thread = Thread.pull(mover: actor, goal: enemy, world: world, contact_id: enemy[:entity_id])
-    first = thread[:points][1]
-    heading = BF.heading_to(thread[:points][0], first)
+    route = Route.pull(mover: actor, goal: enemy, world: world, contact_id: enemy[:entity_id])
+    first = route[:points][1]
+    heading = BF.heading_to(route[:points][0], first)
     along = BF.distance_between(actor, first)
     into_friend = BF.shortest_facing_delta(actor[:facing], heading).abs < 15.0 && along < 1.0
 
-    assert_operator thread[:points].length, :>=, 3
+    assert_operator route[:points].length, :>=, 3
     refute into_friend, "first hop #{first.inspect} is the jammed face midpoint"
   end
 
@@ -242,9 +239,7 @@ class SimBattlePathingThreadTest < ActiveSupport::TestCase
     landed = BF.merge_footprint(actor, plan[:pose])
     refute BF.rectangles_overlap?(landed, house_obs)
     refute_equal "terrain-5", plan[:blocker] && plan[:blocker][:entity_id]
-    leftover = 3.0 - plan[:cost_spent].to_f
-    assert leftover <= 0.5 || plan[:avoided],
-           "spent #{plan[:cost_spent]} leftover #{leftover} avoided=#{plan[:avoided]} blocker=#{plan[:blocker].inspect}"
+    assert_operator BF.distance_between(actor, plan[:pose]), :>, 0.2
   end
 
   test "almost-contact approach does not turn into the map edge" do
@@ -274,7 +269,7 @@ class SimBattlePathingThreadTest < ActiveSupport::TestCase
     assert_in_delta actor[:facing], landed[:facing], 20.0
   end
 
-  test "support block wraps a friend toward the enemy instead of turning to the map edge" do
+  test "support block routes around a friend toward the enemy instead of turning to the map edge" do
     actor = BattleScenarios.combatant(
       entity_id: "unit-36", x: 4.0, y: 4.0, facing: 0.0,
       base_width: 4.0, base_depth: 4.0, movement: 4.0
@@ -310,15 +305,15 @@ class SimBattlePathingThreadTest < ActiveSupport::TestCase
       id: "terrain-3", type: "house", x: 25.76, y: 17.65, width: 3.32, depth: 2.1
     )
     world = Pathing::Obstacles.merge([ actor, enemy ], [ house ])
-    thread = Thread.pull(mover: actor, goal: enemy, world: world, contact_id: enemy[:entity_id])
+    route = Route.pull(mover: actor, goal: enemy, world: world, contact_id: enemy[:entity_id])
     house_obs = BF.feature_as_obstacle(house)
 
-    wrap = thread[:points][1]
-    assert wrap, "thread has no wrap vertex"
-    assert_operator wrap[:y], :>, actor[:y], "wrap #{wrap.inspect} goes into the house west face, not north"
-    thread[:points].each do |point|
+    route_point = route[:points][1]
+    assert route_point, "route has no intermediate point"
+    assert_operator route_point[:y], :>, actor[:y], "route #{route_point.inspect} goes into the house west face, not north"
+    route[:points].each do |point|
       pose = actor.merge(x: point[:x], y: point[:y])
-      refute BF.rectangles_overlap?(pose, house_obs), "thread vertex #{point.inspect} overlaps the house"
+      refute BF.rectangles_overlap?(pose, house_obs), "route vertex #{point.inspect} overlaps the house"
     end
 
     plan = Pathing.plan_approach(

@@ -1,9 +1,8 @@
 module Sim
   module Battle
     module Pathing
-      # Shortest polyline of tray-clear segments through the Minkowski vertices
-      # of convex obstacles. The tray, not a point, is the thing that must fit.
-      module Thread
+      # Shortest clear route through obstacle checkpoints.
+      module Route
         module_function
 
         def pull(mover:, goal:, obstacles: nil, contact_id: nil, kernels: nil, world: nil)
@@ -11,12 +10,12 @@ module Sim
           finish = point(goal)
           space = Obstacles.coerce(world || obstacles, kernels)
           wrap = space.except(mover[:entity_id], goal[:entity_id], contact_id)
-          return { points: [ start ], blocker: nil, complete: true, wrapped: [] } if same?(start, finish)
+          return { points: [ start ], blocker: nil, complete: true } if same?(start, finish)
 
           path = visible_path(mover, start, finish, wrap, contact_id)
           hit = wrap.first_hit(mover, start, finish, contact_id: contact_id)
           reached = path && same?(path.last, finish)
-          pack(mover, path, finish, wrap, contact_id, reached ? nil : hit, hit ? [ hit ] : [])
+          pack(mover, path, finish, wrap, contact_id, reached ? nil : hit)
         end
 
         def anchor(origin:, goal_point:, goal_unit:, contact_id:, **)
@@ -26,13 +25,12 @@ module Sim
           goal_point || goal_unit || origin
         end
 
-        def pack(mover, raw, finish, world, contact_id, blocker, wrapped)
+        def pack(mover, raw, finish, world, contact_id, blocker)
           points = taut(mover, raw, world, contact_id)
           {
             points: points,
             blocker: blocker,
-            complete: blocker.nil? && same?(points.last, finish),
-            wrapped: Array(wrapped)
+            complete: blocker.nil? && same?(points.last, finish)
           }
         end
 
@@ -47,7 +45,7 @@ module Sim
             jump = finish_index
             while jump > index + 1
               visible = if index.zero?
-                world.followable?(mover, points[jump], contact_id: contact_id) &&
+                world.first_segment_clear?(mover, points[jump], contact_id: contact_id) &&
                   !receding_turn?(mover, points[jump], points.last, world, contact_id)
               else
                 world.segment_clear?(mover, points[index], points[jump], contact_id: contact_id)
@@ -72,19 +70,19 @@ module Sim
 
         def visible_path(mover, start, finish, world, contact_id)
           nodes = [ start ]
-          world.wrap_vertices(mover, contact_id: contact_id).each do |vertex|
+          world.route_points(mover, contact_id: contact_id).each do |vertex|
             nodes << vertex unless same?(vertex, start) || same?(vertex, finish)
           end
           nodes << finish
 
-          return [ start, finish ] if world.followable?(mover, finish, contact_id: contact_id)
+          return [ start, finish ] if world.first_segment_clear?(mover, finish, contact_id: contact_id)
 
           edges = Array.new(nodes.length) { [] }
           finish_index = nodes.length - 1
           nodes.each_index do |i|
             ((i + 1)...nodes.length).each do |j|
               visible = if i.zero?
-                world.followable?(mover, nodes[j], contact_id: contact_id) &&
+                world.first_segment_clear?(mover, nodes[j], contact_id: contact_id) &&
                   !receding_turn?(mover, nodes[j], finish, world, contact_id)
               else
                 world.segment_clear?(mover, nodes[i], nodes[j], contact_id: contact_id)

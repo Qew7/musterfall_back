@@ -190,22 +190,19 @@ module Sim
             end
             State.sync_combatant_footprint!(combatant)
             to = position_of(combatant)
-            avoid_note = if retreat[:blocked_by_ally] && retreat[:blocker]
+            path_note = if retreat[:blocked_by_ally] && retreat[:blocker]
               " (путь закрыт союзником #{retreat[:blocker][:name]})"
-            elsif retreat[:avoided]
-              blocker_name = retreat.dig(:blocker, :name)
-              blocker_name ? " (обходит #{blocker_name})" : " (обходит препятствие)"
             else
               ""
             end
             summary = if escaped
               "#{combatant[:name]} в панике покидает поле боя."
             elsif phase_type == "start"
-              "#{combatant[:name]} продолжает бегство#{avoid_note}."
+              "#{combatant[:name]} продолжает бегство#{path_note}."
             elsif about_faced
-              "#{combatant[:name]} ломает строй и бежит от угрозы#{avoid_note}."
+              "#{combatant[:name]} ломает строй и бежит от угрозы#{path_note}."
             else
-              "#{combatant[:name]} ломает строй и обращается в бегство#{avoid_note}."
+              "#{combatant[:name]} ломает строй и обращается в бегство#{path_note}."
             end
           end
 
@@ -295,7 +292,7 @@ module Sim
             lines << "pose=(#{format("%.1f", from[:x].to_f)}, #{format("%.1f", from[:y].to_f)}) f#{format("%.1f", from[:facing].to_f)}°"
           end
           if retreat.is_a?(Hash) && retreat[:destination]
-            lines << "retreat edge=#{retreat_edge || "-"} avoided=#{retreat[:avoided]} blocked_by_ally=#{retreat[:blocked_by_ally]} escaped=#{escaped}"
+            lines << "retreat edge=#{retreat_edge || "-"} blocked_by_ally=#{retreat[:blocked_by_ally]} escaped=#{escaped}"
             dest = retreat[:destination]
             lines << "retreat pose=(#{format("%.1f", dest[:x].to_f)}, #{format("%.1f", dest[:y].to_f)}) f#{format("%.1f", dest[:facing].to_f)}°"
             if retreat[:blocker]

@@ -9,9 +9,9 @@ class SimBattleReplayTest < ActiveSupport::TestCase
     matchup = game.round_matchups.first
     assert matchup.completed?
 
-    payload = Sim::Battle::Replay.call(matchup: matchup, compare: true)
+    payload = Sim::Battle::Replay.call(matchup: matchup, compare: :semantic)
 
-    assert payload[:compare][:identical]
+    assert payload[:compare][:semantic_identical]
     assert_equal matchup.seed, payload[:seed]
     assert payload[:result][:rounds].any?
   end

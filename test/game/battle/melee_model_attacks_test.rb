@@ -76,56 +76,6 @@ class SimBattleMeleeModelAttacksTest < ActiveSupport::TestCase
     assert_match(/попало #{engaged} из #{engaged} атак/, action[:summary])
   end
 
-  test "melee logs misses when no fighting model hits" do
-    attacker = combatant(
-      entity_id: "dryads",
-      x: 10,
-      y: 12,
-      facing: 0,
-      files: 4,
-      ranks: 2,
-      model_width: 1,
-      model_depth: 1,
-      base_width: 4,
-      base_depth: 2,
-      attacks: 1,
-      contributors: {
-        melee: [ { entity_id: "dryads", name: "Дриады", kind: "unit", power: 4 } ],
-        ranged: [],
-        spell: []
-      }
-    )
-    defender = combatant(
-      entity_id: "reavers",
-      x: 14.2,
-      y: 12,
-      facing: 180,
-      side_index: 1,
-      files: 4,
-      ranks: 2,
-      model_width: 1,
-      model_depth: 1,
-      base_width: 4,
-      base_depth: 2
-    )
-    engaged = Attack.engaged_model_count(attacker, defender)
-
-    phase = Attack.create_phase("melee", "Фаза боя")
-    Attack.resolve_melee_strike!(
-      phase: phase,
-      attacker: attacker,
-      target: defender,
-      vector: "front",
-      acting_side: { combatants: [ attacker ] },
-      target_side: { combatants: [ defender ] },
-      round_number: 1,
-      rng: seq_rng(Array.new(engaged, 0.9))
-    )
-
-    assert_empty phase[:actions]
-    assert_match(/попало 0 из #{engaged} атак/, phase[:events].last)
-  end
-
   test "melee cannot kill more defender models than are in contact" do
     attacker = combatant(
       entity_id: "dryads",

@@ -149,7 +149,6 @@ class SimBattleTerrainTest < ActiveSupport::TestCase
       goal_point: { x: 22, y: 12 },
       budget: 8,
       obstacles: obstacles,
-      bypass: true,
       terrain: [ building ]
     )
     assert plan[:pose]
@@ -179,7 +178,6 @@ class SimBattleTerrainTest < ActiveSupport::TestCase
       goal_point: { x: 20, y: 12 },
       budget: 4,
       obstacles: [],
-      bypass: false,
       terrain: [],
       flying: false
     )
@@ -188,7 +186,6 @@ class SimBattleTerrainTest < ActiveSupport::TestCase
       goal_point: { x: 20, y: 12 },
       budget: 4,
       obstacles: [],
-      bypass: false,
       terrain: [ rough ],
       flying: false
     )
@@ -201,7 +198,6 @@ class SimBattleTerrainTest < ActiveSupport::TestCase
       goal_point: { x: 20, y: 12 },
       budget: 4,
       obstacles: [],
-      bypass: false,
       terrain: [ rough ],
       flying: true
     )
@@ -246,7 +242,7 @@ class SimBattleTerrainTest < ActiveSupport::TestCase
     assert_equal false, entries.first[:chargeable]
   end
 
-  test "bypass can route around impassable terrain like a unit blocker" do
+  test "maneuvers route around impassable terrain like a unit blocker" do
     origin = unit(entity_id: "a", x: 12, y: 12, facing: 0, movement: 10, base_width: 1, base_depth: 1)
     building = house(x: 16, y: 12, width: 2, depth: 4)
     obstacles = Pathing.merge_obstacles([], [ building ])
@@ -255,11 +251,10 @@ class SimBattleTerrainTest < ActiveSupport::TestCase
       goal_point: { x: 22, y: 12 },
       budget: 10,
       obstacles: obstacles,
-      bypass: true,
       terrain: [ building ]
     )
     assert plan[:pose]
-    assert plan[:avoided] || plan[:truncated]
+    assert_operator BF.distance_between(origin, plan[:pose]), :>, 0.2
     refute BF.rectangles_overlap?(
       origin.merge(x: plan[:pose][:x], y: plan[:pose][:y], facing: plan[:pose][:facing]),
       BF.feature_as_obstacle(building)

@@ -3,24 +3,24 @@ require "test_helper"
 class SimBattlePathingContractTest < ActiveSupport::TestCase
   BF = Sim::Geometry::Battlefield
   Pathing = Sim::Battle::Pathing
-  Thread = Sim::Battle::Pathing::Thread
+  Route = Sim::Battle::Pathing::Route
 
-  test "open ground is a clear thread segment" do
+  test "open ground is a clear route segment" do
     actor = BattleScenarios.combatant(x: 4.0, y: 12.0, facing: 0.0)
     target = { x: 30.0, y: 12.0 }
     kernels = Pathing.obstacle_kernels([ actor ])
 
-    assert Thread.segment_clear?(actor, actor, target, kernels, nil)
+    assert Route.segment_clear?(actor, actor, target, kernels, nil)
   end
 
-  test "thread segment sees a thin wall on a long line" do
+  test "route segment sees a thin wall on a long line" do
     actor = BattleScenarios.combatant(x: 2.0, y: 12.0, facing: 0.0)
     target = { x: 36.0, y: 12.0 }
     wall = BattleScenarios.terrain(id: "wall", x: 20.0, y: 12.0, width: 1.0, depth: 4.0)
     obstacles = Pathing.merge_obstacles([ actor ], [ wall ])
     kernels = Pathing.obstacle_kernels(obstacles)
 
-    refute Thread.segment_clear?(actor, actor, target, kernels, nil)
+    refute Route.segment_clear?(actor, actor, target, kernels, nil)
   end
 
   test "taut pull removes interior waypoints that stay clear" do
@@ -32,32 +32,32 @@ class SimBattlePathingContractTest < ActiveSupport::TestCase
       { x: 16.0, y: 12.0 }
     ]
     kernels = Pathing.obstacle_kernels([ actor ])
-    pulled = Thread.taut(actor, path, kernels, nil)
+    pulled = Route.taut(actor, path, kernels, nil)
 
     assert_equal 2, pulled.length
     assert_in_delta 4.0, pulled.first[:x], 0.001
     assert_in_delta 16.0, pulled.last[:x], 0.001
   end
 
-  test "thread wraps a house instead of going through it" do
+  test "route wraps a house instead of going through it" do
     actor = BattleScenarios.combatant(x: 6.0, y: 8.0, facing: 0.0)
     target = BattleScenarios.enemy(x: 31.0, y: 8.0, facing: 180.0)
     house = BattleScenarios.terrain(id: "house", x: 18.0, y: 8.0, width: 3.0, depth: 3.0)
     obstacles = Pathing.merge_obstacles([ actor, target ], [ house ])
     house_obs = BF.feature_as_obstacle(house)
     kernels = Pathing.obstacle_kernels(obstacles)
-    thread = Thread.pull(
+    route = Route.pull(
       mover: actor, goal: target, obstacles: obstacles,
       contact_id: target[:entity_id], kernels: kernels
     )
 
-    assert_operator thread[:points].length, :>=, 2
-    thread[:points].each do |point|
+    assert_operator route[:points].length, :>=, 2
+    route[:points].each do |point|
       pose = actor.merge(x: point[:x], y: point[:y])
-      refute BF.rectangles_overlap?(pose, house_obs), "thread vertex #{point.inspect} hits the house"
+      refute BF.rectangles_overlap?(pose, house_obs), "route vertex #{point.inspect} hits the house"
     end
-    assert thread[:points].any? { |point| (point[:y] - actor[:y]).abs >= 0.4 },
-           "expected the house thread to leave the east-west line through the house"
+    assert route[:points].any? { |point| (point[:y] - actor[:y]).abs >= 0.4 },
+           "expected the house route to leave the east-west line through the house"
   end
 
   test "wide block facing a lake wheels onto a corridor instead of holding" do
@@ -125,7 +125,7 @@ class SimBattlePathingContractTest < ActiveSupport::TestCase
     end
   end
 
-  test "allies wrap a frontal blocker instead of holding the column" do
+  test "allies route a frontal blocker instead of holding the column" do
     origin = BattleScenarios.combatant(
       entity_id: "boars", x: 8.0, y: 12.0, facing: 0.0, base_width: 3.0, base_depth: 3.0, side_index: 0
     )

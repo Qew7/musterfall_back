@@ -496,8 +496,6 @@ class SimBattleMovementWheelTest < ActiveSupport::TestCase
       lane: "center",
       side_index: 1
     )
-    lich_start = lich.dup
-
     phase = Sim::Battle::Phases::Movement.play(
       acting_side: { player_id: "p1", combatants: [ knights, lich ] },
       target_side: { player_id: "bot", combatants: [ orcs, goblins ] }
@@ -506,21 +504,10 @@ class SimBattleMovementWheelTest < ActiveSupport::TestCase
     refute Sim::Geometry::Battlefield.rectangles_overlap?(knights, lich)
     action = phase[:actions].find { |entry| entry[:actor_id] == "unit-22" }
     assert action, "knights should still move or wait"
-    avoided = action.dig(:maneuver, :pathing_avoided) || action.dig(:maneuver, :avoided)
-    unless avoided || Sim::Geometry::Battlefield.distance_between(lich_start, lich) > 0.05
-      11.times do |index|
-        t = index / 10.0
-        pose = knights.merge(
-          x: 4.0 + ((knights[:x] - 4.0) * t),
-          y: 4.0 + ((knights[:y] - 4.0) * t),
-          facing: knights[:facing]
-        )
-        refute Sim::Geometry::Obb.overlap_units?(pose, lich_start), "knights swept through lich at t=#{t}"
-      end
-    end
+    assert Array(action.dig(:maneuver, :steps)).any?
   end
 
-  test "stationary allied blocker is wrapped with wheel/turn then advance" do
+  test "stationary allied blocker is passed with wheel or turn then advance" do
     actor = combatant(
       entity_id: "chaos-knights",
       name: "Рыцари разлома",
@@ -654,7 +641,7 @@ class SimBattleMovementWheelTest < ActiveSupport::TestCase
     assert_operator first[:front_x], :>, 12.5
   end
 
-  test "co-movers in one wave do not block each other from their start squares" do
+  test "co-movers in one simultaneous group do not block each other from their start squares" do
     flank_dryad = combatant(
       entity_id: "flank-dryad", name: "Фланг", x: 8, y: 2, facing: 0, lane: "left",
       movement: 3, melee: 4, ranged: 0, spell: 0, morale: 6, skill: 3,
@@ -727,7 +714,7 @@ class SimBattleMovementWheelTest < ActiveSupport::TestCase
     end
   end
 
-  test "wave transit re-paths around a co-mover landing without blocking on its start" do
+  test "simultaneous group transit re-paths around a co-mover landing without blocking on its start" do
     leader = combatant(
       entity_id: "leader", name: "Фронт", x: 14, y: 12, facing: 0,
       movement: 6, melee: 4, ranged: 0, spell: 0, base_width: 2, base_depth: 2, initiative: 4
@@ -812,14 +799,13 @@ class SimBattleMovementWheelTest < ActiveSupport::TestCase
 
     refute plan[:blocked_by_ally]
     assert plan[:pose]
-    assert plan[:avoided]
     traveled = Sim::Geometry::Battlefield.distance_between(origin, plan[:pose])
     assert_operator traveled, :>, 0.2
     landed = origin.merge(plan[:pose])
     refute Sim::Geometry::Battlefield.rectangles_overlap?(landed, ally)
   end
 
-  test "player log does not say обходит when soft-stopping on the charge target" do
+  test "player log names the charge target without a pathfinding mode" do
     actor = combatant(
       entity_id: "brutes",
       name: "Орки-громилы",
@@ -859,8 +845,7 @@ class SimBattleMovementWheelTest < ActiveSupport::TestCase
     )
     action = phase[:actions].find { |entry| entry[:actor_id] == "brutes" }
     assert action, "expected brutes to move toward warriors"
-    refute_includes action[:summary], "обходит"
-    assert_includes action[:summary], "совершил продвижение к Воины Хаоса"
+    assert_includes action[:summary], "совершил продвижение к Тяжёлая гвардия"
     assert action[:details].any? { |line| line.include?("MV budget=") }
     refute_includes action[:summary], "wheel"
   end

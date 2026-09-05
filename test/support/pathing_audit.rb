@@ -1,7 +1,7 @@
-# Quality bar for thread pathing.
-# Linus — one pipeline: taut OBB thread, then declared maneuvers. No heading probes.
-# Dijkstra — collision-true segments; wrap vertices keep the moving tray off obstacles.
-# Maneuver — wheel/turn then advance/march along the thread; contact is a face.
+# Quality bar for route pathing.
+# Linus — one pipeline: taut OBB route, then declared maneuvers. No heading probes.
+# Dijkstra — collision-true segments; route vertices keep the moving tray off obstacles.
+# Maneuver — wheel/turn then advance/march along the route; contact is a face.
 module PathingAudit
   ROOT = File.expand_path("../../app/domain/sim/battle", __dir__)
   PATHING = File.join(ROOT, "pathing.rb")
@@ -14,21 +14,21 @@ module PathingAudit
       file: PATHING,
       pattern: /BYPASS_HEADING_OFFSETS/,
       reviewers: { linus: 16, dijkstra: 8, maneuver: 12 },
-      message: "heading-offset bypass survived the thread rewrite"
+      message: "heading-offset detour survived the route rewrite"
     },
     {
       id: :competitive_maneuver_pick,
       file: MANEUVERS,
       pattern: /def pick\(/,
       reviewers: { linus: 14, dijkstra: 4, maneuver: 10 },
-      message: "maneuvers still compete instead of following the thread"
+      message: "maneuvers still compete instead of following the route"
     },
     {
       id: :hold_column_ally,
       file: PATHING,
       pattern: /ally_bypass_allowed\?/,
       reviewers: { linus: 8, dijkstra: 2, maneuver: 8 },
-      message: "hold-column ally special case survived the thread rewrite"
+      message: "hold-column ally special case survived the route rewrite"
     }
   ].freeze
 
@@ -90,22 +90,22 @@ module PathingAudit
     house = BattleScenarios.terrain(id: "house", x: 18.0, y: 8.0, width: 3.0, depth: 3.0)
     obstacles = Sim::Battle::Pathing.merge_obstacles([ actor, target ], [ house ])
     kernels = Sim::Battle::Pathing.obstacle_kernels(obstacles)
-    thread = Sim::Battle::Pathing::Thread.pull(
+    route = Sim::Battle::Pathing::Route.pull(
       mover: actor, goal: target, obstacles: obstacles, contact_id: target[:entity_id], kernels: kernels
     )
     issues = []
-    unless thread && thread[:points] && thread[:points].length >= 2
-      return [ issue(:no_house_thread, "thread does not wrap a 3\" house",
+    unless route && route[:points] && route[:points].length >= 2
+      return [ issue(:no_house_thread, "route does not route a 3\" house",
                      { linus: 4, dijkstra: 20, maneuver: 16 }) ]
     end
 
     house_obs = Sim::Geometry::Battlefield.feature_as_obstacle(house)
-    collided = thread[:points].any? do |point|
+    collided = route[:points].any? do |point|
       pose = actor.merge(x: point[:x], y: point[:y])
       Sim::Geometry::Battlefield.rectangles_overlap?(pose, house_obs)
     end
     if collided
-      issues << issue(:thread_hits_house, "thread vertices overlap the house",
+      issues << issue(:thread_hits_house, "route vertices overlap the house",
                       { linus: 4, dijkstra: 18, maneuver: 16 })
     end
     issues
@@ -117,10 +117,10 @@ module PathingAudit
     wall = BattleScenarios.terrain(id: "wall", x: 20.0, y: 12.0, width: 1.0, depth: 4.0)
     obstacles = Sim::Battle::Pathing.merge_obstacles([ actor ], [ wall ])
     kernels = Sim::Battle::Pathing.obstacle_kernels(obstacles)
-    clear = Sim::Battle::Pathing::Thread.segment_clear?(actor, actor, target, kernels, nil)
+    clear = Sim::Battle::Pathing::Route.segment_clear?(actor, actor, target, kernels, nil)
     return [] unless clear
 
-    [ issue(:segment_skips_wall, "thread segment_clear? misses a 1\" wall on a long line",
+    [ issue(:segment_skips_wall, "route segment_clear? misses a 1\" wall on a long line",
             { linus: 4, dijkstra: 18, maneuver: 12 }) ]
   end
 

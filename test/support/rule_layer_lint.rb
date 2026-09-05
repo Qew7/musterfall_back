@@ -14,9 +14,9 @@ module RuleLayerLint
       bans: [
         [ /abilities\.include\?/, "ability branch in phase — rules/<rule>/<phase>.rb" ],
         [ /SpellEffects\.status\?/, "spell-effect branch in phase — rules/<rule>/<phase>.rb" ],
-        [ /\bflying\?/, "flying? in phase — Flying::Movement owns the wave" ],
-        [ /contact_wave\?/, "contact_wave? in phase — Ground.plan_waves owns the list" ],
-        [ /orbit_mode\?/, "orbit_mode? in phase — Ground owns wrap/orbit" ],
+        [ /\bflying\?/, "flying? in phase — Flying::Movement owns its movement group" ],
+        [ /moves_first\?/, "moves_first? in phase — Ground.plan_groups owns the list" ],
+        [ /orbit_mode\?/, "orbit_mode? in phase — Ground owns flank/rear routing" ],
         [ /:flyer_setup_rear|:flyer_setup_flank|:flyer_approach|:flyer_charge|"flyer_charge"|"flyer_leap"/,
           "flyer mode/kind in phase — set it on the Flying plan" ]
       ]
@@ -26,7 +26,7 @@ module RuleLayerLint
       bans: [
         [ /:flyer_setup_rear|:flyer_setup_flank|:flyer_approach|:flyer_charge/,
           "flyer modes in facade — Flying::Movement" ],
-        [ /def contact_wave\?/, "contact_wave? facade — Ground.contact_wave?" ],
+        [ /def moves_first\?/, "moves_first? facade — Ground.moves_first?" ],
         [ /def orbit_mode\?/, "orbit_mode? facade — Ground.orbit_mode?" ],
         [ /SpellEffects\.status\?/, "spell-effect branch in facade — rules/<rule>/<phase>.rb" ]
       ]
@@ -36,7 +36,7 @@ module RuleLayerLint
       bans: [
         [ /:orbit_flank|:wrap_rear|:flyer_setup_rear|:flyer_setup_flank|:flyer_approach|:flyer_charge/,
           "maneuver policy in pathing — Ground/Flying approach_goal_point" ],
-        [ /contact_wave\?/, "contact_wave? in pathing" ],
+        [ /moves_first\?/, "moves_first? in pathing" ],
         [ /abilities\.include\?/, "ability branch in pathing" ],
         [ /SpellEffects\.status\?/, "spell-effect branch in pathing — rules/<rule>/<phase>.rb" ]
       ]

@@ -4,7 +4,7 @@ module Sim
       module Ground
         # Default wheeled / marched melee approach.
         module Movement
-          # rule: ground | movement | Default infantry movement AI: charge, flank/rear setup, contact waves, pathfinding.
+          # rule: ground | movement | Default infantry movement AI: charge, flank/rear setup, simultaneous movement, pathfinding.
           module_function
 
           def plan_entries(movers, enemies, claimed, terrain: [])
@@ -14,7 +14,7 @@ module Sim
               nearest = in_arc.min_by { |entry| Geometry::Battlefield.distance_between_units(combatant, entry) }
               dist = nearest ? Geometry::Battlefield.distance_between_units(combatant, nearest) : Float::INFINITY
               align = nearest ? Decisions::Movement.front_alignment_to(combatant, nearest) : 999.0
-              [ align, dist, combatant[:entity_id].to_s ]
+              [ dist, align, combatant[:entity_id].to_s ]
             end
 
             entries_by_id = {}
@@ -88,23 +88,23 @@ module Sim
             end
 
             ranked.filter_map { |combatant| entries_by_id[combatant[:entity_id]] }.each do |entry|
-              entry[:contact_wave] = closing_front?(entry, living)
+              entry[:moves_first] = closing_front?(entry, living)
             end
           end
 
-          # Nearby front claimers settle first; later waves path around their landings.
-          def plan_waves(movers, enemies, claimed, terrain: [])
+          # Nearby front claimers settle first; later groups path around their landings.
+          def plan_groups(movers, enemies, claimed, terrain: [])
             entries = plan_entries(movers, enemies, claimed, terrain: terrain)
-            contact, later = entries.partition { |entry| contact_wave?(entry) }
-            waves = contact.group_by { |entry| entry[:nearest][:entity_id] }.map do |_id, group|
-              { entries: group, allow_ally_bypass: false }
+            contact, later = entries.partition { |entry| moves_first?(entry) }
+            groups = contact.group_by { |entry| entry[:nearest][:entity_id] }.map do |_id, group|
+              { entries: group }
             end
-            waves << { entries: later, allow_ally_bypass: true } if later.any?
-            waves
+            groups << { entries: later } if later.any?
+            groups
           end
 
-          def contact_wave?(entry)
-            !!entry[:contact_wave]
+          def moves_first?(entry)
+            !!entry[:moves_first]
           end
 
           def slot_path?(origin, defender, contact_slot)
@@ -134,7 +134,7 @@ module Sim
               ]
             end.each do |enemy|
               next unless Decisions::Movement.can_charge?(combatant, enemy, terrain)
-              next unless Decisions::Movement.this_turn_charge?(combatant, enemy, enemies: enemies)
+              next unless Decisions::Movement.within_charge_range?(combatant, enemy, enemies: enemies)
 
               side = Decisions::Movement.unclaimed_side(combatant, enemy, claimed)
               next unless side
@@ -157,8 +157,6 @@ module Sim
             candidates.each do |enemy|
               side = Geometry::Battlefield.classify_attack_vector(combatant, enemy)
               if claimed[enemy[:entity_id]].key?(side)
-                return nil if enemy.equal?(candidates.first)
-
                 next
               end
 
@@ -235,7 +233,7 @@ module Sim
             nil
           end
 
-          # Front arc empty: nearest enemy on a side flank. Follow already Turn/Wheels onto the heading.
+          # Front arc empty: nearest enemy on a side flank. Pathing turns or wheels onto the heading.
           def choose_flank_arc_facing(combatant, enemies, claimed, terrain = [])
             return nil if Decisions::Movement.engaged_with_any?(combatant, enemies)
             return nil if Decisions::Movement.enemies_in_front_arc(combatant, enemies).any?
@@ -267,7 +265,7 @@ module Sim
             contact_slot.to_s == Geometry::Battlefield.classify_attack_vector(combatant, nearest)
           end
 
-          def build_approach_intent(combatant:, nearest:, obstacles:, enemies: [], contact_slot: nil, allow_ally_bypass: false, approach_mode: :direct, terrain: [], chargeable: true)
+          def build_approach_intent(combatant:, nearest:, obstacles:, enemies: [], contact_slot: nil, approach_mode: :direct, terrain: [], chargeable: true)
             return nil unless nearest
             return nil if Decisions::Movement.engaged?(combatant, nearest)
             return nil unless approach_allowed?(combatant, nearest, contact_slot)

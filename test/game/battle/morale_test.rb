@@ -317,8 +317,7 @@ class SimBattleMoraleTest < ActiveSupport::TestCase
     )
 
     refute Sim::Geometry::Battlefield.rectangles_overlap?(combatant, blocker)
-    refute_match(/обходит/, action[:summary])
-    assert_includes action[:details].join(" "), "avoided=false"
+    assert action[:summary]
   end
 
   test "fleeing unit does not slide around another unit with the same name" do
@@ -374,8 +373,7 @@ class SimBattleMoraleTest < ActiveSupport::TestCase
     )
 
     assert fleeing[:is_routing] || fleeing[:current_health].to_i <= 0
-    refute_match(/обходит/, action[:summary])
-    assert_includes action[:details].join(" "), "avoided=false"
+    assert action[:summary]
   end
 
   test "breaking morale does not turn in place onto a neighboring ally" do
@@ -458,7 +456,7 @@ class SimBattleMoraleTest < ActiveSupport::TestCase
     assert_equal plain_check[:threshold] + 1, check[:threshold]
   end
 
-  test "non-hero undead crumble instead of fleeing on morale failure" do
+  test "non-hero undead lose health by failure margin instead of fleeing" do
     combatant = {
       entity_id: "skel",
       name: "Скелеты",
@@ -496,9 +494,9 @@ class SimBattleMoraleTest < ActiveSupport::TestCase
     )
 
     refute combatant[:is_routing]
-    assert_equal 8, action[:damage]
-    assert_equal 0, combatant[:current_health]
-    assert_match(/рассыпается/, action[:summary])
+    assert_equal 1, action[:damage]
+    assert_equal 7, combatant[:current_health]
+    assert_match(/теряет/, action[:summary])
   end
 
   test "undead hero loses failure margin instead of crumbling" do

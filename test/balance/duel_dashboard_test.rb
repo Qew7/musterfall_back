@@ -4,6 +4,7 @@ class BalanceDuelDashboardTest < ActiveSupport::TestCase
   setup do
     load Rails.root.join("db/seeds.rb") if Faction.count.zero?
     @version = CatalogVersion.current!
+    BalanceDuelRun.where(catalog_version: @version).delete_all
   end
 
   test "aggregates duel runs for selected catalog version" do
@@ -41,6 +42,6 @@ class BalanceDuelDashboardTest < ActiveSupport::TestCase
     assert_equal 1, payload[:matchups].length
     assert_equal 14, payload[:matchups].first[:left_wins]
     assert_equal 16, payload[:matchups].first[:right_wins]
-    assert_equal 2, payload[:template_wins].length
+    assert_equal 14, payload[:template_wins].find { |entry| entry[:template_id] == "state_swords" }[:wins]
   end
 end

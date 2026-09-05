@@ -8,7 +8,7 @@ class SimBattleMovementManeuversTest < ActiveSupport::TestCase
   test "aligned approach is an advance, not a wheel or march" do
     actor = BattleScenarios.combatant(x: 8.0, y: 12.0, facing: 0.0, movement: 4.0)
     enemy = BattleScenarios.enemy(x: 24.0, y: 12.0, facing: 180.0)
-    plan = Maneuvers.follow_segment(
+    plan = Maneuvers.plan_segment(
       origin: actor,
       heading: 0.0,
       budget: 4.0,
@@ -27,7 +27,7 @@ class SimBattleMovementManeuversTest < ActiveSupport::TestCase
   test "aligned approach marches double distance when the tray is clear" do
     actor = BattleScenarios.combatant(x: 8.0, y: 12.0, facing: 0.0, movement: 4.0)
     enemy = BattleScenarios.enemy(x: 32.0, y: 12.0, facing: 180.0)
-    plan = Maneuvers.follow_segment(
+    plan = Maneuvers.plan_segment(
       origin: actor,
       heading: 0.0,
       budget: 4.0,
@@ -49,7 +49,7 @@ class SimBattleMovementManeuversTest < ActiveSupport::TestCase
       base_width: 5.0, base_depth: 2.0, files: 5, ranks: 2, frontage: 5
     )
     goal = { x: 8.0, y: 20.0 }
-    plan = Maneuvers.follow_segment(
+    plan = Maneuvers.plan_segment(
       origin: actor,
       heading: 90.0,
       budget: 4.0,
@@ -117,7 +117,7 @@ class SimBattleMovementManeuversTest < ActiveSupport::TestCase
     refute Maneuvers::Turn.applies?(actor, heading, 3.0)
     assert Maneuvers::Wheel.applies?(actor, heading, 3.0)
 
-    plan = Maneuvers.follow_segment(
+    plan = Maneuvers.plan_segment(
       origin: actor,
       heading: heading,
       budget: 3.0,
@@ -137,7 +137,7 @@ class SimBattleMovementManeuversTest < ActiveSupport::TestCase
       x: 8.0, y: 12.0, facing: 0.0, movement: 4.0,
       base_width: 5.0, base_depth: 2.0, files: 5, ranks: 2, frontage: 5
     )
-    plan = Maneuvers.follow_segment(
+    plan = Maneuvers.plan_segment(
       origin: actor,
       heading: 90.0,
       budget: 4.0,
@@ -154,7 +154,7 @@ class SimBattleMovementManeuversTest < ActiveSupport::TestCase
     refute plan[:steps].any? { |step| step[:kind] == "turn" }
   end
 
-  test "a wrap heading does not reform when the enemy is ahead" do
+  test "a route heading does not reform when the enemy is ahead" do
     actor = BattleScenarios.combatant(
       entity_id: "unit-12", x: 35.0, y: 19.0, facing: 180.0,
       base_width: 4.0, base_depth: 2.0, files: 4, ranks: 2, movement: 4.0
@@ -165,7 +165,7 @@ class SimBattleMovementManeuversTest < ActiveSupport::TestCase
 
     refute Maneuvers.turn_for?(actor, heading, 4.0, enemy, space, enemy[:entity_id])
 
-    plan = Maneuvers.follow_segment(
+    plan = Maneuvers.plan_segment(
       origin: actor,
       heading: heading,
       budget: 4.0,
@@ -181,23 +181,22 @@ class SimBattleMovementManeuversTest < ActiveSupport::TestCase
     refute BF.turn_delta?(BF.shortest_facing_delta(actor[:facing], plan[:pose][:facing]))
   end
 
-  test "follow does not reform onto a side waypoint when the enemy is ahead" do
+  test "maneuver sequence does not reform onto a side waypoint when the enemy is ahead" do
     actor = BattleScenarios.combatant(
       entity_id: "unit-10", x: 31.0, y: 11.0, facing: 180.0,
       base_width: 4.0, base_depth: 2.0, files: 4, ranks: 2, movement: 3.0
     )
     enemy = BattleScenarios.enemy(entity_id: "unit-38", x: 7.0, y: 7.0, facing: 0.0)
-    thread = {
+    route = {
       points: [
         { x: 31.0, y: 11.0 },
         { x: 31.0, y: 9.5 }
       ],
-      complete: false,
-      wrapped: [ { entity_id: "terrain-4" } ]
+      complete: false
     }
-    plan = Pathing::Follow.along(
+    plan = Pathing::ManeuverSequence.along(
       origin: actor,
-      thread: thread,
+      route: route,
       budget: 3.0,
       goal_unit: enemy,
       obstacles: [ actor, enemy ],
@@ -206,10 +205,10 @@ class SimBattleMovementManeuversTest < ActiveSupport::TestCase
 
     refute plan[:steps].any? { |step| step[:kind] == "turn" }
     refute BF.turn_delta?(BF.shortest_facing_delta(actor[:facing], plan[:pose][:facing])),
-           "reformed onto wrap vertex facing=#{plan.dig(:pose, :facing)}"
+           "reformed onto route point facing=#{plan.dig(:pose, :facing)}"
   end
 
-  test "follow reforms 90 when a wheel into CONTACT-kissing terrain cannot start" do
+  test "route turns 90 when a wheel into CONTACT-kissing terrain cannot start" do
     actor = BattleScenarios.combatant(
       entity_id: "hero-1", x: 11.81, y: 15.36, facing: 313.4,
       base_width: 1.0, base_depth: 1.0, files: 1, ranks: 1, frontage: 1, movement: 3.0
@@ -227,13 +226,14 @@ class SimBattleMovementManeuversTest < ActiveSupport::TestCase
       obstacles: world, contact_id: enemy[:entity_id], goal_unit: enemy, terrain: [ lake ]
     )
 
-    assert BF.turn_delta?(BF.shortest_facing_delta(actor[:facing], plan[:pose][:facing])),
-           "expected a 90° reform, facing=#{plan.dig(:pose, :facing)}"
     assert plan[:steps].any? { |step| step[:kind] == "turn" },
            "expected a 90° reform, got #{Array(plan[:steps]).map { |step| step[:kind] }}"
+    landed = BF.merge_footprint(actor, plan[:pose])
+    refute BF.rectangles_overlap?(landed, BF.feature_as_obstacle(lake))
+    assert_operator BF.distance_between(actor, plan[:pose]), :>, 0.2
   end
 
-  test "follow skips a wrap vertex that doubles back when the enemy is ahead" do
+  test "route may turn around terrain while still closing on the enemy" do
     actor = BattleScenarios.combatant(
       entity_id: "unit-10", x: 31.0, y: 11.0, facing: 180.0,
       base_width: 4.0, base_depth: 2.0, files: 4, ranks: 2, movement: 3.0
@@ -248,10 +248,8 @@ class SimBattleMovementManeuversTest < ActiveSupport::TestCase
       obstacles: world, contact_id: enemy[:entity_id], goal_unit: enemy, terrain: [ house ]
     )
 
-    refute_equal :turn, plan[:maneuver], "reformed onto wrap vertex facing=#{plan.dig(:pose, :facing)}"
-    refute BF.turn_delta?(BF.shortest_facing_delta(actor[:facing], plan[:pose][:facing])),
-           "reformed onto wrap vertex facing=#{plan.dig(:pose, :facing)}"
-    refute plan[:steps].any? { |step| step[:kind] == "turn" }
+    assert_operator BF.distance_between(plan[:pose], enemy), :<, BF.distance_between(actor, enemy)
+    refute BF.rectangles_overlap?(BF.merge_footprint(actor, plan[:pose]), BF.feature_as_obstacle(house))
   end
 
   test "movement phase applies the turned footprint to the combatant" do
@@ -287,8 +285,7 @@ class SimBattleMovementManeuversTest < ActiveSupport::TestCase
       budget: 4.0,
       obstacles: [ actor, enemy ],
       contact_id: nil,
-      goal_unit: nil,
-      bypass: false
+      goal_unit: nil
     )
 
     assert_equal :turn, plan[:maneuver], "expected turn, got #{plan[:maneuver].inspect} facing=#{plan.dig(:pose, :facing)}"

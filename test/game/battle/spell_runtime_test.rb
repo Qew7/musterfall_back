@@ -259,7 +259,7 @@ class SimBattleSpellRuntimeTest < ActiveSupport::TestCase
     ally = BattleScenarios.combatant(
       entity_id: "ally",
       x: 16.0,
-      y: 9.5,
+      y: 9.0,
       facing: 90.0,
       base_width: 4.0,
       base_depth: 2.0
@@ -278,7 +278,7 @@ class SimBattleSpellRuntimeTest < ActiveSupport::TestCase
       spell: Sim::Battle::Spells::Shadow::Shadowstep
     )
 
-    context.teleport!(ally, to: { x: 16.0, y: 9.5, facing: 90.0 })
+    assert_same ally, context.teleport!(ally, to: { x: 16.0, y: 9.0, facing: 90.0 })
     world = Sim::Battle::Pathing::Obstacles.around(ally, units: acting_side[:combatants] + target_side[:combatants], terrain: [ house ])
     toward_enemy = Sim::Geometry::Battlefield.heading_to(ally, enemy)
     assert world.clear?(ally)

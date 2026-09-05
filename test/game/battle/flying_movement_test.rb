@@ -29,7 +29,7 @@ class SimBattleFlyingMovementTest < ActiveSupport::TestCase
                      "should not keep rear-goal facing while still in front arc"
   end
 
-  test "ranged-primary flyers use flying movement instead of reposition hold" do
+  test "ranged-primary flyers charge through flying movement instead of reposition hold" do
     dragon = {
       entity_id: "unit-33", name: "Костяной дракон", kind: "unit",
       x: 8.0, y: 20.0, facing: 0.0, lane: "right", row: "front",
@@ -54,6 +54,6 @@ class SimBattleFlyingMovementTest < ActiveSupport::TestCase
 
     entry = Sim::Battle::Rules::Flying::Movement.plan_entry(dragon, [ enemy ], claimed, [])
     assert entry, "expected flying assault plan for ranged-primary dragon"
-    assert_equal :flyer_approach, entry[:approach_mode]
+    assert_equal :flyer_charge, entry[:approach_mode]
   end
 end

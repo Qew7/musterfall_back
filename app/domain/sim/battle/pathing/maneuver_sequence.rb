@@ -1,15 +1,15 @@
 module Sim
   module Battle
     module Pathing
-      # Walk a taut thread by composing declared maneuvers on each segment.
-      module Follow
+      # Express a clear route as declared maneuvers.
+      module ManeuverSequence
         module_function
 
-        def along(origin:, thread:, budget:, goal_unit:, obstacles:, contact_id:, terrain: [], flying: false, kernels: nil, march_allowed: false, world: nil)
+        def along(origin:, route:, budget:, goal_unit:, obstacles:, contact_id:, terrain: [], flying: false, kernels: nil, march_allowed: false, world: nil)
           space = Obstacles.coerce(world || obstacles, kernels)
-          points = Array(thread[:points])
-          return idle(origin, budget, thread) if points.length < 2
-          return idle(origin, budget, thread) if points.length == 2 && same?(points[0], points[1])
+          points = Array(route[:points])
+          return idle(origin, budget, route) if points.length < 2
+          return idle(origin, budget, route) if points.length == 2 && same?(points[0], points[1])
 
           pose = origin
           remaining = budget.to_f
@@ -23,7 +23,7 @@ module Sim
           last = nil
           maneuver = :advance
           multiplier = nil
-          goal = thread[:complete] ? points.last : goal_unit
+          goal = route[:complete] ? points.last : goal_unit
 
           (0...(points.length - 1)).each do |index|
             break if remaining <= 0.05
@@ -32,10 +32,10 @@ module Sim
             next if same?(pose, dest)
 
             last_segment = index == points.length - 2
-            at_contact = thread[:complete] && last_segment
+            at_contact = route[:complete] && last_segment
             heading = Geometry::Battlefield.heading_to(pose, dest)
-            can_march = march_allowed && thread_straight?(thread) && last_segment
-            plan = Maneuvers.follow_segment(
+            can_march = march_allowed && straight_route?(route) && last_segment
+            plan = Maneuvers.plan_segment(
               origin: pose,
               heading: heading,
               budget: remaining,
@@ -51,6 +51,13 @@ module Sim
               allow_turn: last.nil?
             )
             break unless plan && plan[:pose]
+            if index.zero? &&
+                plan[:maneuver] == :wheel &&
+                plan[:truncated] &&
+                Pathing.terrain_obstacle?(plan[:blocker]) &&
+                Geometry::Battlefield.distance_between(origin, plan[:pose]) <= 0.5
+              break
+            end
 
             segment_origin = pose
             spent = plan[:cost_spent].to_f
@@ -107,9 +114,17 @@ module Sim
             end
           end
 
-          wrapped = Array(thread[:wrapped])
           blocker = last && last[:blocker]
           heading = Geometry::Battlefield.heading_to(origin, points[1] || origin)
+          if goal_unit && points.length == 2
+            before = Geometry::Battlefield.distance_between_units(origin, goal_unit)
+            after = Geometry::Battlefield.distance_between_units(
+              Geometry::Battlefield.merge_footprint(origin, pose),
+              goal_unit
+            )
+            return idle(origin, budget, route) if before <= budget.to_f + Pathing::ENGAGE &&
+              after > before + 0.05
+          end
 
           {
             pose: pose,
@@ -125,15 +140,13 @@ module Sim
             march_multiplier: multiplier,
             steps: steps,
             motion_sequence: motion_sequence,
-            avoided: wrapped.any?,
             heading: heading,
-            blocked_by_ally: false,
-            thread: points
+            blocked_by_ally: false
           }
         end
 
-        def thread_straight?(thread)
-          Array(thread[:points]).length <= 2 && Array(thread[:wrapped]).empty?
+        def straight_route?(route)
+          Array(route[:points]).length <= 2
         end
 
         # ponytail: CONTACT-kissing trays idle when every wheel clips the lake and
@@ -177,7 +190,7 @@ module Sim
           plan
         end
 
-        def idle(origin, budget, thread)
+        def idle(origin, budget, _route)
           {
             pose: origin,
             truncated: false,
@@ -192,10 +205,8 @@ module Sim
             march_multiplier: nil,
             steps: [],
             motion_sequence: [],
-            avoided: false,
             heading: origin[:facing],
-            blocked_by_ally: false,
-            thread: Array(thread[:points])
+            blocked_by_ally: false
           }
         end
 

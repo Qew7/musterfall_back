@@ -15,17 +15,14 @@ module Sim
         Array(unit_obstacles) + Geometry::Battlefield.impassable_obstacles(terrain)
       end
 
-      # Pull a taut OBB thread to the claimed contact face, then follow it with
-      # wheel / turn / advance / march. Extra kwargs are accepted for callers.
-      def plan_approach(origin:, goal_point:, budget:, obstacles:, contact_id: nil, goal_unit: nil, bypass: true, allow_ally_bypass: false, approach_mode: :direct, terrain: [], flying: false, march_allowed: false, contact_slot: nil)
+      # Find a clear route to the claimed contact face and express it as maneuvers.
+      def plan_approach(origin:, goal_point:, budget:, obstacles:, contact_id: nil, goal_unit: nil, terrain: [], flying: false, march_allowed: false)
         world = Obstacles.coerce(obstacles)
-        anchor = Thread.anchor(
+        anchor = Route.anchor(
           origin: origin,
           goal_point: goal_point,
           goal_unit: goal_unit,
-          contact_id: contact_id,
-          contact_slot: contact_slot,
-          approach_mode: approach_mode
+          contact_id: contact_id
         )
         if contact_id && goal_unit
           face = Geometry::Battlefield.heading_to(origin, anchor)
@@ -34,15 +31,15 @@ module Sim
             anchor = world.contact_pose(origin, goal_unit, contact_id: contact_id) || anchor
           end
         end
-        thread = Thread.pull(
+        route = Route.pull(
           mover: origin,
           goal: anchor,
           world: world,
           contact_id: contact_id
         )
-        Follow.along(
+        ManeuverSequence.along(
           origin: origin,
-          thread: thread,
+          route: route,
           budget: budget,
           goal_unit: goal_unit,
           world: world,
@@ -107,7 +104,6 @@ module Sim
           preferred = simulate_retreat(origin, preferred_heading, distance, world, kernels: kernels, contact_exempt_ids: exempt_ids)
           candidates << preferred.merge(
             edge: "away",
-            avoided: false,
             heading: preferred_heading,
             blocked_by_ally: friendly_blocker?(origin, preferred[:blocker], ally_id_list)
           )
@@ -119,7 +115,6 @@ module Sim
 
           candidates << plan.merge(
             edge: edge[:label],
-            avoided: false,
             heading: edge[:heading],
             blocked_by_ally: friendly_blocker?(origin, plan[:blocker], ally_id_list)
           )
@@ -166,7 +161,7 @@ module Sim
           wheel[:completed]
 
         if toward_contact
-          # Thread already picked a clear pad (contact_pose). Recomputing
+          # The route already picked a clear contact pose. Recomputing
           # charge_destination here can land the tray on a lake beside the charge.
           engagement = if goal_point
             face = goal_point[:facing] || heading || wheeled[:facing]

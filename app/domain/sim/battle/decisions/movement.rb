@@ -44,7 +44,8 @@ module Sim
         end
 
         def can_charge?(attacker, defender, terrain = [])
-          Geometry::Battlefield.can_charge_through_terrain?(attacker, defender, terrain)
+          Geometry::Battlefield.can_charge_through_terrain?(attacker, defender, terrain) ||
+            Rules.for(:movement).can_charge_through_terrain?(attacker, defender, terrain)
         end
 
         def planner_for(combatant)
@@ -64,7 +65,10 @@ module Sim
         end
 
         def melee_movers(combatants)
-          Roles.active(combatants).select { |entry| Roles.melee_primary?(entry) || flying?(entry) }
+          Roles.active(combatants).select do |entry|
+            override = Rules.for(:movement).melee_mover?(entry)
+            override.nil? ? Roles.melee_primary?(entry) || flying?(entry) : override
+          end
         end
 
         # Only enemies inside the attacker's front arc are valid assault targets.
@@ -94,13 +98,6 @@ module Sim
 
         def engaged_with_any?(combatant, enemies)
           Pathing.active_units(enemies).any? { |enemy| engaged?(combatant, enemy) }
-        end
-
-        def this_turn_charge?(combatant, enemy, enemies: [])
-          return false unless enemy
-
-          gap = Geometry::Battlefield.distance_between_units(combatant, enemy)
-          gap <= budget_for(combatant, enemies: enemies) + ENGAGE
         end
 
         def within_charge_range?(combatant, enemy, enemies: [])
@@ -135,19 +132,19 @@ module Sim
           target_row
         end
 
-        # Flying wave first (leap landings), then Ground contact / flank waves.
-        def plan_melee_waves(movers, enemies, terrain: [])
+        # Flyers move first, then nearby contacts, then the remaining ground units.
+        def plan_movement_groups(movers, enemies, terrain: [])
           living = Pathing.active_units(enemies)
           claimed = Hash.new { |hash, key| hash[key] = {} }
           grouped = movers.group_by { |combatant| planner_for(combatant) }
 
           [ Rules::Flying::Movement, Rules::Ground::Movement ].flat_map do |planner|
-            planner.plan_waves(Array(grouped[planner]), living, claimed, terrain: terrain)
+            planner.plan_groups(Array(grouped[planner]), living, claimed, terrain: terrain)
           end
         end
 
         def plan_melee_entries(movers, enemies, terrain: []) # leftovers:keep
-          plan_melee_waves(movers, enemies, terrain: terrain).flat_map { |wave| wave[:entries] }
+          plan_movement_groups(movers, enemies, terrain: terrain).flat_map { |group| group[:entries] }
         end
 
         def build_entry(combatant, enemy, side, approach_mode, chargeable: true)
@@ -162,14 +159,13 @@ module Sim
           }
         end
 
-        def build_approach_intent(combatant:, nearest:, obstacles:, enemies: [], contact_slot: nil, allow_ally_bypass: false, approach_mode: :direct, terrain: [], chargeable: true)
+        def build_approach_intent(combatant:, nearest:, obstacles:, enemies: [], contact_slot: nil, approach_mode: :direct, terrain: [], chargeable: true)
           planner_for(combatant).build_approach_intent(
             combatant: combatant,
             nearest: nearest,
             obstacles: obstacles,
             enemies: enemies,
             contact_slot: contact_slot,
-            allow_ally_bypass: allow_ally_bypass,
             approach_mode: approach_mode,
             terrain: terrain,
             chargeable: chargeable

@@ -100,7 +100,7 @@ class SimBattleMovementLivenessTest < ActiveSupport::TestCase
   test "reachable terrain obstacles are tracked as an explicit pathfinding capability" do
     definition = KNOWN_REACHABLE_GAPS.first
     result = run_case(definition, reachable: true)
-    skip "Pathing cannot yet retain a multi-turn bypass waypoint for #{definition[:id]}" unless result.reached
+    skip "Pathing cannot yet retain a multi-turn route for #{definition[:id]}" unless result.reached
 
     assert BattleInvariants.verify_result!(result)
   end

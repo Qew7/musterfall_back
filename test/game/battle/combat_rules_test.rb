@@ -241,7 +241,7 @@ class SimBattleCombatRulesTest < ActiveSupport::TestCase
     refute intent.dig(:plan, :fear_halted)
   end
 
-  test "fear check runs once per charger per round across movement waves" do
+  test "fear check runs once per charger per round across movement groups" do
     normal = charge_combatant(entity_id: "orc", x: 12, y: 12, morale: 5, movement: 6)
     scary = charge_combatant(entity_id: "skel", x: 22, y: 12, facing: 180, abilities: [ "fear" ], side_index: 1)
     intent_a = charge_intent_for(normal, scary)
@@ -366,7 +366,7 @@ class SimBattleCombatRulesTest < ActiveSupport::TestCase
     assert_includes rules.log_clauses(ctx.call(combatant(charged_distance: 6), enemy.merge(abilities: [ "shieldwall" ]))), "щитовая стена ×0.75"
     assert_includes rules.log_clauses(ctx.call(combatant(abilities: [ "ferocious" ], ferocious_streak: 2), enemy)), "ярость SK +2"
     assert_includes rules.log_clauses(ctx.call(
-      combatant(abilities: [ "supportRank" ], files: 4, models_remaining: 10),
+      combatant(abilities: [ "supportRank" ], files: 4, ranks: 2, models_remaining: 10),
       enemy,
       contact_side: "front"
     )), "второй ряд бьёт"

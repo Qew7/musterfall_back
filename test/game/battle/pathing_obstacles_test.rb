@@ -41,7 +41,7 @@ class SimBattlePathingObstaclesTest < ActiveSupport::TestCase
     refute BF.rectangles_overlap?(mover.merge(x: dest[:x], y: dest[:y]), enemy)
   end
 
-  test "except removes the contact so the thread can end on the claimed face" do
+  test "except removes the contact so the route can end on the claimed face" do
     enemy = BattleScenarios.enemy(x: 22.0, y: 12.0)
     lake = BattleScenarios.terrain(id: "lake", type: "lake", x: 16.0, y: 12.0)
     world = Obstacles.merge([ enemy ], [ lake ]).except(enemy[:entity_id])
@@ -74,16 +74,16 @@ class SimBattlePathingObstaclesTest < ActiveSupport::TestCase
     refute world.wheel_clear?(mover, 270.0)
   end
 
-  test "wrap vertices sit outside the tray circumradius so corners clear the obstacle" do
+  test "route vertices sit outside the tray circumradius so corners clear the obstacle" do
     mover = BattleScenarios.combatant(
       x: 8.0, y: 12.0, facing: 0.0, base_width: 5.0, base_depth: 4.0
     )
     lake = BattleScenarios.terrain(id: "lake", type: "lake", x: 16.0, y: 12.0, width: 3.0, depth: 2.4)
     world = Obstacles.merge([ mover ], [ lake ])
     lake_obs = BF.feature_as_obstacle(lake)
-    vertices = world.wrap_vertices(mover)
+    vertices = world.route_points(mover)
 
-    assert vertices.any?, "expected Minkowski wrap vertices around the lake"
+    assert vertices.any?, "expected Minkowski route vertices around the lake"
     vertices.each do |vertex|
       pose = mover.merge(x: vertex[:x], y: vertex[:y])
       refute BF.rectangles_overlap?(pose, lake_obs), vertex.inspect
@@ -98,14 +98,14 @@ class SimBattlePathingObstaclesTest < ActiveSupport::TestCase
     end
   end
 
-  test "wrap_vertices omit a vertex whose tray hangs off the board" do
+  test "route_points omit a vertex whose tray hangs off the board" do
     mover = BattleScenarios.combatant(
       entity_id: "unit-36", x: 4.0, y: 4.0, facing: 0.0,
       base_width: 4.0, base_depth: 4.0
     )
     mage = BattleScenarios.combatant(entity_id: "hero-1", x: 8.0, y: 4.0, base_width: 1.0, base_depth: 1.0)
     world = Obstacles.merge([ mover, mage ], [])
-    vertices = world.wrap_vertices(mover)
+    vertices = world.route_points(mover)
 
     refute vertices.any? { |vertex| vertex[:y] < 1.5 }, vertices.inspect
     assert vertices.any? { |vertex| vertex[:y] > mover[:y] + 1.0 }, vertices.inspect

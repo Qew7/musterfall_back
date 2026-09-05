@@ -157,8 +157,7 @@ class SimBattleWizardCastSeekTest < ActiveSupport::TestCase
     move = phase[:actions].find { |action| action[:actor_id] == "hero-1" }
     assert move
     refute_equal move[:from][:x], move[:to][:x]
-    assert move.dig(:maneuver, :avoided) || move.dig(:maneuver, :pathing_avoided) ||
-      Array(move.dig(:maneuver, :steps)).any? { |step| %w[wheel turn advance march].include?(step[:kind].to_s) }
+    assert Array(move.dig(:maneuver, :steps)).any? { |step| %w[wheel turn advance march].include?(step[:kind].to_s) }
   end
 
   test "hybrid wizard out of spell range seeks instead of holding under distant LoS" do

@@ -139,7 +139,7 @@ module Sim
 
         # First hop from the live pose: wheel+translate, or turn+translate when the
         # heading is a 90° wrap the current frontage cannot wheel.
-        def followable?(mover, to, contact_id: nil)
+        def first_segment_clear?(mover, to, contact_id: nil)
           return false if same_point?(mover, to)
 
           heading = Geometry::Battlefield.heading_to(mover, to)
@@ -222,7 +222,7 @@ module Sim
           samples.min_by { |point| Geometry::Battlefield.distance_between(dest, point) }
         end
 
-        def wrap_vertices(mover, contact_id: nil)
+        def route_points(mover, contact_id: nil)
           seen = {}
           @kernels.filter_map do |kernel|
             next if kernel.id == mover[:entity_id]

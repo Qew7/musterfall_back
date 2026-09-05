@@ -75,7 +75,6 @@ class SimGeometryObbTest < ActiveSupport::TestCase
       goal_point: { x: 20.0, y: 12.0 },
       budget: 4.0,
       obstacles: obstacles,
-      bypass: false
     )
 
     assert plan[:pose]

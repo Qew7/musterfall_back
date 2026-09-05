@@ -58,7 +58,6 @@ module Sim
             contact_slot: maneuver[:contact_slot],
             approach_mode: maneuver[:approach_mode],
             truncated: maneuver[:truncated_by_collision],
-            avoided: maneuver[:avoided],
             blocked_by_ally: maneuver[:blocked_by_ally]
           ),
           damage: action[:damage] || action[:models_lost],

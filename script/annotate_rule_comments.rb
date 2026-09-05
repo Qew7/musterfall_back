@@ -54,7 +54,7 @@ ANNOTATIONS = {
   "forestkin/round.rb" =>
     "forestkin | round | In forest, heal +1 HP per round while wounded. Balance: treeman/dryad sustain over long fights.",
   "ground/movement.rb" =>
-    "ground | movement | Default infantry AI: charge, flank/rear setup, contact waves, pathfinding. Balance: drives melee deploy and post-standoff closes.",
+    "ground | movement | Default infantry AI: charge, flank/rear setup, simultaneous movement, pathfinding. Balance: drives melee deploy and post-standoff closes.",
   "line/shooting.rb" =>
     "line | shooting | Line template artillery/magic beam. Balance: inferno cannon and similar rare artillery.",
   "machine/shooting.rb" =>

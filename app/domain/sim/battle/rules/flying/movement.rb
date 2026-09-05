@@ -25,12 +25,12 @@ module Sim
             ranked.filter_map { |combatant| entries_by_id[combatant[:entity_id]] }
           end
 
-          # Own wave before infantry so landings exist as obstacles, not takeoff ghosts.
-          def plan_waves(movers, enemies, claimed, terrain: [])
+          # Move before infantry so landings exist as obstacles, not takeoff positions.
+          def plan_groups(movers, enemies, claimed, terrain: [])
             entries = plan_entries(movers, enemies, claimed, terrain: terrain)
             return [] if entries.empty?
 
-            [ { entries: entries, allow_ally_bypass: true } ]
+            [ { entries: entries } ]
           end
 
           def plan_entry(combatant, enemies, claimed, terrain = [])
@@ -45,7 +45,7 @@ module Sim
           end
 
           def choose_charge_for_slot(combatant, enemies, claimed, terrain, slot)
-            budget = Decisions::Movement.budget_for(combatant, enemies: enemies)
+            budget = Decisions::Movement.charge_budget_for(combatant, enemies: enemies)
             return nil if budget <= 0.05
 
             enemy = furthest_chargeable_enemy(combatant, enemies, claimed, terrain, slot)
@@ -59,7 +59,7 @@ module Sim
             Pathing.active_units(enemies).select do |enemy|
               next false unless Decisions::Movement.can_charge?(combatant, enemy, terrain)
               next false if claimed[enemy[:entity_id]].key?(slot)
-              next false unless Decisions::Movement.this_turn_charge?(combatant, enemy, enemies: enemies)
+              next false unless Decisions::Movement.within_charge_range?(combatant, enemy, enemies: enemies)
 
               true
             end.max_by do |enemy|
@@ -154,11 +154,15 @@ module Sim
             end
           end
 
-          def build_approach_intent(combatant:, nearest:, obstacles:, enemies: [], contact_slot: nil, allow_ally_bypass: false, approach_mode: :flyer_charge, terrain: [], chargeable: true)
+          def build_approach_intent(combatant:, nearest:, obstacles:, enemies: [], contact_slot: nil, approach_mode: :flyer_charge, terrain: [], chargeable: true)
             return nil unless nearest
             return nil if Decisions::Movement.engaged?(combatant, nearest)
 
-            budget = Decisions::Movement.budget_for(combatant, enemies: enemies)
+            budget = if approach_mode == :flyer_charge
+              Decisions::Movement.charge_budget_for(combatant, enemies: enemies)
+            else
+              Decisions::Movement.budget_for(combatant, enemies: enemies)
+            end
             return nil if budget <= 0.05
 
             case approach_mode
@@ -472,7 +476,6 @@ module Sim
               pose: pose,
               desired: origin.merge(x: clamped[:x], y: clamped[:y], facing: desired_facing),
               truncated: Geometry::Battlefield.distance_between(pose, clamped) > 0.05,
-              avoided: false,
               blocked_by_ally: false,
               blocker: nil,
               leap: true,

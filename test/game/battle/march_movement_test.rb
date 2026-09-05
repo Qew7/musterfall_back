@@ -53,7 +53,6 @@ class SimBattleMarchMovementTest < ActiveSupport::TestCase
       obstacles: [ infantry, enemy ],
       contact_id: enemy[:entity_id],
       goal_unit: enemy,
-      bypass: false,
       march_allowed: meta[:march].to_s == "active"
     )
 
@@ -76,7 +75,6 @@ class SimBattleMarchMovementTest < ActiveSupport::TestCase
       obstacles: [ infantry, enemy ],
       contact_id: enemy[:entity_id],
       goal_unit: enemy,
-      bypass: false,
       march_allowed: meta[:march].to_s == "active"
     )
 

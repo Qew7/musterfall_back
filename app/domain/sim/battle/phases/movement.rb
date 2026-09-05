@@ -50,20 +50,18 @@ module Sim
                 kind: "row_advance",
                 target_row: target_row,
                 desired: { x: combatant[:x], y: combatant[:y], facing: combatant[:facing] },
-                truncated_by_collision: false,
-                avoided: false
+                truncated_by_collision: false
               }
             )
           end
 
-          # Rule planners own wave order (flyers, then ground contact per target, then flanks).
-          Decisions::Movement.plan_melee_waves(physical_movers, target_side[:combatants], terrain: terrain).each do |wave|
-            moved += run_melee_wave!(
+          # Flyers move first, then ground contacts per target, then the remaining units.
+          Decisions::Movement.plan_movement_groups(physical_movers, target_side[:combatants], terrain: terrain).each do |group|
+            moved += run_simultaneous_moves!(
               phase: phase,
               acting_side: acting_side,
               target_side: target_side,
-              entries: wave[:entries],
-              allow_ally_bypass: wave[:allow_ally_bypass],
+              entries: group[:entries],
               terrain: terrain,
               round_number: round_number
             )
@@ -158,7 +156,7 @@ module Sim
           end
         end
 
-        def run_melee_wave!(phase:, acting_side:, target_side:, entries:, allow_ally_bypass:, terrain: [], round_number: 1)
+        def run_simultaneous_moves!(phase:, acting_side:, target_side:, entries:, terrain: [], round_number: 1)
           return 0 if entries.empty?
 
           mover_ids = entries.map { |entry| entry[:combatant][:entity_id] }.to_set
@@ -172,7 +170,6 @@ module Sim
               obstacles: obstacles,
               enemies: target_side[:combatants],
               contact_slot: entry[:contact_slot],
-              allow_ally_bypass: allow_ally_bypass,
               approach_mode: entry[:approach_mode] || :direct,
               terrain: terrain,
               chargeable: entry.fetch(:chargeable, true)
@@ -190,28 +187,27 @@ module Sim
 
           # Co-movers that never move still occupy their start — treat as hard blockers
           # so others cannot land inside them (idle heroes, wait intents, etc.).
-          occupied = obstacles + wave_stayers(entries, intents).map { |entry| freeze_obstacle(entry) }
+          occupied = obstacles + group_stayers(entries, intents).map { |entry| freeze_obstacle(entry) }
           resolve_destination_conflicts!(intents, occupied)
-          enforce_wave_transit_paths!(
+          enforce_simultaneous_paths!(
             intents,
             obstacles,
-            stayers: wave_stayers(entries, intents),
+            stayers: group_stayers(entries, intents),
             enemies: target_side[:combatants],
-            terrain: terrain,
-            allow_ally_bypass: allow_ally_bypass
+            terrain: terrain
           )
-          occupied = obstacles + wave_stayers(entries, intents).map { |entry| freeze_obstacle(entry) }
+          occupied = obstacles + group_stayers(entries, intents).map { |entry| freeze_obstacle(entry) }
           resolve_destination_conflicts!(intents, occupied)
           # Landing conflict can turn a co-mover into a waiter after everyone already
           # planned through their start. Re-path those sweeps; thread wrap already exists.
           reroute_around_stayers!(
             intents,
             obstacles,
-            stayers: wave_stayers(entries, intents),
+            stayers: group_stayers(entries, intents),
             enemies: target_side[:combatants],
             terrain: terrain
           )
-          occupied = obstacles + wave_stayers(entries, intents).map { |entry| freeze_obstacle(entry) }
+          occupied = obstacles + group_stayers(entries, intents).map { |entry| freeze_obstacle(entry) }
           resolve_destination_conflicts!(intents, occupied)
           apply_free_aligns!(intents, occupied)
           Rules.for(:movement).prepare_melee_intents!(
@@ -226,7 +222,7 @@ module Sim
           commit_intents!(phase, acting_side, target_side, intents)
         end
 
-        def wave_stayers(entries, intents)
+        def group_stayers(entries, intents)
           entries.map { |entry| entry[:combatant] }.select do |unit|
             intent = intents.find { |row| row[:combatant][:entity_id] == unit[:entity_id] }
             intent.nil? || intent[:wait] || intent[:destination].nil?
@@ -253,7 +249,6 @@ module Sim
               obstacles: world,
               enemies: enemies,
               contact_slot: intent[:contact_slot],
-              allow_ally_bypass: false,
               approach_mode: intent[:approach_mode] || :direct,
               terrain: terrain,
               chargeable: !contact_id.nil?
@@ -286,7 +281,7 @@ module Sim
             pose = destination_pose(intent)
             next unless Decisions::Movement.engaged?(pose, nearest)
 
-            # Include same-wave allies (excluded from hard_obstacles as co-movers) so idle friends
+            # Include allies moving at the same time so idle friends
             # still steer free-align away from their half.
             ally_blockers = intents.filter_map do |other|
               next if other[:combatant][:entity_id] == intent[:combatant][:entity_id]
@@ -326,7 +321,7 @@ module Sim
           end
         end
 
-        # Simultaneous melee: co-movers in the same wave vacate together — do not treat their
+        # Simultaneous melee: moving allies vacate together — do not treat their
         # starts as obstacles while landing (orchestrator model). Only static blockers, accepted
         # landings, and units that end up waiting keep occupying space. Charge targets are soft.
         def resolve_destination_conflicts!(intents, static_obstacles)
@@ -416,11 +411,11 @@ module Sim
           best
         end
 
-        # Orchestrator landings are resolved first; then each mover's swept tray must stay
-        # clear of static blockers, stationary allies, and co-mover *landings* (not their
-        # starts — those vacate this wave). Re-path or shorten when a straight march would
+        # Resolve landings first; each mover must then stay clear of static blockers,
+        # stationary allies, and other movers' landings (their starts are vacated together).
+        # Re-plan or shorten when a straight march would
         # cut through where an ally will stand.
-        def enforce_wave_transit_paths!(intents, static_obstacles, stayers:, enemies:, terrain:, allow_ally_bypass:)
+        def enforce_simultaneous_paths!(intents, static_obstacles, stayers:, enemies:, terrain:)
           movers = intents.reject { |intent| intent[:wait] || intent[:destination].nil? }
           return if movers.empty?
 
@@ -435,31 +430,30 @@ module Sim
           end
 
           movers.each do |intent|
-            apply_wave_transit_constraint!(
+            apply_simultaneous_path_constraint!(
               intent,
               static: static,
               stayer_obstacles: stayer_obstacles,
               intents: intents,
               enemies: enemies,
-              terrain: terrain,
-              allow_ally_bypass: allow_ally_bypass
+              terrain: terrain
             )
           end
         end
 
-        def apply_wave_transit_constraint!(intent, static:, stayer_obstacles:, intents:, enemies:, terrain:, allow_ally_bypass:)
+        def apply_simultaneous_path_constraint!(intent, static:, stayer_obstacles:, intents:, enemies:, terrain:)
           unit = intent[:combatant]
           from = unit
           desired = destination_pose(intent)
           contact_id = charge_contact_id_for(intent)
-          transit_world = wave_transit_obstacles(
+          transit_world = simultaneous_obstacles(
             static, stayer_obstacles, intents,
             except_id: unit[:entity_id],
             mover_from: from,
             mover_to: desired
           )
 
-          return if wave_translation_clear?(unit, from, desired, transit_world, contact_id: contact_id)
+          return if simultaneous_path_clear?(unit, from, desired, transit_world, contact_id: contact_id)
 
           fresh = Decisions::Movement.build_approach_intent(
             combatant: unit,
@@ -467,20 +461,19 @@ module Sim
             obstacles: transit_world,
             enemies: enemies,
             contact_slot: intent[:contact_slot],
-            allow_ally_bypass: allow_ally_bypass,
             approach_mode: intent[:approach_mode] || :direct,
             terrain: terrain,
             chargeable: !contact_id.nil?
           )
           if fresh && !fresh[:wait] && fresh[:destination]
             fresh_pose = destination_pose(fresh.merge(combatant: unit, destination: fresh[:destination]))
-            fresh_world = wave_transit_obstacles(
+            fresh_world = simultaneous_obstacles(
               static, stayer_obstacles, intents,
               except_id: unit[:entity_id],
               mover_from: from,
               mover_to: fresh_pose
             )
-            if wave_translation_clear?(unit, from, fresh_pose, fresh_world, contact_id: contact_id)
+            if simultaneous_path_clear?(unit, from, fresh_pose, fresh_world, contact_id: contact_id)
               merge_replanned_intent!(intent, fresh)
               return
             end
@@ -502,7 +495,7 @@ module Sim
           end
         end
 
-        def wave_transit_obstacles(static, stayer_obstacles, intents, except_id:, mover_from: nil, mover_to: nil)
+        def simultaneous_obstacles(static, stayer_obstacles, intents, except_id:, mover_from: nil, mover_to: nil)
           static + stayer_obstacles + co_mover_destination_obstacles(
             intents,
             except_id: except_id,
@@ -540,7 +533,7 @@ module Sim
           dot < CONTACT
         end
 
-        def wave_translation_clear?(mover, from, to, obstacles, contact_id: nil)
+        def simultaneous_path_clear?(mover, from, to, obstacles, contact_id: nil)
           return true if Geometry::Battlefield.distance_between(from, to) <= 0.05
 
           space = Pathing::Obstacles.coerce(obstacles).except(mover[:entity_id])
@@ -737,7 +730,7 @@ module Sim
         private_class_method :record_charge!
 
         # Enemies and non-moving allies only — co-movers are resolved together, not sequenced.
-        # Impassable terrain is merged into the same obstacle list for Pathing bypass.
+        # Impassable terrain is merged into the same obstacle list for Pathing.
         def movement_obstacles(acting_side, target_side, mover_ids, terrain = [])
           allies = Pathing.active_units(acting_side[:combatants]).reject { |entry| mover_ids.include?(entry[:entity_id]) }
           enemies = Pathing.active_units(target_side[:combatants])
@@ -794,10 +787,7 @@ module Sim
           if plan[:blocked_by_ally]
             ", путь закрыт союзником #{blocker[:name]}"
           elsif blocker_is_target?(plan, nearest)
-            # Soft-stop / align on the charge target is not "обходит".
             plan[:truncated] ? ", выходит на контакт" : ""
-          elsif plan[:avoided]
-            ", обходит #{blocker_label}"
           elsif plan[:truncated]
             ", путь преграждён #{blocker_label}"
           else
@@ -814,7 +804,6 @@ module Sim
         def maneuver_log_kind(plan, contact_blocker, wheel, turn, advance_spent, march_spent)
           return plan[:kind] if plan[:kind]
           return "blocked_by_ally" if plan[:blocked_by_ally]
-          return "bypass" if plan[:avoided] && !contact_blocker
           return "contact_align" if contact_blocker && plan[:truncated]
 
           maneuver_kind(plan, wheel, turn, advance_spent, march_spent)
@@ -837,8 +826,6 @@ module Sim
             mv_spent_march: march_spent.to_f,
             desired: { x: desired[:x], y: desired[:y], facing: desired[:facing] },
             truncated_by_collision: !!plan[:truncated],
-            avoided: !!plan[:avoided] && !contact_blocker,
-            pathing_avoided: !!plan[:avoided],
             blocked_by_ally: !!plan[:blocked_by_ally],
             blocker_id: plan.dig(:blocker, :entity_id),
             blocker_name: plan.dig(:blocker, :name),
@@ -957,7 +944,7 @@ module Sim
           ]
 
           if maneuver
-            lines << "maneuver.kind=#{maneuver[:kind]} avoided=#{maneuver[:avoided]} pathing_avoided=#{maneuver[:pathing_avoided]} blocked_by_ally=#{maneuver[:blocked_by_ally]} truncated=#{maneuver[:truncated_by_collision]}"
+            lines << "maneuver.kind=#{maneuver[:kind]} blocked_by_ally=#{maneuver[:blocked_by_ally]} truncated=#{maneuver[:truncated_by_collision]}"
             if maneuver[:contact_slot]
               lines << "contact_slot=#{maneuver[:contact_slot]}"
             end

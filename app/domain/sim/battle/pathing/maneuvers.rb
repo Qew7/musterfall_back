@@ -9,7 +9,7 @@ module Sim
       module Maneuvers
         module_function
 
-        def follow_segment(origin:, heading:, budget:, goal_point:, goal_unit:, obstacles:, contact_id:, terrain: [], flying: false, kernels: nil, march_allowed: false, finish: nil, allow_turn: true, **)
+        def plan_segment(origin:, heading:, budget:, goal_point:, goal_unit:, obstacles:, contact_id:, terrain: [], flying: false, kernels: nil, march_allowed: false, finish: nil, allow_turn: true, **)
           space = Obstacles.coerce(obstacles, kernels)
           shared = {
             origin: origin,

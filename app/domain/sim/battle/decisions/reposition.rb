@@ -62,7 +62,6 @@ module Sim
               obstacles: obstacles,
               contact_id: nil,
               goal_unit: nil,
-              bypass: false,
               terrain: terrain,
               flying: Decisions::Movement.flying?(combatant),
               march_allowed: march_meta[:march].to_s == "active"
@@ -214,14 +213,17 @@ module Sim
           faced = try_face_clear(candidate, candidate, look, remaining, obstacles)
           return [ candidate, plan ] unless faced
 
-          [ apply_pose(candidate, faced[:pose]), faced[:plan].merge(
+          faced_plan = faced[:plan].merge(
             desired: plan[:desired] || faced[:pose],
             heading: plan[:heading],
             truncated: plan[:truncated],
-            avoided: plan[:avoided],
             blocked_by_ally: plan[:blocked_by_ally],
-            blocker: plan[:blocker]
-          ) ]
+            blocker: plan[:blocker],
+            cost_spent: plan[:cost_spent].to_f + faced.dig(:plan, :wheel, :cost).to_f,
+            steps: Array(plan[:steps]) + Pathing::Maneuvers.steps_for(faced[:plan]),
+            motion_sequence: Array(plan[:motion_sequence]) + Pathing::Maneuvers.motion_entries_for(candidate, faced[:plan])
+          )
+          [ apply_pose(candidate, faced[:pose]), faced_plan ]
         end
 
         def try_face_clear(origin, pose_unit, desired_facing, budget, obstacles)
@@ -244,7 +246,6 @@ module Sim
               pose: faced,
               desired: faced,
               heading: desired_facing,
-              avoided: false,
               truncated: false,
               blocked_by_ally: false,
               blocker: nil,

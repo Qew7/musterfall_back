@@ -1,7 +1,7 @@
 require "test_helper"
 
 # Covers the contact-jam fixes: engage snap band, soft charge-target conflicts,
-# two-pass contact→flank movement, contact slots, and limited ally flank bypass.
+# two-pass contact→flank movement, contact slots, and routes around allies.
 class SimBattleContactChargeTest < ActiveSupport::TestCase
   BF = Sim::Geometry::Battlefield
   CONTACT = Sim::Battle::Pathing::CONTACT
@@ -295,8 +295,8 @@ class SimBattleContactChargeTest < ActiveSupport::TestCase
     by_id = entries.index_by { |entry| entry[:combatant][:entity_id] }
     assert_equal "front", by_id["orks"][:contact_slot]
     assert_equal "flank", by_id["skel"][:contact_slot]
-    assert GroundMovement.contact_wave?(by_id["orks"])
-    refute GroundMovement.contact_wave?(by_id["skel"])
+    assert GroundMovement.moves_first?(by_id["orks"])
+    refute GroundMovement.moves_first?(by_id["skel"])
 
     before = BF.distance_between_units(flanker, enemy)
     MovementPhase.play(
@@ -309,7 +309,7 @@ class SimBattleContactChargeTest < ActiveSupport::TestCase
     refute BF.rectangles_overlap?(flanker, front)
   end
 
-  test "a distant front claimer is not in the contact wave" do
+  test "a distant front claimer is not in the contact simultaneous group" do
     actor = combatant(
       entity_id: "front", name: "Алебардисты",
       x: 4, y: 12, facing: 0, movement: 4,
@@ -324,7 +324,7 @@ class SimBattleContactChargeTest < ActiveSupport::TestCase
     refute ChargeRange.within?(actor, enemy, enemies: [ enemy ])
     entries = DecisionsMovement.plan_melee_entries([ actor ], [ enemy ])
     assert_equal "front", entries.first[:contact_slot]
-    refute GroundMovement.contact_wave?(entries.first)
+    refute GroundMovement.moves_first?(entries.first)
   end
 
   test "immediate charge gate uses 2x MV not 1x MV" do
@@ -476,7 +476,7 @@ class SimBattleContactChargeTest < ActiveSupport::TestCase
     refute GroundMovement.slot_path?(origin, defender, "front")
   end
 
-  test "flyer wave runs before infantry contact" do
+  test "flyer group moves before infantry contact" do
     flyer = combatant(
       entity_id: "hero-1", name: "Принц",
       x: 10, y: 18, facing: 0, movement: 10,
@@ -493,10 +493,9 @@ class SimBattleContactChargeTest < ActiveSupport::TestCase
       base_width: 1, base_depth: 1, melee: 6, side_index: 1
     )
 
-    waves = DecisionsMovement.plan_melee_waves([ flyer, infantry ], [ enemy ])
-    assert_equal "hero-1", waves.first[:entries].first[:combatant][:entity_id]
-    assert waves.first[:allow_ally_bypass]
-    refute waves.dig(1, :allow_ally_bypass)
+    groups = DecisionsMovement.plan_movement_groups([ flyer, infantry ], [ enemy ])
+    assert_equal "hero-1", groups.first[:entries].first[:combatant][:entity_id]
+    assert_equal "unit-1", groups.second[:entries].first[:combatant][:entity_id]
   end
 
   test "a second front claimer keeps the nearest enemy on a free slot" do
@@ -945,10 +944,10 @@ class SimBattleContactChargeTest < ActiveSupport::TestCase
   end
 
   # ---------------------------------------------------------------------------
-  # 5. Limited ally bypass for flank / rear / small footprint
+  # 5. Routes around allies for flank / rear / small footprint
   # ---------------------------------------------------------------------------
 
-  test "frontal approach wraps an allied blocker instead of waiting" do
+  test "frontal approach moves around an allied blocker instead of waiting" do
     origin = combatant(
       entity_id: "boars",
       name: "Наездники на кабанах",
@@ -993,7 +992,6 @@ class SimBattleContactChargeTest < ActiveSupport::TestCase
 
     assert plan[:pose]
     refute plan[:blocked_by_ally]
-    assert plan[:avoided]
     traveled = BF.distance_between(origin, plan[:pose])
     assert_operator traveled, :>, 0.2
     landed = origin.merge(plan[:pose])
@@ -1001,7 +999,7 @@ class SimBattleContactChargeTest < ActiveSupport::TestCase
     refute BF.rectangles_overlap?(landed, enemy)
   end
 
-  test "geometric flank approach may bypass an allied blocker" do
+  test "geometric flank approach may move around an allied blocker" do
     # Enemy faces west; hero sits due south (true flank). Ally sits on the northbound line.
     origin = combatant(
       entity_id: "hero",
@@ -1045,8 +1043,7 @@ class SimBattleContactChargeTest < ActiveSupport::TestCase
       budget: 5,
       obstacles: [ ally, enemy ],
       contact_id: enemy[:entity_id],
-      goal_unit: enemy,
-      allow_ally_bypass: true
+      goal_unit: enemy
     )
 
     assert plan[:pose]
@@ -1057,7 +1054,7 @@ class SimBattleContactChargeTest < ActiveSupport::TestCase
     refute BF.rectangles_overlap?(landed, ally)
   end
 
-  test "small footprint wraps an ally on a frontal line" do
+  test "small footprint moves around an ally on a frontal line" do
     origin = combatant(
       entity_id: "hero",
       name: "Герой",
@@ -1097,13 +1094,11 @@ class SimBattleContactChargeTest < ActiveSupport::TestCase
       budget: 6,
       obstacles: [ ally, enemy ],
       contact_id: enemy[:entity_id],
-      goal_unit: enemy,
-      allow_ally_bypass: true
+      goal_unit: enemy
     )
 
     assert plan[:pose]
     refute plan[:blocked_by_ally]
-    assert plan[:avoided]
     traveled = BF.distance_between(origin, plan[:pose])
     assert_operator traveled, :>, 0.2
     landed = origin.merge(plan[:pose])
@@ -1457,7 +1452,7 @@ class SimBattleContactChargeTest < ActiveSupport::TestCase
     assert_equal :direct, by_id["u2"][:approach_mode]
   end
 
-  test "when primary enemy geo slot is taken natural side defers to fallback on same target" do
+  test "when primary enemy geo slot is taken natural side tries another enemy" do
     ghouls = combatant(
       entity_id: "unit-5", name: "Упырская стая",
       x: 31, y: 11, facing: 180, movement: 4,
@@ -1476,12 +1471,10 @@ class SimBattleContactChargeTest < ActiveSupport::TestCase
 
     claimed = Hash.new { |hash, key| hash[key] = {} }
     claimed["unit-5"]["front"] = "unit-8"
-    refute GroundMovement.choose_natural_side(second_skeleton, [ ghouls, vampire ], claimed, [])
-
-    choice = GroundMovement.choose_fallback_target(second_skeleton, [ ghouls, vampire ], claimed, [])
+    choice = GroundMovement.choose_natural_side(second_skeleton, [ ghouls, vampire ], claimed, [])
     assert choice
-    assert_equal "unit-5", choice[:nearest][:entity_id]
-    assert_equal "flank", choice[:contact_slot]
+    assert_equal "hero-2", choice[:nearest][:entity_id]
+    assert_equal "front", choice[:contact_slot]
   end
 
   test "when front is taken and no other enemy exists claimer orbits free flank" do
