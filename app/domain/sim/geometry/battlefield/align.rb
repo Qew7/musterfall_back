@@ -62,7 +62,7 @@ module Sim
             next false if obs[:current_health].to_i <= 0
             next false if !attacker[:side_index].nil? && !obs[:side_index].nil? && obs[:side_index] != attacker[:side_index]
             # Friend not locked in contact with this defender — still a physical block for align.
-            next false if distance_between_units(obs, defender) <= (CONFIG[:melee_contact_tolerance] + CONFIG[:contact_snap])
+            next false if melee_contact?(obs, defender)
             # Only allies close enough to clip our wheel matter for free_side / short-arc checks.
             next false if distance_between_units(attacker, obs) > reach
 
@@ -79,6 +79,7 @@ module Sim
           steps.times do |index|
             progress = (index + 1).to_f / steps
             candidate = rotate_unit_around_point(origin, pivot, delta * progress)
+            return true unless tray_on_battlefield?(candidate)
             hit = idle_allies.any? do |ally|
               rectangles_overlap?(candidate, ally) || distance_between_units(candidate, ally) < contact
             end
@@ -154,6 +155,7 @@ module Sim
             progress = (index + 1).to_f / steps
             candidate = rotate_unit_around_point(start, pivot, delta * progress)
             candidate = separate_aligned_pose(candidate, defender) if rectangles_overlap?(candidate, defender)
+            next unless tray_on_battlefield?(candidate)
             next if rectangles_overlap?(candidate, defender)
             next if distance_between_units(candidate, defender) > engage
             next if obstacles.any? { |obs|
@@ -180,6 +182,7 @@ module Sim
             progress = (index + 1).to_f / steps
             candidate = rotate_unit_around_point(start, pivot, delta * progress)
             candidate = separate_aligned_pose(candidate, defender) if rectangles_overlap?(candidate, defender)
+            next unless tray_on_battlefield?(candidate)
             next if rectangles_overlap?(candidate, defender)
             next if distance_between_units(candidate, defender) > engage
             next if obstacles.any? { |obs|

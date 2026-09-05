@@ -9,6 +9,12 @@ module Sim
 
         Kernel = Pathing::ObstacleKernel
         UNIT_WRAP_PAD = Pathing::CONTACT + Pathing::TERRAIN_WRAP_PAD
+        BATTLEFIELD_EDGE = {
+          entity_id: "battlefield-edge",
+          name: "край поля",
+          terrain_type: "edge",
+          obstacle_kind: :terrain
+        }.freeze
 
         def self.merge(units, terrain = [])
           new(Pathing.merge_obstacles(units, terrain))
@@ -75,6 +81,8 @@ module Sim
         end
 
         def first_blocker(pose, contact_id: nil)
+          return BATTLEFIELD_EDGE unless Geometry::Battlefield.tray_on_battlefield?(pose)
+
           px = pose[:x].to_f
           py = pose[:y].to_f
           phw, phd = Geometry::Obb.half_sizes(pose)
@@ -102,6 +110,11 @@ module Sim
         end
 
         def translation_clear?(mover, from, to, contact_id: nil)
+          start = mover.merge(x: from[:x], y: from[:y], facing: from[:facing])
+          finish = mover.merge(x: to[:x], y: to[:y], facing: to[:facing])
+          return false unless Geometry::Battlefield.tray_on_battlefield?(start)
+          return false unless Geometry::Battlefield.tray_on_battlefield?(finish)
+
           length = Geometry::Battlefield.distance_between(from, to)
           phw, phd = Geometry::Obb.half_sizes(mover)
           pc, ps = Geometry::Obb.trig(to[:facing])
@@ -229,7 +242,7 @@ module Sim
             next if contact_id && kernel.id == contact_id
 
             minkowski_points(mover, kernel).filter_map do |vertex|
-              pose = fit_tray_on_board(mover.merge(x: vertex[:x], y: vertex[:y]))
+              pose = Geometry::Battlefield.fit_tray_on_battlefield(mover.merge(x: vertex[:x], y: vertex[:y]))
               next unless pose
               next unless clear?(pose, contact_id: contact_id)
 
@@ -305,41 +318,15 @@ module Sim
           return false unless turn[:completed]
 
           turned = Geometry::Battlefield.merge_footprint(mover, turn)
-          return false unless tray_on_board?(turned)
+          return false unless Geometry::Battlefield.tray_on_battlefield?(turned)
           return false if first_blocker(turned, contact_id: contact_id)
           return true if same_point?(turned, to)
 
           dest = turned.merge(x: to[:x], y: to[:y])
-          return false unless tray_on_board?(dest)
+          return false unless Geometry::Battlefield.tray_on_battlefield?(dest)
           return false if first_blocker(dest, contact_id: contact_id)
 
           translation_clear?(turned, turned, dest, contact_id: contact_id)
-        end
-
-        def tray_on_board?(pose)
-          width = Geometry::Battlefield::CONFIG[:width]
-          height = Geometry::Battlefield::CONFIG[:height]
-          Geometry::Battlefield.unit_corners(pose).all? do |corner|
-            corner[:x].between?(0.0, width) && corner[:y].between?(0.0, height)
-          end
-        end
-
-        # ponytail: clamp instead of drop — off-board Minkowski corners left a 4x4
-        # dead-ended on a house west face; if the clamp still overlaps, clear? drops it.
-        def fit_tray_on_board(pose)
-          width = Geometry::Battlefield::CONFIG[:width]
-          height = Geometry::Battlefield::CONFIG[:height]
-          corners = Geometry::Battlefield.unit_corners(pose)
-          xs = corners.map { |corner| corner[:x] }
-          ys = corners.map { |corner| corner[:y] }
-          dx = 0.0
-          dy = 0.0
-          dx = -xs.min if xs.min < 0.0
-          dy = -ys.min if ys.min < 0.0
-          dx = width - xs.max if xs.max + dx > width
-          dy = height - ys.max if ys.max + dy > height
-          fitted = pose.merge(x: pose[:x] + dx, y: pose[:y] + dy)
-          tray_on_board?(fitted) ? fitted : nil
         end
 
         def point(entry)

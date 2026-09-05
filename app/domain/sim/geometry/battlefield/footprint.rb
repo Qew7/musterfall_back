@@ -85,6 +85,26 @@ module Sim
           Sim::Geometry::Obb.overlap_units?(left, right)
         end
 
+        def tray_on_battlefield?(unit)
+          width = CONFIG[:width].to_f
+          height = CONFIG[:height].to_f
+          unit_corners(unit).all? do |corner|
+            corner[:x].between?(0.0, width) && corner[:y].between?(0.0, height)
+          end
+        end
+
+        def fit_tray_on_battlefield(unit)
+          corners = unit_corners(unit)
+          xs = corners.map { |corner| corner[:x] }
+          ys = corners.map { |corner| corner[:y] }
+          dx = xs.min.negative? ? -xs.min : 0.0
+          dy = ys.min.negative? ? -ys.min : 0.0
+          dx = CONFIG[:width].to_f - xs.max if xs.max + dx > CONFIG[:width].to_f
+          dy = CONFIG[:height].to_f - ys.max if ys.max + dy > CONFIG[:height].to_f
+          fitted = unit.merge(x: unit[:x].to_f + dx, y: unit[:y].to_f + dy)
+          tray_on_battlefield?(fitted) ? fitted : nil
+        end
+
         def project_unit_onto_axis(unit, axis)
           dots = unit_corners(unit).map { |point| (point[:x] * axis[:x]) + (point[:y] * axis[:y]) }
           { min: dots.min, max: dots.max }

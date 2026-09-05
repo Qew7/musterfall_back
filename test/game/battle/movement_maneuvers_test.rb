@@ -5,6 +5,32 @@ class SimBattleMovementManeuversTest < ActiveSupport::TestCase
   Pathing = Sim::Battle::Pathing
   Maneuvers = Sim::Battle::Pathing::Maneuvers
 
+  test "adjacent wheels in one direction are recorded as one maneuver" do
+    first = {
+      kind: "wheel",
+      direction: "right",
+      delta: 30.0,
+      cost: 1.0,
+      from: { x: 5.0, y: 5.0, facing: 0.0 },
+      to: { x: 5.2, y: 5.1, facing: 30.0 }
+    }
+    second = {
+      kind: "wheel",
+      direction: "right",
+      delta: 20.0,
+      cost: 0.5,
+      from: first[:to].dup,
+      to: { x: 5.4, y: 5.3, facing: 50.0 }
+    }
+
+    compacted = Maneuvers.compact_motion_entries([ first, second ])
+
+    assert_equal 1, compacted.size
+    assert_in_delta 50.0, compacted.first[:delta], 0.001
+    assert_in_delta 1.5, compacted.first[:cost], 0.001
+    assert_equal second[:to], compacted.first[:to]
+  end
+
   test "aligned approach is an advance, not a wheel or march" do
     actor = BattleScenarios.combatant(x: 8.0, y: 12.0, facing: 0.0, movement: 4.0)
     enemy = BattleScenarios.enemy(x: 24.0, y: 12.0, facing: 180.0)

@@ -281,23 +281,59 @@ module Sim
               combatant, nearest,
               contact_slot: contact_slot,
               approach_mode: approach_mode,
-              chargeable: chargeable
+              chargeable: charging
             )
             # Forest-hidden: march in without soft-contact until sharing the same forest.
-            contact_id = chargeable ? nearest[:entity_id] : nil
+            contact_id = charging ? nearest[:entity_id] : nil
             plan = Pathing.plan_approach(
               origin: combatant,
               goal_point: goal_point,
               budget: budget,
               obstacles: obstacles,
               contact_id: contact_id,
-              goal_unit: chargeable ? nearest : nil,
+              goal_unit: charging ? nearest : nil,
               terrain: terrain,
               flying: false,
               # Charge already spends ×2; march on top would be ×4.
               march_allowed: !charging && march_meta[:march].to_s == "active"
             )
+            if charging
+              closed = Pathing.close_contact(
+                origin: combatant,
+                plan: plan,
+                target: nearest,
+                obstacles: obstacles
+              )
+              unless closed
+                charging = false
+                contact_id = nil
+                budget = Decisions::Movement.budget_for(combatant, enemies: enemies)
+                plan = Pathing.plan_approach(
+                  origin: combatant,
+                  goal_point: nearest,
+                  budget: budget,
+                  obstacles: obstacles,
+                  contact_id: nil,
+                  goal_unit: nil,
+                  terrain: terrain,
+                  flying: false,
+                  march_allowed: march_meta[:march].to_s == "active"
+                )
+              else
+                plan = closed
+              end
+            end
             destination = plan[:pose]
+            if !charging && destination
+              before_gap = Geometry::Battlefield.distance_between_units(combatant, nearest)
+              after_gap = Geometry::Battlefield.distance_between_units(destination, nearest)
+              if after_gap > before_gap + 0.05
+                plan = turn_toward_if_clear(combatant, nearest, budget, obstacles)
+                return nil unless plan
+
+                destination = plan[:pose]
+              end
+            end
             facing_changed = destination && Geometry::Battlefield.shortest_facing_delta(combatant[:facing], destination[:facing]).abs > 0.05
             traveled = destination ? Geometry::Battlefield.distance_between(combatant, destination) : 0.0
             meaningful_move = destination && (facing_changed || traveled > 0.05)
@@ -316,21 +352,48 @@ module Sim
             )
           end
 
+          def turn_toward_if_clear(combatant, target, budget, obstacles)
+            heading = Geometry::Battlefield.heading_to(combatant, target)
+            turn = Geometry::Battlefield.apply_turn(combatant, heading, budget)
+            return nil unless turn[:completed]
+
+            pose = Geometry::Battlefield.merge_footprint(combatant, turn)
+            world = Pathing::Obstacles.coerce(obstacles).except(combatant[:entity_id])
+            return nil unless world.clear?(pose)
+
+            {
+              pose: pose,
+              desired: pose,
+              heading: heading,
+              truncated: false,
+              blocker: nil,
+              blocked_by_ally: false,
+              maneuver: :turn,
+              wheel: nil,
+              turn: turn,
+              cost_spent: turn[:cost].to_f,
+              mv_spent_wheel: 0.0,
+              mv_spent_turn: turn[:cost].to_f,
+              mv_spent_advance: 0.0,
+              mv_spent_march: 0.0,
+              steps: Pathing::Maneuvers.steps_for({ turn: turn }),
+              motion_sequence: Pathing::Maneuvers.motion_entries_for(
+                combatant, { pose: pose, turn: turn }
+              )
+            }
+          end
+
           def approach_goal_point(origin, defender, contact_slot:, approach_mode:, chargeable: true)
             slot = contact_slot.to_s
+            return Pathing.contact_pose_for_slot(origin, defender, slot) if chargeable
+
             if slot_path?(origin, defender, slot) && %w[flank rear].include?(slot)
               points = Pathing.contact_slot_points(origin, defender, slot)
               return points.min_by { |point| Geometry::Battlefield.distance_between(origin, point) } if points.any?
 
               return defender
             end
-            return defender unless chargeable
-
-            # Corner charge_destination at ~CONTACT is a 90° hop into the map edge.
-            gap = Geometry::Battlefield.distance_between_units(origin, defender)
-            return Geometry::Battlefield.move_along_facing(origin, [ gap, 0.5 ].min) if gap <= 1.0
-
-            Geometry::Battlefield.charge_destination(origin, defender)
+            defender
           end
 
           def corner_contact_reachable?(origin, defender, budget, terrain: [])
@@ -348,7 +411,13 @@ module Sim
             return false unless pose
 
             landed = origin.merge(x: pose[:x], y: pose[:y], facing: pose[:facing])
-            Geometry::Battlefield.distance_between_units(landed, defender) <= Decisions::Movement::ENGAGE
+            closed = Pathing.close_contact(
+              origin: origin,
+              plan: plan,
+              target: defender,
+              obstacles: [ defender ]
+            )
+            closed && Geometry::Battlefield.side_contact?(landed.merge(closed[:pose]), defender)
           end
         end
       end

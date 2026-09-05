@@ -165,43 +165,80 @@ module Sim
 
           def halt_charge!(intent)
             from = intent[:from]
-            desired = intent[:destination]
             combatant = intent[:combatant]
             target = intent[:nearest]
-            halted = fear_halt_pose(from, desired, combatant, target)
-
-            intent[:destination] = Geometry::Battlefield.footprint_destination(halted)
-            intent.delete(:paid_destination)
-            intent[:free_align] = false
-            intent[:charge_contact_id] = nil
-            intent[:plan] = (intent[:plan] || {}).merge(truncated: true, fear_halted: true, charge: false)
-          end
-
-          def fear_halt_pose(from, desired, combatant, target)
-            pose = lerp_pose(from, desired, combatant, 0.5)
-            return pose unless Decisions::Movement.engaged?(pose, target)
-
-            (1..10).each do |step|
-              t = 0.5 - (step * 0.05)
-              break if t <= 0
-
-              pose = lerp_pose(from, desired, combatant, t)
-              return pose unless Decisions::Movement.engaged?(pose, target)
+            plan = intent[:plan] || {}
+            motions = truncate_motions(combatant, plan[:motion_sequence], 0.5)
+            halted = if motions.any?
+              combatant.merge(motions.last[:to])
+            else
+              combatant.merge(x: from[:x], y: from[:y], facing: from[:facing])
+            end
+            if Decisions::Movement.engaged?(halted, target)
+              motions = []
+              halted = combatant.merge(x: from[:x], y: from[:y], facing: from[:facing])
             end
 
-            combatant.merge(x: from[:x], y: from[:y], facing: from[:facing])
+            intent[:destination] = Geometry::Battlefield.footprint_destination(halted)
+            intent[:free_align] = false
+            intent[:charge_contact_id] = nil
+            spent = motions.group_by { |motion| motion[:kind].to_s }
+            intent[:plan] = plan.merge(
+              pose: halted,
+              motion_sequence: motions,
+              steps: motions.map { |motion|
+                motion.slice(:kind, :cost, :delta, :direction)
+              },
+              truncated: true,
+              fear_halted: true,
+              charge: false,
+              mv_spent_wheel: Array(spent["wheel"]).sum { |motion| motion[:cost].to_f },
+              mv_spent_turn: Array(spent["turn"]).sum { |motion| motion[:cost].to_f },
+              mv_spent_advance: Array(spent["advance"]).sum { |motion| motion[:cost].to_f },
+              mv_spent_march: Array(spent["march"]).sum { |motion| motion[:cost].to_f }
+            )
           end
 
-          def lerp_pose(from, desired, combatant, ratio)
-            from_facing = from[:facing].to_f
-            facing_delta = Geometry::Battlefield.shortest_facing_delta(from_facing, desired[:facing])
-            pose = combatant.merge(
-              x: from[:x].to_f + ((desired[:x].to_f - from[:x].to_f) * ratio),
-              y: from[:y].to_f + ((desired[:y].to_f - from[:y].to_f) * ratio),
-              facing: Geometry::Battlefield.normalize_facing(from_facing + (facing_delta * ratio))
-            )
-            Geometry::Battlefield.apply_footprint!(pose, desired)
-            pose
+          def truncate_motions(combatant, sequence, ratio)
+            motions = Array(sequence)
+            limit = motions.sum { |motion| motion[:cost].to_f } * ratio.to_f
+            kept = []
+            motions.each do |motion|
+              cost = motion[:cost].to_f
+              if cost <= limit + 0.0001
+                kept << motion
+                limit -= cost
+                next
+              end
+              break if limit <= 0.0001 || cost <= 0.0001
+
+              fraction = limit / cost
+              from = motion[:from]
+              to = motion[:to]
+              partial =
+                if motion[:kind].to_s == "wheel"
+                  start = combatant.merge(x: from[:x], y: from[:y], facing: from[:facing])
+                  pose = Geometry::Battlefield.wheel_pose(start, motion[:delta].to_f * fraction)
+                  Pathing::Maneuvers.motion_entry(
+                    "wheel", from, pose,
+                    { cost: limit, delta: motion[:delta].to_f * fraction }
+                  )
+                elsif motion[:kind].to_s == "turn"
+                  nil
+                else
+                  pose = {
+                    x: from[:x].to_f + ((to[:x].to_f - from[:x].to_f) * fraction),
+                    y: from[:y].to_f + ((to[:y].to_f - from[:y].to_f) * fraction),
+                    facing: from[:facing].to_f + (
+                      Geometry::Battlefield.shortest_facing_delta(from[:facing], to[:facing]) * fraction
+                    )
+                  }
+                  Pathing::Maneuvers.motion_entry(motion[:kind], from, pose, cost: limit)
+                end
+              kept << partial if partial
+              break
+            end
+            Pathing::Maneuvers.compact_motion_entries(kept)
           end
 
           def push_fear_action!(phase:, combatant:, target:, check:, summary:, before:, battle_sides:, trigger:, result:)

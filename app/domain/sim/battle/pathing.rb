@@ -51,6 +51,32 @@ module Sim
         )
       end
 
+      def close_contact(origin:, plan:, target:, obstacles:)
+        return nil unless plan && plan[:pose] && target
+
+        world = Obstacles.coerce(obstacles)
+        landed = Geometry::Battlefield.merge_footprint(origin, plan[:pose])
+        clear = world.except(origin[:entity_id], target[:entity_id])
+        if Geometry::Battlefield.side_contact?(landed, target)
+          return plan if clear.clear?(landed)
+        end
+        return nil if Geometry::Battlefield.distance_between_units(landed, target) > ENGAGE
+
+        aligned = Geometry::Battlefield.align_fronts_pose(landed, target, obstacles: clear)
+        return nil unless Geometry::Battlefield.side_contact?(aligned, target)
+        return nil unless clear.clear?(aligned)
+
+        delta = Geometry::Battlefield.shortest_facing_delta(landed[:facing], aligned[:facing])
+        motion = Maneuvers.motion_entry(
+          "wheel", landed, aligned,
+          { cost: 0.0, delta: delta }
+        )
+        plan.merge(
+          pose: aligned,
+          motion_sequence: Array(plan[:motion_sequence]) + [ motion ]
+        )
+      end
+
       # Waypoints off a defender's flank/rear face for slot-aware charges.
       def contact_slot_points(origin, defender, slot)
         slot_name = slot.to_s
@@ -88,6 +114,48 @@ module Sim
             ]
           end
         points
+      end
+
+      def contact_pose_for_slot(origin, defender, slot)
+        own = Geometry::Battlefield.unit_dimensions(origin)
+        target = Geometry::Battlefield.unit_dimensions(defender)
+        forward = Geometry::Battlefield.facing_vector(defender[:facing])
+        right = Geometry::Battlefield.right_vector(defender[:facing])
+        padding = Geometry::Battlefield::CONFIG[:contact_padding]
+        candidates =
+          case slot.to_s
+          when "rear"
+            [
+              {
+                x: defender[:x] - (forward[:x] * (target[:half_depth] + own[:half_depth] + padding)),
+                y: defender[:y] - (forward[:y] * (target[:half_depth] + own[:half_depth] + padding)),
+                facing: Geometry::Battlefield.normalize_facing(defender[:facing])
+              }
+            ]
+          when "flank"
+            distance = target[:half_width] + own[:half_depth] + padding
+            [
+              {
+                x: defender[:x] + (right[:x] * distance),
+                y: defender[:y] + (right[:y] * distance),
+                facing: Geometry::Battlefield.normalize_facing(defender[:facing] - 90.0)
+              },
+              {
+                x: defender[:x] - (right[:x] * distance),
+                y: defender[:y] - (right[:y] * distance),
+                facing: Geometry::Battlefield.normalize_facing(defender[:facing] + 90.0)
+              }
+            ]
+          else
+            [
+              {
+                x: defender[:x] + (forward[:x] * (target[:half_depth] + own[:half_depth] + padding)),
+                y: defender[:y] + (forward[:y] * (target[:half_depth] + own[:half_depth] + padding)),
+                facing: Geometry::Battlefield.normalize_facing(defender[:facing] + 180.0)
+              }
+            ]
+          end
+        candidates.min_by { |pose| Geometry::Battlefield.distance_between(origin, pose) }
       end
 
       # Run toward an edge (or preferred flee heading). Face the run direction.
@@ -279,7 +347,7 @@ module Sim
         samples = wheel_samples + march_samples
 
         blocker = nil
-        budget_limit = budget.nil? ? nil : budget.to_f + 0.05
+        budget_limit = budget.nil? ? nil : budget.to_f + 0.0001
 
         samples.each do |pose|
           segment = Geometry::Battlefield.distance_between(prev, pose)

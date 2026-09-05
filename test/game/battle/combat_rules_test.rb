@@ -294,7 +294,7 @@ class SimBattleCombatRulesTest < ActiveSupport::TestCase
       contributors: { melee: [ { entity_id: "skel", name: "Skels", kind: "unit", power: 3 } ], ranged: [], spell: [] }
     )
     victim = combatant(
-      entity_id: "orc", x: 14.2, y: 12, facing: 180, base_width: 2, base_depth: 2, abilities: [], morale: 5, side_index: 1,
+      entity_id: "orc", x: 14.01, y: 12, facing: 180, base_width: 2, base_depth: 2, abilities: [], morale: 5, side_index: 1,
       contributors: { melee: [ { entity_id: "orc", name: "Orcs", kind: "unit", power: 5 } ], ranged: [], spell: [] }
     )
     phase_move = Attack.create_phase("movement", "Фаза движения")
@@ -697,8 +697,8 @@ class SimBattleCombatRulesTest < ActiveSupport::TestCase
     LavaSpit = Sim::Battle::Rules::LavaSpit::Round
     troll = combatant(
       entity_id: "troll",
-      x: 0,
-      y: 0,
+      x: 5,
+      y: 5,
       facing: 0,
       base_width: 3,
       base_depth: 1,
@@ -713,8 +713,8 @@ class SimBattleCombatRulesTest < ActiveSupport::TestCase
     defender = combatant(
       entity_id: "wall",
       side_index: 1,
-      x: 1,
-      y: 0,
+      x: 6.01,
+      y: 5,
       facing: 180,
       base_width: 4,
       base_depth: 1,
@@ -816,7 +816,7 @@ class SimBattleCombatRulesTest < ActiveSupport::TestCase
     attacker = combatant(
       entity_id: "riders",
       name: "Наездники",
-      x: 10,
+      x: 9.49,
       y: 12,
       facing: 0,
       base_width: 3,

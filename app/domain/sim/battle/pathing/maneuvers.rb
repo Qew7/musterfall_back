@@ -135,6 +135,25 @@ module Sim
           entries
         end
 
+        def compact_motion_entries(entries)
+          Array(entries).each_with_object([]) do |entry, compacted|
+            previous = compacted.last
+            same_wheel = previous &&
+              previous[:kind].to_s == "wheel" &&
+              entry[:kind].to_s == "wheel" &&
+              previous[:direction].to_s == entry[:direction].to_s &&
+              chained?(previous[:to], entry[:from])
+            unless same_wheel
+              compacted << entry
+              next
+            end
+
+            previous[:to] = entry[:to]
+            previous[:cost] = previous[:cost].to_f + entry[:cost].to_f
+            previous[:delta] = previous[:delta].to_f + entry[:delta].to_f
+          end
+        end
+
         def motion_pose(pose)
           return {} unless pose
 
@@ -145,12 +164,58 @@ module Sim
           }
           out[:row] = pose[:row].to_s if pose[:row]
           out[:lane] = pose[:lane].to_s if pose[:lane]
+          %i[base_width base_depth files ranks frontage].each do |key|
+            out[key] = pose[key] if pose.key?(key)
+          end
           out
+        end
+
+        def trim_motion_entries(entries, budget, mover)
+          remaining = budget.to_f
+          Array(entries).each_with_object([]) do |motion, accepted|
+            cost = motion[:cost].to_f
+            if cost <= remaining + 0.0001
+              accepted << motion
+              remaining = [ remaining - cost, 0.0 ].max
+              next
+            end
+            next if remaining <= 0.0001 || cost <= 0.0001 || motion[:kind].to_s == "turn"
+
+            ratio = remaining / cost
+            from = motion[:from]
+            to = motion[:to]
+            pose =
+              if motion[:kind].to_s == "wheel"
+                start = Geometry::Battlefield.merge_footprint(mover, from)
+                Geometry::Battlefield.wheel_pose(start, motion[:delta].to_f * ratio)
+              else
+                Geometry::Battlefield.merge_footprint(mover, from).merge(
+                  x: from[:x].to_f + ((to[:x].to_f - from[:x].to_f) * ratio),
+                  y: from[:y].to_f + ((to[:y].to_f - from[:y].to_f) * ratio),
+                  facing: Geometry::Battlefield.normalize_facing(
+                    from[:facing].to_f +
+                      (Geometry::Battlefield.shortest_facing_delta(from[:facing], to[:facing]) * ratio)
+                  )
+                )
+              end
+            pivot = motion[:kind].to_s == "wheel" ?
+              { cost: remaining, delta: motion[:delta].to_f * ratio } :
+              nil
+            accepted << motion_entry(motion[:kind], from, pose, pivot, cost: remaining)
+            remaining = 0.0
+          end
         end
 
         def motion_travel?(from, to)
           Geometry::Battlefield.distance_between(from, to) > 0.05 ||
             Geometry::Battlefield.shortest_facing_delta(from[:facing], to[:facing]).abs > 0.05
+        end
+
+        def chained?(left, right)
+          return false unless left && right
+
+          Geometry::Battlefield.distance_between(left, right) <= 0.01 &&
+            Geometry::Battlefield.shortest_facing_delta(left[:facing], right[:facing]).abs <= 0.01
         end
 
         def motion_entry(kind, from_pose, to_pose, pivot = nil, cost: nil)

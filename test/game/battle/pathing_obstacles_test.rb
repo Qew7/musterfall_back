@@ -110,4 +110,16 @@ class SimBattlePathingObstaclesTest < ActiveSupport::TestCase
     refute vertices.any? { |vertex| vertex[:y] < 1.5 }, vertices.inspect
     assert vertices.any? { |vertex| vertex[:y] > mover[:y] + 1.0 }, vertices.inspect
   end
+
+  test "the battlefield edge blocks the whole tray" do
+    mover = BattleScenarios.combatant(
+      entity_id: "wide", x: 3.0, y: 3.0, facing: 0.0,
+      base_width: 4.0, base_depth: 4.0
+    )
+    world = Obstacles.merge([ mover ], []).except(mover[:entity_id])
+    off_board = mover.merge(x: 1.5)
+
+    assert_equal "battlefield-edge", world.first_blocker(off_board)[:entity_id]
+    refute world.translation_clear?(mover, mover, off_board)
+  end
 end

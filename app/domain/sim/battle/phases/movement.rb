@@ -4,8 +4,6 @@ module Sim
       module Movement
         ADVANCING = Decisions::Movement::ADVANCING
         CONTACT = Pathing::CONTACT
-        CONTACT_SNAP = Pathing::CONTACT_SNAP
-        ENGAGE = Pathing::ENGAGE
         SLOT_RANK = Decisions::Movement::SLOT_RANK
 
         module_function
@@ -96,6 +94,7 @@ module Sim
               origin_pose: combatant.dup
             )
             resolve_destination_conflicts!([ packed ], reposition_obstacles)
+            accept_maneuver_destinations!([ packed ])
             apply_intents!([ packed ])
             # Subsequent seekers treat this pose as occupied (including wait / blocked_by_ally).
             reposition_obstacles = reposition_obstacles.reject { |entry| entry[:entity_id] == combatant[:entity_id] }
@@ -187,8 +186,6 @@ module Sim
 
           # Co-movers that never move still occupy their start — treat as hard blockers
           # so others cannot land inside them (idle heroes, wait intents, etc.).
-          occupied = obstacles + group_stayers(entries, intents).map { |entry| freeze_obstacle(entry) }
-          resolve_destination_conflicts!(intents, occupied)
           enforce_simultaneous_paths!(
             intents,
             obstacles,
@@ -218,6 +215,7 @@ module Sim
             round_number: round_number,
             terrain: terrain
           )
+          accept_maneuver_destinations!(intents)
           apply_intents!(intents)
           commit_intents!(phase, acting_side, target_side, intents)
         end
@@ -270,7 +268,7 @@ module Sim
           end
         end
 
-        # After paid approach reaches ENGAGE, freely wheel to press fronts (no slide, no MV cost).
+        # Once sides touch, freely wheel around that contact to press fronts.
         def apply_free_aligns!(intents, hard_obstacles)
           intents.each do |intent|
             next if intent[:wait] || intent[:destination].nil?
@@ -296,12 +294,26 @@ module Sim
             soft_id = charge_contact_id_for(intent) || nearest[:entity_id]
             next if destination_blocked?(aligned, [], align_obstacles, contact_id: soft_id)
 
-            intent[:paid_destination] = intent[:destination].dup
-            intent[:destination] = Geometry::Battlefield.footprint_destination(
+            destination = Geometry::Battlefield.footprint_destination(
               Geometry::Battlefield.merge_footprint(aligned, intent[:destination]).merge(
                 x: aligned[:x],
                 y: aligned[:y],
                 facing: aligned[:facing]
+              )
+            )
+            plan = intent[:plan] || {}
+            delta = Geometry::Battlefield.shortest_facing_delta(pose[:facing], aligned[:facing])
+            free_align = Pathing::Maneuvers.motion_entry(
+              "wheel",
+              pose,
+              Geometry::Battlefield.merge_footprint(pose, destination),
+              { cost: 0.0, delta: delta }
+            )
+            intent[:destination] = destination
+            intent[:plan] = plan.merge(
+              pose: Geometry::Battlefield.merge_footprint(pose, destination),
+              motion_sequence: Pathing::Maneuvers.compact_motion_entries(
+                Array(plan[:motion_sequence]) + [ free_align ]
               )
             )
             intent[:free_align] = true
@@ -318,6 +330,19 @@ module Sim
             combatant[:x] = destination[:x]
             combatant[:y] = destination[:y]
             combatant[:facing] = destination[:facing]
+          end
+        end
+
+        def accept_maneuver_destinations!(intents)
+          intents.each do |intent|
+            next if intent[:wait] || intent[:destination].nil?
+
+            last = Array(intent.dig(:plan, :motion_sequence)).last
+            next unless last && last[:to]
+
+            pose = Geometry::Battlefield.merge_footprint(intent[:combatant], last[:to])
+            intent[:destination] = Geometry::Battlefield.footprint_destination(pose)
+            intent[:plan] = (intent[:plan] || {}).merge(pose: pose)
           end
         end
 
@@ -347,7 +372,7 @@ module Sim
 
             pose = destination_pose(intent)
             if destination_blocked?(pose, [], occupied, contact_id: contact_id)
-              pose = shorten_destination(combatant, pose, [], occupied, contact_id: contact_id)
+              pose = nil
             end
 
             if pose.nil? || !meaningful_destination?(combatant, pose)
@@ -359,7 +384,6 @@ module Sim
               )
               occupied << freeze_obstacle(combatant)
             else
-              intent[:destination] = Geometry::Battlefield.footprint_destination(pose)
               occupied << pose
             end
           end
@@ -390,27 +414,6 @@ module Sim
             Geometry::Battlefield.shortest_facing_delta(origin[:facing], pose[:facing]).abs > 0.05
         end
 
-        # Pull the destination back toward the origin until clear of accepted/static poses.
-        def shorten_destination(origin, desired, static_obstacles, accepted, contact_id: nil)
-          best = nil
-          from_facing = origin[:facing].to_f
-          facing_delta = Geometry::Battlefield.shortest_facing_delta(from_facing, desired[:facing])
-          12.times do |index|
-            t = 1.0 - ((index + 1) / 12.0)
-            pose = origin.merge(
-              x: origin[:x].to_f + ((desired[:x].to_f - origin[:x].to_f) * t),
-              y: origin[:y].to_f + ((desired[:y].to_f - origin[:y].to_f) * t),
-              facing: Geometry::Battlefield.normalize_facing(from_facing + (facing_delta * t))
-            )
-            pose = Geometry::Battlefield.merge_footprint(pose, desired)
-            next if destination_blocked?(pose, static_obstacles, accepted, contact_id: contact_id)
-
-            best = pose
-            break
-          end
-          best
-        end
-
         # Resolve landings first; each mover must then stay clear of static blockers,
         # stationary allies, and other movers' landings (their starts are vacated together).
         # Re-plan or shorten when a straight march would
@@ -429,19 +432,27 @@ module Sim
             [ slot, dist, -intent[:combatant][:initiative].to_i, intent[:combatant][:entity_id].to_s ]
           end
 
+          accepted = []
           movers.each do |intent|
             apply_simultaneous_path_constraint!(
               intent,
               static: static,
               stayer_obstacles: stayer_obstacles,
-              intents: intents,
+              intents: accepted,
               enemies: enemies,
               terrain: terrain
             )
+            if intent[:wait] || intent[:destination].nil?
+              stayer_obstacles << freeze_obstacle(intent[:combatant])
+            else
+              accepted << intent
+            end
           end
         end
 
         def apply_simultaneous_path_constraint!(intent, static:, stayer_obstacles:, intents:, enemies:, terrain:)
+          return if intents.empty? && stayer_obstacles.empty?
+
           unit = intent[:combatant]
           from = unit
           desired = destination_pose(intent)
@@ -453,7 +464,11 @@ module Sim
             mover_to: desired
           )
 
-          return if simultaneous_path_clear?(unit, from, desired, transit_world, contact_id: contact_id)
+          return if simultaneous_path_clear?(
+            unit, from, desired, transit_world,
+            contact_id: contact_id,
+            motions: intent.dig(:plan, :motion_sequence)
+          )
 
           fresh = Decisions::Movement.build_approach_intent(
             combatant: unit,
@@ -473,26 +488,22 @@ module Sim
               mover_from: from,
               mover_to: fresh_pose
             )
-            if simultaneous_path_clear?(unit, from, fresh_pose, fresh_world, contact_id: contact_id)
+            if simultaneous_path_clear?(
+              unit, from, fresh_pose, fresh_world,
+              contact_id: contact_id,
+              motions: fresh.dig(:plan, :motion_sequence)
+            )
               merge_replanned_intent!(intent, fresh)
               return
             end
-
-            desired = fresh_pose
-            transit_world = fresh_world
           end
 
-          shortened = shorten_transit(unit, desired, transit_world, contact_id: contact_id)
-          if shortened.nil? || !meaningful_destination?(unit, shortened)
-            intent[:wait] = true
-            intent[:destination] = nil
-            intent[:plan] = (intent[:plan] || {}).merge(
-              blocked_by_ally: true,
-              blocker: intent.dig(:plan, :blocker) || { name: "союзник", entity_id: nil }
-            )
-          else
-            intent[:destination] = Geometry::Battlefield.footprint_destination(shortened)
-          end
+          intent[:wait] = true
+          intent[:destination] = nil
+          intent[:plan] = (intent[:plan] || {}).merge(
+            blocked_by_ally: true,
+            blocker: intent.dig(:plan, :blocker) || { name: "союзник", entity_id: nil }
+          )
         end
 
         def simultaneous_obstacles(static, stayer_obstacles, intents, except_id:, mover_from: nil, mover_to: nil)
@@ -505,16 +516,39 @@ module Sim
         end
 
         def co_mover_destination_obstacles(intents, except_id: nil, mover_from: nil, mover_to: nil)
-          intents.filter_map do |intent|
+          intents.flat_map do |intent|
             next if intent[:wait] || intent[:destination].nil?
             next if intent[:combatant][:entity_id] == except_id
 
-            obstacle = destination_pose(intent)
-            if mover_from && mover_to && vacating_overlap?(mover_from, mover_to, obstacle)
-              next
+            destination = destination_pose(intent)
+            reservations = motion_reservations(intent)
+            unless mover_from && mover_to && vacating_overlap?(mover_from, mover_to, destination)
+              reservations << destination
             end
+            reservations.map { |pose| freeze_obstacle(pose) }
+          end.compact.flatten
+        end
 
-            freeze_obstacle(obstacle)
+        def motion_reservations(intent)
+          mover = intent[:combatant]
+          motions = Array(intent.dig(:plan, :motion_sequence))
+          motions.flat_map do |motion|
+            from = motion[:from]
+            to = motion[:to]
+            travel = Geometry::Battlefield.distance_between(from, to)
+            facing = Geometry::Battlefield.shortest_facing_delta(from[:facing], to[:facing]).abs
+            steps = [ (travel / 0.5).ceil, (facing / 10.0).ceil, 1 ].max
+            (1...steps).map do |index|
+              ratio = index.to_f / steps
+              Geometry::Battlefield.merge_footprint(mover, from).merge(
+                x: from[:x].to_f + ((to[:x].to_f - from[:x].to_f) * ratio),
+                y: from[:y].to_f + ((to[:y].to_f - from[:y].to_f) * ratio),
+                facing: Geometry::Battlefield.normalize_facing(
+                  from[:facing].to_f +
+                    (Geometry::Battlefield.shortest_facing_delta(from[:facing], to[:facing]) * ratio)
+                )
+              )
+            end
           end
         end
 
@@ -533,10 +567,38 @@ module Sim
           dot < CONTACT
         end
 
-        def simultaneous_path_clear?(mover, from, to, obstacles, contact_id: nil)
+        def simultaneous_path_clear?(mover, from, to, obstacles, contact_id: nil, motions: nil)
           return true if Geometry::Battlefield.distance_between(from, to) <= 0.05
 
           space = Pathing::Obstacles.coerce(obstacles).except(mover[:entity_id])
+          sequence = Array(motions)
+          unless sequence.empty?
+            return sequence.all? do |motion|
+              motion_from = mover.merge(
+                x: motion.dig(:from, :x),
+                y: motion.dig(:from, :y),
+                facing: motion.dig(:from, :facing)
+              )
+              motion_to = mover.merge(
+                x: motion.dig(:to, :x),
+                y: motion.dig(:to, :y),
+                facing: motion.dig(:to, :facing)
+              )
+              if motion[:kind].to_s == "wheel"
+                heading = Geometry::Battlefield.normalize_facing(
+                  motion_from[:facing].to_f + motion[:delta].to_f
+                )
+                space.wheel_clear?(motion_from, heading, contact_id: contact_id)
+              elsif motion[:kind].to_s == "turn"
+                space.clear?(motion_to, contact_id: contact_id)
+              else
+                space.translation_clear?(
+                  motion_from, motion_from, motion_to, contact_id: contact_id
+                )
+              end
+            end
+          end
+
           from_facing = from[:facing].to_f
           facing_delta = Geometry::Battlefield.shortest_facing_delta(from_facing, to[:facing])
 
@@ -551,29 +613,6 @@ module Sim
             return false if space.first_blocker(pose, contact_id: contact_id)
           end
           true
-        end
-
-        def shorten_transit(origin, desired, obstacles, contact_id: nil)
-          from_facing = origin[:facing].to_f
-          facing_delta = Geometry::Battlefield.shortest_facing_delta(from_facing, desired[:facing])
-          space = Pathing::Obstacles.coerce(obstacles).except(origin[:entity_id])
-          best = nil
-
-          12.times do |index|
-            t = 1.0 - ((index + 1) / 12.0)
-            pose = origin.merge(
-              x: origin[:x].to_f + ((desired[:x].to_f - origin[:x].to_f) * t),
-              y: origin[:y].to_f + ((desired[:y].to_f - origin[:y].to_f) * t),
-              facing: Geometry::Battlefield.normalize_facing(from_facing + (facing_delta * t))
-            )
-            pose = Geometry::Battlefield.merge_footprint(pose, desired)
-            next if space.first_blocker(pose, contact_id: contact_id)
-            next unless meaningful_destination?(origin, pose)
-
-            best = pose
-            break
-          end
-          best
         end
 
         def merge_replanned_intent!(intent, fresh)
@@ -634,31 +673,15 @@ module Sim
 
             destination = intent[:destination]
             after = State.snapshot_combatant(combatant)
-            # MV accounting uses the paid landing; free align after contact costs no movement.
-            paid = intent[:paid_destination] || destination
-            planned_wheel = plan[:wheel]
-            planned_turn = plan[:turn]
-            applied_wheel = wheel_for_applied_move(origin_pose, paid, planned_wheel)
-            applied_turn = turn_for_applied_move(origin_pose, paid, planned_turn)
-            pivot = applied_turn || applied_wheel
-            travel = Geometry::Battlefield.distance_between(
-              pivot ? { x: pivot[:x], y: pivot[:y] } : origin_pose,
-              paid
-            )
-            wheel_cost = applied_wheel ? applied_wheel[:cost].to_f : 0.0
-            turn_cost = applied_turn ? applied_turn[:cost].to_f : 0.0
-            if plan[:maneuver] == :march
-              rate = (plan[:march_multiplier] || Geometry::Battlefield::CONFIG[:march_multiplier]).to_f
-              march_spent = travel / rate
-              advance_spent = 0.0
-            else
-              march_spent = 0.0
-              advance_spent = travel
-              if budget && (wheel_cost + turn_cost + advance_spent) > budget.to_f
-                advance_spent = [ budget.to_f - wheel_cost - turn_cost, 0.0 ].max
-              end
-            end
-            desired = plan[:desired] || paid
+            applied_wheel = plan[:wheel]
+            applied_turn = plan[:turn]
+            wheel_spent = plan[:mv_spent_wheel]
+            turn_spent = plan[:mv_spent_turn]
+            wheel_spent = applied_wheel[:cost].to_f if wheel_spent.nil? && applied_wheel
+            turn_spent = applied_turn[:cost].to_f if turn_spent.nil? && applied_turn
+            advance_spent = plan[:mv_spent_advance].to_f
+            march_spent = plan[:mv_spent_march].to_f
+            desired = plan[:desired] || destination
             record_charge!(combatant, nearest, from)
             motions = Array(plan[:motion_sequence])
             movement_actor = movement_actor_for(combatant)
@@ -691,7 +714,9 @@ module Sim
               march_spent: march_spent,
               desired: desired,
               kind_override: intent[:kind] == "reposition" ? "reposition" : nil,
-              motions: motions
+              motions: motions,
+              wheel_spent: wheel_spent.to_f,
+              turn_spent: turn_spent.to_f
             )
             maneuver = maneuver.merge(contact_slot: intent[:contact_slot]) if intent[:contact_slot]
             maneuver = maneuver.merge(free_align: true) if intent[:free_align]
@@ -720,8 +745,11 @@ module Sim
 
         def record_charge!(combatant, target, from)
           return unless target
-          return unless Geometry::Battlefield.distance_between_units(combatant, target) <= ENGAGE
-          return unless Geometry::Battlefield.distance_between_units(from.merge(combatant.slice(:base_width, :base_depth)), target) > ENGAGE
+          return unless Geometry::Battlefield.side_contact?(combatant, target)
+          return if Geometry::Battlefield.melee_contact?(
+            from.merge(combatant.slice(:base_width, :base_depth)),
+            target
+          )
 
           combatant[:charged_distance] = Geometry::Battlefield.distance_between(from, combatant)
           combatant[:charged_target_id] = target[:entity_id]
@@ -797,8 +825,10 @@ module Sim
 
         def blocker_is_target?(plan, nearest)
           return false unless plan[:blocker] && nearest
+          return false unless plan[:pose]
 
-          plan[:blocker][:entity_id] == nearest[:entity_id]
+          plan[:blocker][:entity_id] == nearest[:entity_id] &&
+            Geometry::Battlefield.side_contact?(plan[:pose], nearest)
         end
 
         def maneuver_log_kind(plan, contact_blocker, wheel, turn, advance_spent, march_spent)
@@ -809,7 +839,7 @@ module Sim
           maneuver_kind(plan, wheel, turn, advance_spent, march_spent)
         end
 
-        def approach_maneuver(plan, nearest, budget, wheel:, turn:, advance_spent:, march_spent:, desired:, kind_override: nil, motions: [])
+        def approach_maneuver(plan, nearest, budget, wheel:, turn:, advance_spent:, march_spent:, desired:, kind_override: nil, motions: [], wheel_spent: nil, turn_spent: nil)
           contact_blocker = blocker_is_target?(plan, nearest)
           kind = kind_override || maneuver_log_kind(plan, contact_blocker, wheel, turn, advance_spent, march_spent)
 
@@ -820,8 +850,8 @@ module Sim
             heading: plan[:heading],
             desired_facing: plan[:heading],
             mv_budget: budget,
-            mv_spent_wheel: wheel ? wheel[:cost].to_f : 0.0,
-            mv_spent_turn: turn ? turn[:cost].to_f : 0.0,
+            mv_spent_wheel: wheel_spent.nil? ? (wheel ? wheel[:cost].to_f : 0.0) : wheel_spent,
+            mv_spent_turn: turn_spent.nil? ? (turn ? turn[:cost].to_f : 0.0) : turn_spent,
             mv_spent_advance: advance_spent.to_f,
             mv_spent_march: march_spent.to_f,
             desired: { x: desired[:x], y: desired[:y], facing: desired[:facing] },
@@ -842,31 +872,6 @@ module Sim
             actor_name: combatant[:name],
             actor_role: combatant[:kind].to_s == "hero" ? "hero" : "unit"
           }
-        end
-
-        def wheel_for_applied_move(origin, destination, planned_wheel)
-          return nil unless planned_wheel && planned_wheel[:cost].to_f > 0.05
-
-          applied_delta = Geometry::Battlefield.shortest_facing_delta(origin[:facing], destination[:facing])
-          return nil if applied_delta.abs < 0.05
-          return planned_wheel if Geometry::Battlefield.shortest_facing_delta(destination[:facing], planned_wheel[:facing]).abs < 0.05
-
-          {
-            x: destination[:x],
-            y: destination[:y],
-            facing: destination[:facing],
-            delta: applied_delta,
-            cost: Geometry::Battlefield.wheel_cost(origin, origin[:facing], destination[:facing])
-          }
-        end
-
-        def turn_for_applied_move(origin, destination, planned_turn)
-          return nil unless planned_turn && planned_turn[:cost].to_f > 0.05
-
-          applied_delta = Geometry::Battlefield.shortest_facing_delta(origin[:facing], destination[:facing])
-          return nil unless Geometry::Battlefield.turn_delta?(applied_delta)
-
-          planned_turn
         end
 
         def maneuver_kind(plan, wheel, turn, advance_spent, march_spent)

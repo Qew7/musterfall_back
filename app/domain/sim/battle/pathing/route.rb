@@ -213,7 +213,9 @@ module Sim
         end
 
         def point(entry)
-          { x: entry[:x].to_f, y: entry[:y].to_f }
+          point = { x: entry[:x].to_f, y: entry[:y].to_f }
+          point[:facing] = entry[:facing].to_f if entry.key?(:facing)
+          point
         end
 
         def same?(left, right)

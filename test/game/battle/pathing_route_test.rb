@@ -292,7 +292,7 @@ class SimBattlePathingRouteTest < ActiveSupport::TestCase
     assert_operator landed[:x], :>=, actor[:x] - 0.05
   end
 
-  test "a 4x4 tray wheels north of a house whose Minkowski corner sits off the north edge" do
+  test "a 4x4 tray routes around a house without crossing the north edge" do
     actor = BattleScenarios.combatant(
       entity_id: "unit-19", x: 16.96, y: 19.87, facing: 358.9,
       base_width: 4.0, base_depth: 4.0, files: 4, ranks: 4, movement: 3.0
@@ -310,9 +310,9 @@ class SimBattlePathingRouteTest < ActiveSupport::TestCase
 
     route_point = route[:points][1]
     assert route_point, "route has no intermediate point"
-    assert_operator route_point[:y], :>, actor[:y], "route #{route_point.inspect} goes into the house west face, not north"
     route[:points].each do |point|
       pose = actor.merge(x: point[:x], y: point[:y])
+      assert BF.tray_on_battlefield?(pose), "route vertex #{point.inspect} leaves the battlefield"
       refute BF.rectangles_overlap?(pose, house_obs), "route vertex #{point.inspect} overlaps the house"
     end
 
@@ -326,6 +326,43 @@ class SimBattlePathingRouteTest < ActiveSupport::TestCase
     assert_includes kinds, "wheel"
     leftover = 3.0 - plan[:cost_spent].to_f
     assert leftover <= 0.6, "leftover #{leftover} unused against the house corner"
-    assert_operator landed[:y], :>, actor[:y]
+    assert BF.tray_on_battlefield?(landed)
+  end
+
+  test "battle 725 goblin archers do not route above the battlefield lake" do
+    archers = BattleScenarios.combatant(
+      entity_id: "unit-5", x: 31, y: 3, facing: 180,
+      base_width: 5, base_depth: 3, files: 5, ranks: 3, movement: 4
+    )
+    target = BattleScenarios.enemy(
+      entity_id: "target", x: 8, y: 3, facing: 0,
+      base_width: 4, base_depth: 3
+    )
+    lake = BattleScenarios.terrain(
+      id: "terrain-6", type: "lake", x: 21.721, y: 3.072,
+      width: 5.327, depth: 3.76
+    )
+    world = Pathing::Obstacles.merge([ archers, target ], [ lake ])
+    route = Route.pull(
+      mover: archers,
+      goal: target,
+      world: world,
+      contact_id: target[:entity_id]
+    )
+
+    route[:points].each do |point|
+      assert BF.tray_on_battlefield?(archers.merge(point)), point.inspect
+    end
+    plan = Pathing.plan_approach(
+      origin: archers,
+      goal_point: target,
+      budget: 8,
+      obstacles: world,
+      contact_id: target[:entity_id],
+      goal_unit: target,
+      terrain: [ lake ],
+      march_allowed: true
+    )
+    assert BF.tray_on_battlefield?(BF.merge_footprint(archers, plan[:pose]))
   end
 end

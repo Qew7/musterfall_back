@@ -195,9 +195,15 @@ module Sim
               )
               next unless plan && plan[:pose]
 
-              landed = combatant.merge(x: plan[:pose][:x], y: plan[:pose][:y], facing: plan[:pose][:facing])
-              next unless Geometry::Battlefield.distance_between_units(landed, nearest) <= Decisions::Movement::ENGAGE + 0.05
+              plan = Pathing.close_contact(
+                origin: combatant,
+                plan: plan,
+                target: nearest,
+                obstacles: obstacles
+              )
+              next unless plan
 
+              landed = combatant.merge(x: plan[:pose][:x], y: plan[:pose][:y], facing: plan[:pose][:facing])
               score = Geometry::Battlefield.distance_between_units(landed, nearest)
               if best.nil? || score < best[:score]
                 best = { plan: plan, destination: plan[:pose], score: score }
@@ -370,7 +376,7 @@ module Sim
 
           def charge_landing_candidates(origin, defender, slot)
             facings = []
-            probes = []
+            probes = [ Pathing.contact_pose_for_slot(origin, defender, slot) ]
 
             if %w[flank rear].include?(slot)
               Pathing.contact_slot_points(origin, defender, slot).each do |point|
@@ -472,6 +478,8 @@ module Sim
               Geometry::Battlefield.shortest_facing_delta(origin[:facing], landing_facing).abs > 0.05
             return nil unless meaningful
 
+            travel = Geometry::Battlefield.distance_between(origin, pose)
+            motion = Pathing::Maneuvers.motion_entry("advance", origin, pose, cost: travel)
             {
               pose: pose,
               desired: origin.merge(x: clamped[:x], y: clamped[:y], facing: desired_facing),
@@ -480,7 +488,15 @@ module Sim
               blocker: nil,
               leap: true,
               wheel: nil,
-              heading: landing_facing
+              turn: nil,
+              heading: landing_facing,
+              cost_spent: travel,
+              mv_spent_wheel: 0.0,
+              mv_spent_turn: 0.0,
+              mv_spent_advance: travel,
+              mv_spent_march: 0.0,
+              steps: [ { kind: "advance", cost: travel } ],
+              motion_sequence: [ motion ]
             }
           end
 
@@ -522,8 +538,13 @@ module Sim
             pose = plan && plan[:pose]
             return false unless pose
 
-            landed = origin.merge(x: pose[:x], y: pose[:y], facing: pose[:facing])
-            Geometry::Battlefield.distance_between_units(landed, defender) <= Decisions::Movement::ENGAGE
+            closed = Pathing.close_contact(
+              origin: origin,
+              plan: plan,
+              target: defender,
+              obstacles: [ defender ]
+            )
+            closed && Geometry::Battlefield.side_contact?(closed[:pose], defender)
           end
         end
       end

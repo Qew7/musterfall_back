@@ -253,7 +253,7 @@ class SimBattleMissileChoiceTest < ActiveSupport::TestCase
       models_remaining: 8,
       entity_id: "engaged",
       x: 8,
-      y: 0
+      y: 5
     ).merge(side_index: 1, base_width: 2, base_depth: 2)
     locker = {
       entity_id: "locker",
@@ -262,8 +262,8 @@ class SimBattleMissileChoiceTest < ActiveSupport::TestCase
       side_index: 0,
       current_health: 8,
       max_health: 8,
-      x: 8.3,
-      y: 0,
+      x: 5.99,
+      y: 5,
       facing: 0,
       base_width: 2,
       base_depth: 2,

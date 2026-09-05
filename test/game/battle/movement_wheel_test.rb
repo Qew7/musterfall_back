@@ -42,15 +42,21 @@ class SimBattleMovementWheelTest < ActiveSupport::TestCase
     budget = Sim::Battle::Decisions::ChargeRange.budget(actor, enemies: [ enemy ])
     assert Sim::Battle::Decisions::ChargeRange.within?(actor, enemy, enemies: [ enemy ])
     expected = Sim::Geometry::Battlefield.apply_wheel(actor, heading, budget)
+    before = Sim::Geometry::Battlefield.distance_between_units(actor, enemy)
 
     phase = Sim::Battle::Phases::Movement.play(acting_side: acting_side, target_side: target_side)
 
-    # width 4, charge budget 6: the ~50° wheel fits, leftover goes forward
+    # width 4, charge budget 6: the wheel and closing move are one recorded plan.
     assert expected[:completed]
-    assert_in_delta expected[:facing], actor[:facing], 0.2
-    refute_in_delta expected[:y], actor[:y], 0.05
+    assert_operator Sim::Geometry::Battlefield.distance_between_units(actor, enemy), :<=, before
     refute_in_delta 8.0, actor[:x], 0.05
-    assert phase[:actions].any? { |action| action[:wheel].present? }
+    action = phase[:actions].find { |entry| entry[:actor_id] == actor[:entity_id] }
+    assert action
+    assert action[:wheel].present?
+    last = action[:motions].last[:to]
+    assert_in_delta last[:x], actor[:x], 0.001
+    assert_in_delta last[:y], actor[:y], 0.001
+    assert_in_delta last[:facing], actor[:facing], 0.001
     assert phase[:actions].any? { |action| action[:details].any? { |line| line.include?("wheel") } }
   end
 
@@ -234,7 +240,6 @@ class SimBattleMovementWheelTest < ActiveSupport::TestCase
     )
 
     refute Sim::Geometry::Battlefield.rectangles_overlap?(actor, blocker)
-    assert_operator Sim::Geometry::Battlefield.distance_between_units(actor, blocker), :>=, 0.35
   end
 
   test "spaced column can march without clipping the ally behind" do
@@ -848,6 +853,45 @@ class SimBattleMovementWheelTest < ActiveSupport::TestCase
     assert_includes action[:summary], "совершил продвижение к Тяжёлая гвардия"
     assert action[:details].any? { |line| line.include?("MV budget=") }
     refute_includes action[:summary], "wheel"
+  end
+
+  test "battle 727 swordsmen end exactly at their accepted maneuver endpoints" do
+    swords = [
+      combatant(
+        entity_id: "unit-8", x: 31, y: 11, facing: 180,
+        base_width: 4, base_depth: 4, files: 4, ranks: 4, movement: 3
+      ),
+      combatant(
+        entity_id: "unit-9", x: 31, y: 3, facing: 180,
+        base_width: 4, base_depth: 4, files: 4, ranks: 4, movement: 3
+      )
+    ]
+    enemies = [
+      combatant(
+        entity_id: "unit-10", x: 8, y: 12, facing: 0,
+        base_width: 4, base_depth: 3, files: 4, ranks: 3,
+        movement: 4, side_index: 1
+      ),
+      combatant(
+        entity_id: "hero-1", x: 8, y: 4, facing: 0,
+        base_width: 1, base_depth: 1, movement: 3, side_index: 1
+      )
+    ]
+
+    phase = Sim::Battle::Phases::Movement.play(
+      acting_side: { player_id: "empire", combatants: swords },
+      target_side: { player_id: "undead", combatants: enemies }
+    )
+
+    phase[:actions].select { |action| action[:type] == "movement" }.each do |action|
+      next if action[:motions].empty?
+
+      endpoint = action[:motions].last[:to]
+      assert_in_delta endpoint[:x], action[:to][:x], 0.001
+      assert_in_delta endpoint[:y], action[:to][:y], 0.001
+      assert_in_delta endpoint[:facing], action[:to][:facing], 0.001
+    end
+    refute Sim::Geometry::Battlefield.rectangles_overlap?(*swords)
   end
 
   def combatant(**overrides)

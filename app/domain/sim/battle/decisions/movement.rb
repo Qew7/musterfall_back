@@ -93,7 +93,7 @@ module Sim
         def engaged?(combatant, enemy)
           return false unless enemy
 
-          Geometry::Battlefield.distance_between_units(combatant, enemy) <= ENGAGE
+          Geometry::Battlefield.melee_contact?(combatant, enemy)
         end
 
         def engaged_with_any?(combatant, enemies)

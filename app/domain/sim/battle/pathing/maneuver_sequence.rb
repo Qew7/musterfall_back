@@ -17,6 +17,8 @@ module Sim
           motion_sequence = []
           advance = 0.0
           march = 0.0
+          wheel_spent = 0.0
+          turn_spent = 0.0
           wheel = nil
           turn = nil
           desired = points.last
@@ -66,8 +68,13 @@ module Sim
             pose = Geometry::Battlefield.merge_footprint(pose, plan[:pose])
             remaining = [ remaining - spent, 0.0 ].max
             steps.concat(Array(plan[:steps]))
-            advance += plan[:mv_spent_advance].to_f
-            march += plan[:mv_spent_march].to_f
+            segment_wheel = plan.dig(:wheel, :cost).to_f
+            segment_turn = plan.dig(:turn, :cost).to_f
+            translation_spent = [ spent - segment_wheel - segment_turn, 0.0 ].max
+            advance += translation_spent if plan[:mv_spent_advance].to_f > 0.05
+            march += translation_spent if plan[:mv_spent_march].to_f > 0.05
+            wheel_spent += segment_wheel
+            turn_spent += segment_turn
             wheel = plan[:wheel] if plan.dig(:wheel, :cost).to_f > 0.05 && wheel.nil?
             turn = plan[:turn] if plan.dig(:turn, :cost).to_f > 0.05
             desired = plan[:desired] || dest
@@ -104,8 +111,11 @@ module Sim
               remaining = [ remaining - spent, 0.0 ].max
               motion_sequence = Maneuvers.motion_entries_for(origin, reformed)
               steps = Array(reformed[:steps])
-              advance = reformed[:mv_spent_advance].to_f
-              march = reformed[:mv_spent_march].to_f
+              wheel_spent = reformed.dig(:wheel, :cost).to_f
+              turn_spent = reformed.dig(:turn, :cost).to_f
+              translation_spent = [ spent - wheel_spent - turn_spent, 0.0 ].max
+              advance = reformed[:mv_spent_advance].to_f > 0.05 ? translation_spent : 0.0
+              march = reformed[:mv_spent_march].to_f > 0.05 ? translation_spent : 0.0
               wheel = reformed[:wheel]
               turn = reformed[:turn]
               desired = reformed[:desired] || desired
@@ -126,17 +136,34 @@ module Sim
               after > before + 0.05
           end
 
+          motion_sequence = Maneuvers.compact_motion_entries(motion_sequence)
+          motion_sequence = Maneuvers.trim_motion_entries(motion_sequence, budget, origin)
+          if motion_sequence.any?
+            pose = Geometry::Battlefield.merge_footprint(origin, motion_sequence.last[:to])
+          end
+          grouped = motion_sequence.group_by { |motion| motion[:kind].to_s }
+          wheel_spent = Array(grouped["wheel"]).sum { |motion| motion[:cost].to_f }
+          turn_spent = Array(grouped["turn"]).sum { |motion| motion[:cost].to_f }
+          advance = Array(grouped["advance"]).sum { |motion| motion[:cost].to_f }
+          march = Array(grouped["march"]).sum { |motion| motion[:cost].to_f }
+          total_spent = wheel_spent + turn_spent + advance + march
+          steps = motion_sequence.map { |motion|
+            motion.slice(:kind, :cost, :delta, :direction)
+          }
+
           {
             pose: pose,
             truncated: !blocker.nil?,
             blocker: blocker,
-            cost_spent: budget.to_f - remaining,
+            cost_spent: total_spent,
             wheel: wheel || idle_pivot(origin, budget),
             turn: turn,
             desired: desired,
             maneuver: maneuver,
             mv_spent_advance: advance,
             mv_spent_march: march,
+            mv_spent_wheel: wheel_spent,
+            mv_spent_turn: turn_spent,
             march_multiplier: multiplier,
             steps: steps,
             motion_sequence: motion_sequence,
@@ -202,6 +229,8 @@ module Sim
             maneuver: :advance,
             mv_spent_advance: 0.0,
             mv_spent_march: 0.0,
+            mv_spent_wheel: 0.0,
+            mv_spent_turn: 0.0,
             march_multiplier: nil,
             steps: [],
             motion_sequence: [],

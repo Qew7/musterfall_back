@@ -135,7 +135,7 @@ class SimBattleRepositionTest < ActiveSupport::TestCase
     friend = combatant(
       entity_id: "friend-1",
       name: "Союзник в бою",
-      x: 8.5,
+      x: 8.49,
       y: 16,
       facing: 0,
       melee: 4,
@@ -330,7 +330,7 @@ class SimBattleRepositionTest < ActiveSupport::TestCase
       melee: 1,
       ranged: 4,
       spell: 0,
-      movement: 3,
+      movement: 4,
       side_index: 0
     )
 

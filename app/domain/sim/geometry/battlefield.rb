@@ -6,7 +6,7 @@ module Sim
         height: 24,
         deployment_depth: 10,
         front_arc_degrees: 120,
-        contact_padding: 0.35,
+        contact_padding: 0.01,
         melee_contact_tolerance: 0.4,
         # Almost-touching band: closes the dead zone between "too close to march" and "not yet melee".
         contact_snap: 0.05,

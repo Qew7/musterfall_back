@@ -647,14 +647,14 @@
       "right": 40.0
     },
     "action_counts": {
-      "movement": 25,
+      "movement": 27,
       "shooting": 6
     },
     "contacts": [],
     "rule_effects": {
       "blast": 3,
       "machine": 3,
-      "march": 21,
+      "march": 16,
       "volley": 3
     },
     "actions": [
@@ -670,7 +670,7 @@
         },
         "to": {
           "x": 4.0,
-          "y": 5.5,
+          "y": 5.313,
           "facing": 90.0
         },
         "maneuver": {
@@ -814,7 +814,7 @@
         },
         "to": {
           "x": 31.0,
-          "y": 12.5,
+          "y": 12.313,
           "facing": 90.0
         },
         "maneuver": {
@@ -890,22 +890,51 @@
         }
       },
       {
+        "path": "R1/T2/movement/A5",
+        "type": "movement",
+        "actor_id": "unit-31",
+        "target_id": "unit-26",
+        "from": {
+          "x": 35.0,
+          "y": 11.0,
+          "facing": 180.0
+        },
+        "to": {
+          "x": 35.233,
+          "y": 12.419,
+          "facing": 95.44
+        },
+        "maneuver": {
+          "kind": "reposition",
+          "truncated": false,
+          "blocked_by_ally": false
+        },
+        "morale": {},
+        "trace": {
+          "version": 1,
+          "rule_keys": [
+            "march"
+          ],
+          "result": "reposition"
+        }
+      },
+      {
         "path": "R2/T1/movement/A1",
         "type": "movement",
         "actor_id": "unit-27",
         "target_id": "unit-29",
         "from": {
           "x": 4.0,
-          "y": 5.5,
+          "y": 5.313,
           "facing": 90.0
         },
         "to": {
-          "x": 4.028,
-          "y": 8.442,
-          "facing": 88.22
+          "x": 4.0,
+          "y": 5.313,
+          "facing": 0.0
         },
         "maneuver": {
-          "kind": "wheel",
+          "kind": "turn",
           "contact_slot": "front",
           "approach_mode": "direct",
           "truncated": false,
@@ -917,7 +946,7 @@
           "rule_keys": [
             "march"
           ],
-          "result": "wheel"
+          "result": "turn"
         }
       },
       {
@@ -998,23 +1027,23 @@
         "target_id": "unit-26",
         "from": {
           "x": 31.0,
-          "y": 12.5,
+          "y": 12.313,
           "facing": 90.0
         },
         "to": {
-          "x": 29.5,
-          "y": 12.5,
-          "facing": 180.0
+          "x": 31.0,
+          "y": 12.313,
+          "facing": 90.0
         },
         "maneuver": {
-          "kind": "reposition",
+          "kind": "blocked_by_ally",
           "truncated": false,
-          "blocked_by_ally": false
+          "blocked_by_ally": true
         },
         "morale": {},
         "trace": {
           "version": 1,
-          "result": "reposition"
+          "result": "blocked_by_ally"
         }
       },
       {
@@ -1047,38 +1076,9 @@
         }
       },
       {
-        "path": "R2/T2/movement/A3",
-        "type": "movement",
-        "actor_id": "unit-31",
-        "target_id": "unit-26",
-        "from": {
-          "x": 35.0,
-          "y": 11.0,
-          "facing": 180.0
-        },
-        "to": {
-          "x": 32.617,
-          "y": 10.352,
-          "facing": 190.54
-        },
-        "maneuver": {
-          "kind": "reposition",
-          "truncated": false,
-          "blocked_by_ally": false
-        },
-        "morale": {},
-        "trace": {
-          "version": 1,
-          "rule_keys": [
-            "march"
-          ],
-          "result": "reposition"
-        }
-      },
-      {
         "path": "R2/T2/shooting/A1",
         "type": "shooting",
-        "actor_id": "unit-28",
+        "actor_id": "unit-30",
         "target_id": "unit-26",
         "maneuver": {},
         "damage": 3,
@@ -1094,7 +1094,7 @@
       {
         "path": "R2/T2/shooting/A2",
         "type": "shooting",
-        "actor_id": "unit-28",
+        "actor_id": "unit-30",
         "target_id": "unit-26",
         "maneuver": {},
         "damage": 6,
@@ -1113,14 +1113,14 @@
         "actor_id": "unit-27",
         "target_id": "unit-29",
         "from": {
-          "x": 4.028,
-          "y": 8.442,
-          "facing": 88.22
+          "x": 4.0,
+          "y": 5.313,
+          "facing": 0.0
         },
         "to": {
-          "x": 3.898,
-          "y": 11.102,
-          "facing": 56.2
+          "x": 6.939,
+          "y": 5.286,
+          "facing": 358.3
         },
         "maneuver": {
           "kind": "wheel",
@@ -1170,27 +1170,24 @@
         "actor_id": "unit-28",
         "target_id": "unit-25",
         "from": {
-          "x": 29.5,
-          "y": 12.5,
-          "facing": 180.0
+          "x": 31.0,
+          "y": 12.313,
+          "facing": 90.0
         },
         "to": {
-          "x": 28.917,
-          "y": 12.34,
-          "facing": 167.11
+          "x": 31.0,
+          "y": 12.313,
+          "facing": 90.0
         },
         "maneuver": {
-          "kind": "reposition",
-          "truncated": true,
-          "blocked_by_ally": false
+          "kind": "blocked_by_ally",
+          "truncated": false,
+          "blocked_by_ally": true
         },
         "morale": {},
         "trace": {
           "version": 1,
-          "rule_keys": [
-            "march"
-          ],
-          "result": "reposition"
+          "result": "blocked_by_ally"
         }
       },
       {
@@ -1252,63 +1249,29 @@
         }
       },
       {
-        "path": "R3/T2/movement/A4",
-        "type": "movement",
-        "actor_id": "unit-31",
-        "target_id": "unit-25",
-        "from": {
-          "x": 32.617,
-          "y": 10.352,
-          "facing": 190.54
-        },
-        "to": {
-          "x": 32.217,
-          "y": 10.401,
-          "facing": 199.14
-        },
-        "maneuver": {
-          "kind": "reposition",
-          "truncated": true,
-          "blocked_by_ally": false
-        },
-        "morale": {},
-        "trace": {
-          "version": 1,
-          "rule_keys": [
-            "march"
-          ],
-          "result": "reposition"
-        }
-      },
-      {
         "path": "R4/T1/movement/A1",
         "type": "movement",
         "actor_id": "unit-27",
-        "target_id": "unit-28",
+        "target_id": "unit-29",
         "from": {
-          "x": 3.898,
-          "y": 11.102,
-          "facing": 56.2
+          "x": 6.939,
+          "y": 5.286,
+          "facing": 358.3
         },
         "to": {
-          "x": 5.514,
-          "y": 13.5,
-          "facing": 49.66
+          "x": 6.939,
+          "y": 5.286,
+          "facing": 358.3
         },
         "maneuver": {
-          "kind": "wheel",
-          "contact_slot": "front",
-          "approach_mode": "direct",
-          "truncated": false,
-          "blocked_by_ally": false
+          "kind": "blocked_by_ally",
+          "truncated": true,
+          "blocked_by_ally": true
         },
         "morale": {},
         "trace": {
           "version": 1,
-          "rule_keys": [
-            "march"
-          ],
-          "result": "wheel"
+          "result": "blocked_by_ally"
         }
       },
       {
@@ -1330,6 +1293,32 @@
       },
       {
         "path": "R4/T2/movement/A1",
+        "type": "movement",
+        "actor_id": "unit-28",
+        "target_id": "unit-25",
+        "from": {
+          "x": 31.0,
+          "y": 12.313,
+          "facing": 90.0
+        },
+        "to": {
+          "x": 31.0,
+          "y": 12.313,
+          "facing": 90.0
+        },
+        "maneuver": {
+          "kind": "blocked_by_ally",
+          "truncated": false,
+          "blocked_by_ally": true
+        },
+        "morale": {},
+        "trace": {
+          "version": 1,
+          "result": "blocked_by_ally"
+        }
+      },
+      {
+        "path": "R4/T2/movement/A2",
         "type": "movement",
         "actor_id": "unit-30",
         "target_id": "unit-25",
@@ -1361,31 +1350,26 @@
         "path": "R5/T1/movement/A1",
         "type": "movement",
         "actor_id": "unit-27",
-        "target_id": "unit-30",
+        "target_id": "unit-29",
         "from": {
-          "x": 5.514,
-          "y": 13.5,
-          "facing": 49.66
+          "x": 6.939,
+          "y": 5.286,
+          "facing": 358.3
         },
         "to": {
-          "x": 7.43,
-          "y": 15.702,
-          "facing": 47.37
+          "x": 6.939,
+          "y": 5.286,
+          "facing": 358.3
         },
         "maneuver": {
-          "kind": "wheel",
-          "contact_slot": "front",
-          "approach_mode": "direct",
-          "truncated": false,
-          "blocked_by_ally": false
+          "kind": "blocked_by_ally",
+          "truncated": true,
+          "blocked_by_ally": true
         },
         "morale": {},
         "trace": {
           "version": 1,
-          "rule_keys": [
-            "march"
-          ],
-          "result": "wheel"
+          "result": "blocked_by_ally"
         }
       },
       {
@@ -1407,6 +1391,32 @@
       },
       {
         "path": "R5/T2/movement/A1",
+        "type": "movement",
+        "actor_id": "unit-28",
+        "target_id": "unit-25",
+        "from": {
+          "x": 31.0,
+          "y": 12.313,
+          "facing": 90.0
+        },
+        "to": {
+          "x": 31.0,
+          "y": 12.313,
+          "facing": 90.0
+        },
+        "maneuver": {
+          "kind": "blocked_by_ally",
+          "truncated": false,
+          "blocked_by_ally": true
+        },
+        "morale": {},
+        "trace": {
+          "version": 1,
+          "result": "blocked_by_ally"
+        }
+      },
+      {
+        "path": "R5/T2/movement/A2",
         "type": "movement",
         "actor_id": "unit-30",
         "target_id": "unit-25",
@@ -1438,31 +1448,26 @@
         "path": "R6/T1/movement/A1",
         "type": "movement",
         "actor_id": "unit-27",
-        "target_id": "unit-30",
+        "target_id": "unit-29",
         "from": {
-          "x": 7.43,
-          "y": 15.702,
-          "facing": 47.37
+          "x": 6.939,
+          "y": 5.286,
+          "facing": 358.3
         },
         "to": {
-          "x": 9.09,
-          "y": 17.596,
-          "facing": 13.5
+          "x": 6.939,
+          "y": 5.286,
+          "facing": 358.3
         },
         "maneuver": {
-          "kind": "march",
-          "contact_slot": "front",
-          "approach_mode": "direct",
-          "truncated": false,
-          "blocked_by_ally": false
+          "kind": "blocked_by_ally",
+          "truncated": true,
+          "blocked_by_ally": true
         },
         "morale": {},
         "trace": {
           "version": 1,
-          "rule_keys": [
-            "march"
-          ],
-          "result": "march"
+          "result": "blocked_by_ally"
         }
       },
       {
@@ -1480,6 +1485,32 @@
             "machine"
           ],
           "result": "miss"
+        }
+      },
+      {
+        "path": "R6/T2/movement/A1",
+        "type": "movement",
+        "actor_id": "unit-28",
+        "target_id": "unit-25",
+        "from": {
+          "x": 31.0,
+          "y": 12.313,
+          "facing": 90.0
+        },
+        "to": {
+          "x": 31.0,
+          "y": 12.313,
+          "facing": 90.0
+        },
+        "maneuver": {
+          "kind": "blocked_by_ally",
+          "truncated": false,
+          "blocked_by_ally": true
+        },
+        "morale": {},
+        "trace": {
+          "version": 1,
+          "result": "blocked_by_ally"
         }
       }
     ]

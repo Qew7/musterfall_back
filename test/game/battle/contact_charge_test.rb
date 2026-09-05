@@ -22,7 +22,7 @@ class SimBattleContactChargeTest < ActiveSupport::TestCase
     assert_operator ENGAGE, :>, CONTACT
   end
 
-  test "units microscopically past CONTACT can still choose a melee target" do
+  test "units inside ENGAGE are not in melee until their sides close" do
     # Centers 3.92 apart with half-depths 2+1.5 → OBB gap 0.42 (dead zone).
     orks = combatant(
       entity_id: "orks",
@@ -55,13 +55,11 @@ class SimBattleContactChargeTest < ActiveSupport::TestCase
     assert_operator gap, :>, CONTACT
     assert_operator gap, :<=, ENGAGE
 
-    selection = Targeting.choose_target(orks, [ ghouls ], "melee", [ orks, ghouls ])
-    assert selection, "expected melee engagement inside ENGAGE band"
-    assert_equal "ghouls", selection[:target][:entity_id]
-    assert Targeting.in_melee_combat?(orks, [ orks, ghouls ])
+    assert_nil Targeting.choose_target(orks, [ ghouls ], "melee", [ orks, ghouls ])
+    refute Targeting.in_melee_combat?(orks, [ orks, ghouls ])
   end
 
-  test "approach intent is skipped once inside ENGAGE so units stop micro-creeping" do
+  test "approach inside ENGAGE closes the remaining physical gap" do
     attacker = combatant(
       entity_id: "a1",
       name: "Атакующий",
@@ -92,7 +90,35 @@ class SimBattleContactChargeTest < ActiveSupport::TestCase
       nearest: enemy,
       obstacles: [ enemy ]
     )
-    assert_nil intent
+    assert intent
+    assert BF.side_contact?(intent[:destination], enemy)
+  end
+
+  test "a blocked side closure is not a charge or melee contact" do
+    attacker = combatant(
+      entity_id: "a1", x: 5, y: 12, facing: 0,
+      base_width: 2, base_depth: 2, movement: 3, melee: 5
+    )
+    enemy = combatant(
+      entity_id: "e1", x: 10, y: 12, facing: 180,
+      base_width: 2, base_depth: 2, melee: 5, side_index: 1
+    )
+    wall = BF.feature_as_obstacle(
+      BattleScenarios.terrain(id: "wall", x: 8, y: 12, width: 1, depth: 24)
+    )
+
+    intent = GroundMovement.build_approach_intent(
+      combatant: attacker,
+      nearest: enemy,
+      obstacles: [ enemy, wall ],
+      enemies: [ enemy ],
+      contact_slot: "front",
+      chargeable: true
+    )
+
+    refute intent && intent[:charge_contact_id]
+    refute intent && BF.melee_contact?(intent[:destination], enemy)
+    assert_nil Targeting.choose_target(attacker, [ enemy ], "melee", [ attacker, enemy ])
   end
 
   test "a lake beside the tray does not cancel a clear frontal charge" do
@@ -241,7 +267,7 @@ class SimBattleContactChargeTest < ActiveSupport::TestCase
   # 3. Two-pass movement (contact then flank)
   # ---------------------------------------------------------------------------
 
-  test "flank claimer paths on the board after the front claimer has settled" do
+  test "flank claimer does not claim contact when the settled front blocks its path" do
     front = combatant(
       entity_id: "orks",
       name: "Орки-громилы",
@@ -305,7 +331,9 @@ class SimBattleContactChargeTest < ActiveSupport::TestCase
     )
     after = BF.distance_between_units(flanker, enemy)
 
-    assert_operator after, :<, before
+    assert_operator after, :<=, before
+    assert_nil flanker[:charged_target_id]
+    assert_nil Targeting.choose_target(flanker, [ enemy ], "melee", [ front, flanker, enemy ])
     refute BF.rectangles_overlap?(flanker, front)
   end
 
@@ -350,7 +378,7 @@ class SimBattleContactChargeTest < ActiveSupport::TestCase
     assert_equal "flank", choice[:contact_slot]
   end
 
-  test "immediate charge on assigned flank uses charge_destination when already on that side" do
+  test "immediate charge on assigned flank aims at exact side contact" do
     skeleton = combatant(
       entity_id: "unit-9", name: "Скелетный блок",
       x: 21.38, y: 2.7, facing: 2, movement: 3,
@@ -374,9 +402,10 @@ class SimBattleContactChargeTest < ActiveSupport::TestCase
     goal = GroundMovement.approach_goal_point(
       skeleton, ghouls, contact_slot: "flank", approach_mode: :direct, chargeable: true
     )
-    expected = BF.charge_destination(skeleton, ghouls)
+    expected = Pathing.contact_pose_for_slot(skeleton, ghouls, "flank")
     assert_in_delta expected[:x], goal[:x], 0.05
     assert_in_delta expected[:y], goal[:y], 0.05
+    assert BF.side_contact?(skeleton.merge(goal), ghouls)
   end
 
   test "immediate charge to rear geo within range closes contact instead of wrap_rear setup" do
@@ -1109,7 +1138,7 @@ class SimBattleContactChargeTest < ActiveSupport::TestCase
   # Integration: battle-243 style jam
   # ---------------------------------------------------------------------------
 
-  test "battle jam: almost-touching orks and ghouls engage instead of deadlocking" do
+  test "battle jam: almost-touching orks close their sides before engaging" do
     orks = combatant(
       entity_id: "unit-9",
       name: "Орки-громилы",
@@ -1170,20 +1199,20 @@ class SimBattleContactChargeTest < ActiveSupport::TestCase
     assert_operator gap, :>=, CONTACT
     assert_operator gap, :<=, ENGAGE
 
-    # Greenskin turn: orks should be considered engaged (no futile creep).
+    # The old ENGAGE band is only permission to finish closing, not melee by itself.
     intent = DecisionsMovement.build_approach_intent(
       combatant: orks,
       nearest: ghouls,
       obstacles: [ war_chief, ghouls, skel ]
     )
-    assert_nil intent
+    assert intent
+    assert BF.side_contact?(intent[:destination], ghouls)
 
     selection = Targeting.choose_target(orks, [ ghouls, skel ], "melee", [ orks, war_chief, ghouls, skel ])
-    assert selection
-    assert_equal "unit-13", selection[:target][:entity_id]
+    assert_nil selection
   end
 
-  test "battle jam: skeleton on the war_chief flank reaches melee" do
+  test "battle jam: blocked skeleton closes without claiming false melee" do
     war_chief = combatant(
       entity_id: "hero-3",
       name: "Вождь орды",
@@ -1266,7 +1295,11 @@ class SimBattleContactChargeTest < ActiveSupport::TestCase
 
     after = BF.distance_between_units(skel, war_chief)
     assert_operator after, :<, before
-    assert_operator after, :<, 1.0, "skeleton flank charge should close (before=#{before.round(3)} after=#{after.round(3)})"
+    assert_nil Targeting.choose_target(
+      skel, [ war_chief, orks ], "melee",
+      [ war_chief, orks, ghouls, ghouls_rear, skel ]
+    )
+    assert_nil skel[:charged_target_id]
     refute BF.rectangles_overlap?(skel, ghouls)
     refute BF.rectangles_overlap?(skel, ghouls_rear)
   end
@@ -1322,9 +1355,9 @@ class SimBattleContactChargeTest < ActiveSupport::TestCase
       target_side: { player_id: "undead", combatants: [ ghouls ] }
     )
 
-    # Orks in the ENGAGE band should stay put (already fighting).
+    # A small gap must be physically closed before the orks count as fighting.
     if before_orks <= ENGAGE
-      assert_in_delta before_orks, BF.distance_between_units(orks, ghouls), 0.05
+      assert BF.melee_contact?(orks, ghouls)
       assert Targeting.choose_target(orks, [ ghouls ], "melee", [ war_chief, orks, ghouls ])
     end
 
@@ -1647,7 +1680,7 @@ class SimBattleContactChargeTest < ActiveSupport::TestCase
     assert_operator BF.distance_between_units(attacker, enemy), :<=, before
   end
 
-  test "out-of-arc melee on a side flank reforms toward the enemy" do
+  test "out-of-arc melee does not wheel backward when it cannot complete the turn" do
     enemy = combatant(
       entity_id: "e1",
       name: "Цель",
@@ -1680,12 +1713,12 @@ class SimBattleContactChargeTest < ActiveSupport::TestCase
     assert_equal :direct, entries.first[:approach_mode]
     assert_equal :direct, entries.first[:approach_mode]
 
-    before = BF.angle_between(attacker[:facing], attacker, enemy)
+    before = BF.distance_between_units(attacker, enemy)
     MovementPhase.play(
       acting_side: { player_id: "p1", combatants: [ attacker ] },
       target_side: { player_id: "p2", combatants: [ enemy ] }
     )
-    assert_operator BF.angle_between(attacker[:facing], attacker, enemy), :<, before
+    assert_operator BF.distance_between_units(attacker, enemy), :<=, before
   end
 
   test "a block facing off the fight turns toward a flank-arc enemy" do
@@ -1748,7 +1781,7 @@ class SimBattleContactChargeTest < ActiveSupport::TestCase
     enemy = combatant(
       entity_id: "e1",
       name: "В контакте",
-      x: 12.4,
+      x: 12.01,
       y: 12,
       facing: 180,
       base_width: 2,
