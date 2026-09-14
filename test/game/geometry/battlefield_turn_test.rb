@@ -28,7 +28,7 @@ class SimGeometryBattlefieldTurnTest < ActiveSupport::TestCase
     assert_in_delta 5.0, result[:base_depth], 0.001
     assert_equal 2, result[:files]
     assert_equal 5, result[:ranks]
-    assert_equal 2, result[:frontage]
+    assert_equal 5, result[:frontage]
     assert_equal :turn, result[:kind]
   end
 

@@ -8,13 +8,14 @@ module Sim
       module_function
 
       def load(path)
-        raw =
+        raw = File.read(path.to_s, encoding: "UTF-8")
+        parsed =
           if File.extname(path.to_s) == ".json"
-            JSON.parse(File.read(path))
+            JSON.parse(raw)
           else
-            YAML.safe_load(File.read(path), aliases: false)
+            YAML.safe_load(raw, aliases: false)
           end
-        Sim::Campaign::State.deep_symbolize(raw)
+        Sim::Campaign::State.deep_symbolize(parsed)
       end
 
       def run(entry, catalog: Catalog::Loader.load)

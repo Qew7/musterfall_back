@@ -190,6 +190,28 @@ class SimBattleFootprintSyncTest < ActiveSupport::TestCase
     assert_operator rear_after[:x], :<, rear_before[:x]
   end
 
+  test "casualty after a 90 turn restores preferred frontage" do
+    combatant = imperial_swordsmen
+    combatant[:current_health] = 7
+    Sim::Battle::State.sync_combatant_footprint!(combatant)
+    assert_equal 4, combatant[:files]
+    assert_equal 2, combatant[:ranks]
+
+    turned = BF.merge_footprint(combatant, BF.apply_turn(combatant, 90.0, 4.0))
+    combatant.merge!(turned.slice(:x, :y, :facing, :base_width, :base_depth, :files, :ranks, :frontage))
+    assert_equal 2, combatant[:files]
+    assert_equal 4, combatant[:frontage]
+
+    combatant[:current_health] = 4
+    Sim::Battle::State.sync_combatant_footprint!(combatant)
+
+    assert_equal 4, combatant[:files]
+    assert_equal 1, combatant[:ranks]
+    assert_equal 4, combatant[:frontage]
+    assert_in_delta 4.0, combatant[:base_width], 0.001
+    assert_in_delta 1.0, combatant[:base_depth], 0.001
+  end
+
   test "width-only shrink does not slide the unit along facing" do
     combatant = {
       entity_id: "swords",

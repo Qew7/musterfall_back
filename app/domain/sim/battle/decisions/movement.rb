@@ -133,18 +133,86 @@ module Sim
         end
 
         # Flyers move first, then nearby contacts, then the remaining ground units.
-        def plan_movement_groups(movers, enemies, terrain: [])
+        def plan_movement_groups(movers, enemies, terrain: [], obstacles: [])
           living = Pathing.active_units(enemies)
           claimed = Hash.new { |hash, key| hash[key] = {} }
           grouped = movers.group_by { |combatant| planner_for(combatant) }
 
           [ Rules::Flying::Movement, Rules::Ground::Movement ].flat_map do |planner|
-            planner.plan_groups(Array(grouped[planner]), living, claimed, terrain: terrain)
+            planner.plan_groups(
+              Array(grouped[planner]), living, claimed,
+              terrain: terrain, obstacles: obstacles
+            )
           end
         end
 
-        def plan_melee_entries(movers, enemies, terrain: []) # leftovers:keep
-          plan_movement_groups(movers, enemies, terrain: terrain).flat_map { |group| group[:entries] }
+        def plan_melee_entries(movers, enemies, terrain: [], obstacles: []) # leftovers:keep
+          plan_movement_groups(movers, enemies, terrain: terrain, obstacles: obstacles).flat_map { |group| group[:entries] }
+        end
+
+        # Give this unit the side if a path exists. Reserve it for others only
+        # when a this-turn charge actually closes, or when this is just an approach.
+        def reserve_side_if_reached(combatant, choice, claimed, obstacles:, enemies:, terrain:)
+          nearest = choice[:nearest]
+          slot = choice[:contact_slot].to_s
+          return nil unless nearest && !slot.empty?
+          return nil if claimed[nearest[:entity_id]].key?(slot)
+
+          if Array(obstacles).empty?
+            claimed[nearest[:entity_id]][slot] = combatant[:entity_id]
+            return build_entry(
+              combatant, nearest, slot, choice[:approach_mode] || :direct,
+              chargeable: choice.fetch(:chargeable, true)
+            )
+          end
+
+          intent = build_approach_intent(
+            combatant: combatant,
+            nearest: nearest,
+            obstacles: obstacles,
+            enemies: enemies,
+            contact_slot: slot,
+            approach_mode: choice[:approach_mode] || :direct,
+            terrain: terrain,
+            chargeable: choice.fetch(:chargeable, true)
+          )
+          return nil unless intent && !intent[:wait] && intent[:destination]
+
+          pose = Geometry::Battlefield.merge_footprint(combatant, intent[:destination])
+          reserve = if charge_reservation?(combatant, choice, enemies)
+            Geometry::Battlefield.side_contact?(pose, nearest)
+          else
+            true
+          end
+          claimed[nearest[:entity_id]][slot] = combatant[:entity_id] if reserve
+
+          build_entry(
+            combatant, nearest, slot, choice[:approach_mode] || :direct,
+            chargeable: choice.fetch(:chargeable, true)
+          )
+        end
+
+        def charge_reservation?(combatant, choice, enemies)
+          return false if %i[flyer_approach flyer_setup_rear flyer_setup_flank].include?(choice[:approach_mode]&.to_sym)
+          return false unless choice.fetch(:chargeable, true)
+
+          within_charge_range?(combatant, choice[:nearest], enemies: enemies)
+        end
+
+        def evict_stolen_sides!(entries_by_id, claimed)
+          entries_by_id.delete_if do |entity_id, entry|
+            owner = claimed[entry[:nearest][:entity_id]][entry[:contact_slot].to_s]
+            owner && owner != entity_id
+          end
+        end
+
+        def claimed_with(claimed, rejected)
+          view = Hash.new { |hash, key| hash[key] = {} }
+          claimed.each { |enemy_id, sides| view[enemy_id] = sides.dup }
+          rejected.each do |enemy_id, sides|
+            sides.each_key { |slot| view[enemy_id][slot.to_s] = true }
+          end
+          view
         end
 
         def build_entry(combatant, enemy, side, approach_mode, chargeable: true)
@@ -169,6 +237,86 @@ module Sim
             approach_mode: approach_mode,
             terrain: terrain,
             chargeable: chargeable
+          )
+        end
+
+        # Same target, other face; then another enemy. Wait only if nothing legal remains.
+        def retarget_approach(combatant:, failed:, obstacles:, enemies:, terrain:, claimed_intents: [])
+          claimed = Hash.new { |hash, key| hash[key] = {} }
+          claimed_intents.each do |intent|
+            next if intent[:wait]
+            next if intent[:combatant][:entity_id] == combatant[:entity_id]
+
+            nearest = intent[:nearest]
+            slot = intent[:contact_slot]
+            next unless nearest && slot
+
+            claimed[nearest[:entity_id]][slot.to_s] = intent[:combatant][:entity_id]
+          end
+
+          blocked = failed[:nearest]
+          if blocked
+            failed_slot = failed[:contact_slot].to_s
+            %w[front flank rear].each do |slot|
+              next if slot == failed_slot
+              next if claimed[blocked[:entity_id]].key?(slot)
+
+              fresh = usable_approach(
+                combatant: combatant,
+                nearest: blocked,
+                obstacles: obstacles,
+                enemies: enemies,
+                contact_slot: slot,
+                approach_mode: failed[:approach_mode] || :direct,
+                terrain: terrain,
+                chargeable: failed.fetch(:chargeable, true)
+              )
+              return fresh if fresh
+            end
+            %w[front flank rear].each do |slot|
+              claimed[blocked[:entity_id]][slot] = combatant[:entity_id]
+            end
+          end
+
+          planner_for(combatant).plan_entries(
+            [ combatant ], enemies, claimed, terrain: terrain, obstacles: obstacles
+          ).each do |entry|
+            fresh = usable_approach(
+              combatant: combatant,
+              nearest: entry[:nearest],
+              obstacles: obstacles,
+              enemies: enemies,
+              contact_slot: entry[:contact_slot],
+              approach_mode: entry[:approach_mode] || :direct,
+              terrain: terrain,
+              chargeable: entry.fetch(:chargeable, true)
+            )
+            return fresh if fresh
+          end
+          nil
+        end
+
+        def usable_approach(combatant:, nearest:, obstacles:, enemies:, contact_slot:, approach_mode:, terrain:, chargeable:)
+          fresh = build_approach_intent(
+            combatant: combatant,
+            nearest: nearest,
+            obstacles: obstacles,
+            enemies: enemies,
+            contact_slot: contact_slot,
+            approach_mode: approach_mode,
+            terrain: terrain,
+            chargeable: chargeable
+          )
+          return nil unless fresh && !fresh[:wait] && fresh[:destination]
+
+          traveled = Geometry::Battlefield.distance_between(combatant, fresh[:destination])
+          turned = Geometry::Battlefield.shortest_facing_delta(combatant[:facing], fresh[:destination][:facing]).abs
+          return nil unless traveled > 0.05 || turned > 0.05
+
+          fresh.merge(
+            nearest: nearest,
+            contact_slot: contact_slot,
+            approach_mode: approach_mode
           )
         end
 

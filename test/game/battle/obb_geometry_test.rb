@@ -91,4 +91,26 @@ class SimGeometryObbTest < ActiveSupport::TestCase
     assert_in_delta 4.0, Obb::Native.distance(*args), 0.0001
     assert_in_delta 4.0, Obb.distance(*args), 0.0001
   end
+
+  test "tray_on_battlefield matches corner containment" do
+    rng = Random.new(1)
+    width = BF::CONFIG[:width].to_f
+    height = BF::CONFIG[:height].to_f
+    eps = 1.0e-6
+
+    200.times do
+      pose = {
+        x: (rng.rand * 50) - 5,
+        y: (rng.rand * 34) - 5,
+        facing: rng.rand * 360,
+        base_width: (rng.rand * 8) + 0.1,
+        base_depth: (rng.rand * 8) + 0.1
+      }
+      by_corners = BF.unit_corners(pose).all? do |corner|
+        corner[:x].between?(-eps, width + eps) && corner[:y].between?(-eps, height + eps)
+      end
+
+      assert_equal by_corners, BF.tray_on_battlefield?(pose), pose.inspect
+    end
+  end
 end

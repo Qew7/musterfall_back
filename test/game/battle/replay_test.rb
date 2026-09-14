@@ -16,6 +16,25 @@ class SimBattleReplayTest < ActiveSupport::TestCase
     assert payload[:result][:rounds].any?
   end
 
+  test "movement diff sees string-typed movement actions" do
+    stored = {
+      rounds: [ { turns: [ { phases: [ { actions: [
+        { type: "movement", actor_id: "u1", from: { x: 1, y: 1, facing: 0 }, to: { x: 2, y: 1, facing: 0 } }
+      ] } ] } ] } ]
+    }
+    fresh = {
+      rounds: [ { turns: [ { phases: [ { actions: [
+        { type: "movement", actor_id: "u1", from: { x: 1, y: 1, facing: 0 }, to: { x: 3, y: 1, facing: 0 } }
+      ] } ] } ] } ]
+    }
+    replay = Sim::Battle::Replay.new(nil)
+    diff = replay.send(:diff_movement_actions, stored, fresh)
+
+    assert_equal 1, diff[:stored_count]
+    assert_equal 1, diff[:fresh_count]
+    assert diff[:changed]
+  end
+
   test "replay finds matchup from battle id" do
     game = create_active_game(player_count: 2)
     result = Games::AdvanceRound.call(game: game, base_version: 0)

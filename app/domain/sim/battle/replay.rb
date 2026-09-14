@@ -106,7 +106,7 @@ module Sim
         symbolize(report).fetch(:rounds, []).flat_map do |round|
           round.fetch(:turns, []).flat_map do |turn|
             turn.fetch(:phases, []).flat_map do |phase|
-              phase.fetch(:actions, []).select { |action| action[:type] == :movement }.map do |action|
+              phase.fetch(:actions, []).select { |action| action[:type].to_s == "movement" }.map do |action|
                 {
                   summary: action[:summary],
                   actor_id: action[:actor_id],
@@ -126,7 +126,9 @@ module Sim
       def compact_maneuver(maneuver)
         return nil unless maneuver
 
-        maneuver.slice(:kind, :target_id, :contact_slot, :truncated_by_collision, :blocked_by_ally, :steps)
+        sliced = maneuver.slice(:kind, :target_id, :contact_slot, :truncated_by_collision, :blocked_by_ally, :steps)
+        sliced[:kind] = sliced[:kind].to_s if sliced[:kind]
+        sliced
       end
 
       def symbolize(value)

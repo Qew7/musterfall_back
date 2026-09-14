@@ -214,6 +214,51 @@ module Sim
         entry && (entry[:obstacle_kind] == :terrain || entry[:obstacle_kind] == "terrain")
       end
 
+      # Column (files < preferred frontage) may turn 90° so the wider face looks at
+      # `target` when that tray fits the corridor. Allies are not a width stop;
+      # terrain and other trays are. Charge reach (ours next turn, or theirs now)
+      # is the reason to spend the turn.
+      def widening_turn?(origin, target, obstacles, budget, contact_id: nil)
+        return false unless target
+        return false if origin[:files].to_i >= origin[:frontage].to_i
+
+        heading = Geometry::Battlefield.heading_to(origin, target)
+        return false unless Maneuvers::Turn.applies?(origin, heading, budget)
+
+        turn = Geometry::Battlefield.apply_turn(origin, heading, budget)
+        return false unless turn[:completed]
+
+        turned = Geometry::Battlefield.merge_footprint(origin, turn)
+        return false unless turned[:base_width].to_f > origin[:base_width].to_f + 0.05
+        return false unless frontage_fits?(turned, target, obstacles, contact_id: contact_id || target[:entity_id])
+
+        they_charge = Geometry::Battlefield.in_front_arc?(target, origin, target[:facing]) &&
+          Decisions::ChargeRange.within?(target, origin, enemies: [ origin ])
+        return true if they_charge
+
+        Decisions::ChargeRange.within?(turned, target, enemies: [ target ])
+      end
+
+      def frontage_fits?(pose, target, obstacles, contact_id: nil)
+        space = frontage_world(pose, obstacles, contact_id)
+        return false unless Geometry::Battlefield.tray_on_battlefield?(pose)
+        return false unless space.clear?(pose, contact_id: contact_id)
+
+        dest = Geometry::Battlefield.charge_destination(pose, target)
+        dest_pose = pose.merge(x: dest[:x], y: dest[:y], facing: pose[:facing])
+        return true if Geometry::Battlefield.distance_between(pose, dest_pose) <= 0.05
+        return false unless space.clear?(dest_pose, contact_id: contact_id)
+
+        space.translation_clear?(pose, pose, dest_pose, contact_id: contact_id)
+      end
+
+      def frontage_world(pose, obstacles, contact_id)
+        space = Obstacles.coerce(obstacles)
+        skip = [ pose[:entity_id], contact_id ]
+        space.each { |entry| skip << entry[:entity_id] if ally_blocker?(pose, entry) }
+        space.except(*skip.compact)
+      end
+
       def meaningful_progress?(origin, pose)
         return false unless pose
 

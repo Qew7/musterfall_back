@@ -74,33 +74,8 @@ module Sim
       end
 
       def auto_deploy!(player)
-        deployable_entities(player).each_with_index do |entity, index|
-          row = Constants::BATTLE_ROWS[[ 2, index / 3 ].min]
-          lane = Constants::LANE_ORDER[index % Constants::LANE_ORDER.length]
-          place_in_slot!(entity, row, lane, player[:roster])
-        end
+        Geometry::Deployment.pack_roster!(player[:roster])
         Result.ok(@campaign)
-      end
-
-      def deployable_entities(player)
-        player[:roster]
-          .select { |entry| entry.dig(:state, :current_health).to_i > 0 }
-          .reject { |entry| entry[:kind] == "hero" && entry[:state][:attached_to] }
-          .sort_by { |entity| auto_deploy_sort_key(entity) }
-      end
-
-      def auto_deploy_sort_key(entity)
-        Entities::Footprint.sync_entity!(entity)
-        formation = entity[:components][:formation]
-        area = -(formation[:width].to_f * formation[:depth].to_f)
-
-        if entity[:kind] == "hero"
-          return [ 0, 0, area ] if entity.dig(:components, :hero, :general)
-
-          return [ 1, 0, area ]
-        end
-
-        [ 2, 0, area ]
       end
 
       def place_in_slot!(entity, row, lane, roster)
@@ -132,18 +107,7 @@ module Sim
       end
 
       def placement_clash(entity, position, roster)
-        # Reserve is a packing strip; only enforce separation inside battle rows.
-        slots = Geometry::Battlefield.sync_formation_slots_from_deployment(position)
-        return nil if slots[:row] == "reserve"
-
-        conflicts = Geometry::Deployment.conflicting_entities(
-          Geometry::Deployment.footprint_from_entity(entity, x: position[:x], y: position[:y], facing: position[:facing]),
-          roster,
-          ignore_id: entity[:id]
-        )
-        return nil if conflicts.empty?
-
-        "отряд слишком близко к #{conflicts.map { |entry| entry[:name] }.join(', ')}"
+        Geometry::Deployment.clash_reason(entity, position, roster, ignore_id: entity[:id])
       end
     end
   end

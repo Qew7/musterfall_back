@@ -1,7 +1,9 @@
 #!/bin/bash -e
 
-if [ -f ext/sim_obb/extconf.rb ]; then
-  (cd ext/sim_obb && ruby extconf.rb >/dev/null && make -s) || true
+# Dev compose mounts the host tree: compile here so a Mac .bundle is not used on Linux.
+# Production image already has the kernel from `docker build` and has no compiler.
+if command -v make >/dev/null && [ -f ext/sim_obb/extconf.rb ]; then
+  (cd ext/sim_obb && ruby extconf.rb >/dev/null && make -s clean && make -s) || true
 fi
 
 # If running the rails server then create or migrate existing database

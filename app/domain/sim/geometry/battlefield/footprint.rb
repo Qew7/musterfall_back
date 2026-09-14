@@ -85,22 +85,30 @@ module Sim
           Sim::Geometry::Obb.overlap_units?(left, right)
         end
 
+        # Axis-aligned envelope of the oriented tray. Exact for a rectangular board.
+        def tray_aabb(unit)
+          hw, hd = Sim::Geometry::Obb.half_sizes(unit)
+          c, s = Sim::Geometry::Obb.trig(unit[:facing])
+          rx = (c.abs * hd) + (s.abs * hw)
+          ry = (s.abs * hd) + (c.abs * hw)
+          x = unit[:x].to_f
+          y = unit[:y].to_f
+          [ x - rx, x + rx, y - ry, y + ry ]
+        end
+
         def tray_on_battlefield?(unit)
-          width = CONFIG[:width].to_f
-          height = CONFIG[:height].to_f
-          unit_corners(unit).all? do |corner|
-            corner[:x].between?(0.0, width) && corner[:y].between?(0.0, height)
-          end
+          min_x, max_x, min_y, max_y = tray_aabb(unit)
+          eps = 1.0e-6
+          min_x >= -eps && max_x <= CONFIG[:width].to_f + eps &&
+            min_y >= -eps && max_y <= CONFIG[:height].to_f + eps
         end
 
         def fit_tray_on_battlefield(unit)
-          corners = unit_corners(unit)
-          xs = corners.map { |corner| corner[:x] }
-          ys = corners.map { |corner| corner[:y] }
-          dx = xs.min.negative? ? -xs.min : 0.0
-          dy = ys.min.negative? ? -ys.min : 0.0
-          dx = CONFIG[:width].to_f - xs.max if xs.max + dx > CONFIG[:width].to_f
-          dy = CONFIG[:height].to_f - ys.max if ys.max + dy > CONFIG[:height].to_f
+          min_x, max_x, min_y, max_y = tray_aabb(unit)
+          dx = min_x.negative? ? -min_x : 0.0
+          dy = min_y.negative? ? -min_y : 0.0
+          dx = CONFIG[:width].to_f - max_x if max_x + dx > CONFIG[:width].to_f
+          dy = CONFIG[:height].to_f - max_y if max_y + dy > CONFIG[:height].to_f
           fitted = unit.merge(x: unit[:x].to_f + dx, y: unit[:y].to_f + dy)
           tray_on_battlefield?(fitted) ? fitted : nil
         end

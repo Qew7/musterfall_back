@@ -45,6 +45,7 @@ class BattleScenarioRunner
       end
       signatures << signature
 
+      before_board = board_snapshot(acting_side, target_side)
       phase = Sim::Battle::Phases::Movement.play(
         acting_side: acting_side,
         target_side: target_side,
@@ -54,7 +55,7 @@ class BattleScenarioRunner
       phases << phase
 
       after_signature = pose_signature(actor)
-      if after_signature == signature && board_unchanged?(acting_side, target_side, signatures)
+      if after_signature == signature && board_snapshot(acting_side, target_side) == before_board
         stuck_reason = :no_progress
         break
       end
@@ -98,8 +99,10 @@ class BattleScenarioRunner
     ]
   end
 
-  def board_unchanged?(_acting_side, _target_side, signatures)
-    signatures.length >= 1
+  def board_snapshot(acting_side, target_side)
+    [ acting_side, target_side ].flat_map do |side|
+      Array(side[:combatants]).map { |unit| pose_signature(unit) }
+    end
   end
 
   def deep_dup(value)

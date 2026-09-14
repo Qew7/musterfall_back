@@ -22,7 +22,7 @@ module Sim
             base_depth: unit[:base_width].to_f,
             files: ranks,
             ranks: files,
-            frontage: ranks.positive? ? ranks : unit[:frontage]
+            frontage: unit[:frontage]
           }
         end
 

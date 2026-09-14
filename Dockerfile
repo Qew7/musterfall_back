@@ -47,6 +47,9 @@ RUN bundle install && \
 # Copy application code
 COPY . .
 
+# OBB C kernel for this image's OS/arch. Do not copy a host .so/.bundle.
+RUN cd ext/sim_obb && ruby extconf.rb && make clean && make
+
 # Precompile bootsnap code for faster boot times.
 # -j 1 disable parallel compilation to avoid a QEMU bug: https://github.com/rails/bootsnap/issues/495
 RUN bundle exec bootsnap precompile -j 1 app/ lib/

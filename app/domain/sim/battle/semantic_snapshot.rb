@@ -17,7 +17,7 @@ module Sim
             left: side_health(value[:left]),
             right: side_health(value[:right])
           },
-          action_counts: actions.group_by { |entry| entry[:type] }
+          action_counts: actions.group_by { |entry| entry[:type].to_s }
             .transform_values(&:length)
             .sort.to_h,
           contacts: actions.filter_map { |entry| contact_fingerprint(entry) },
@@ -54,7 +54,7 @@ module Sim
           from: pose(action[:from]),
           to: pose(action[:to]),
           maneuver: compact_hash(
-            kind: maneuver[:kind],
+            kind: maneuver[:kind]&.to_s.presence,
             contact_slot: maneuver[:contact_slot],
             approach_mode: maneuver[:approach_mode],
             truncated: maneuver[:truncated_by_collision],

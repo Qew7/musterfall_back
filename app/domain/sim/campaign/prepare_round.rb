@@ -79,39 +79,7 @@ module Sim
         player = @campaign.find_player(player_id)
         return unless player
 
-        deployable = player[:roster]
-          .select { |entry| entry.dig(:state, :current_health).to_i > 0 }
-          .reject { |entry| entry[:kind] == "hero" && entry[:state][:attached_to] }
-          .sort_by { |entity| bot_deploy_sort_key(entity) }
-
-        deployable.each_with_index do |entity, index|
-          row = Constants::BATTLE_ROWS[[ 2, index / 3 ].min]
-          lane = Constants::LANE_ORDER[index % Constants::LANE_ORDER.length]
-          clear = Geometry::Deployment.find_clear_position(entity, row, lane, player[:roster], ignore_id: entity[:id])
-          next unless clear
-
-          formation = entity[:components][:formation]
-          formation[:facing] = clear[:facing] if clear[:facing]
-          formation[:x] = clear[:x]
-          formation[:y] = clear[:y]
-          slots = Geometry::Battlefield.sync_formation_slots_from_deployment(formation)
-          formation[:lane] = slots[:lane]
-          formation[:row] = slots[:row]
-        end
-      end
-
-      def bot_deploy_sort_key(entity)
-        Entities::Footprint.sync_entity!(entity)
-        formation = entity[:components][:formation]
-        area = -(formation[:width].to_f * formation[:depth].to_f)
-
-        if entity[:kind] == "hero"
-          return [ 0, 0, area ] if entity.dig(:components, :hero, :general)
-
-          return [ 1, 0, area ]
-        end
-
-        [ 2, 0, area ]
+        Geometry::Deployment.pack_roster!(player[:roster])
       end
     end
   end

@@ -97,6 +97,82 @@ class SimBattleMovementLivenessTest < ActiveSupport::TestCase
     end
   end
 
+  test "waiting behind a moving ally is not treated as stuck" do
+    result = run_case(
+      {
+        id: "wait-behind-moving-ally",
+        actor: { x: 6.0, y: 12.0 },
+        target: { x: 30.0, y: 12.0 },
+        allies: [
+          { entity_id: "front", x: 10.0, y: 12.0, base_width: 4.0, base_depth: 4.0, melee: 4, ranged: 0, movement: 4.0 },
+          { entity_id: "upper", x: 6.0, y: 8.5, base_width: 4.0, base_depth: 2.0, ranged: 5, melee: 0, movement: 0 },
+          { entity_id: "lower", x: 6.0, y: 15.5, base_width: 4.0, base_depth: 2.0, ranged: 5, melee: 0, movement: 0 }
+        ],
+        max_turns: 12
+      },
+      reachable: true
+    )
+
+    refute_equal :no_progress, result.stuck_reason, "ally moved; waiter is not stuck"
+    assert result.reached, "actor should follow the moving ally into contact; stuck=#{result.stuck_reason}"
+    assert BattleInvariants.verify_result!(result)
+  end
+
+  test "a blocked lane picks another enemy instead of waiting" do
+    actor = BattleScenarios.combatant(
+      entity_id: "swords",
+      name: "Мечники",
+      x: 6.0,
+      y: 6.0,
+      facing: 0.0,
+      movement: 4.0,
+      melee: 4,
+      ranged: 0
+    )
+    wall = [ 4.0, 6.0, 8.0 ].map.with_index do |y, index|
+      BattleScenarios.combatant(
+        entity_id: "wall-#{index}",
+        name: "Стена #{index}",
+        x: 10.0,
+        y: y,
+        facing: 0.0,
+        movement: 0.0,
+        melee: 0,
+        ranged: 5
+      )
+    end
+    blocked = BattleScenarios.enemy(
+      entity_id: "blocked",
+      name: "Закрытый",
+      x: 22.0,
+      y: 6.0,
+      facing: 180.0,
+      melee: 4,
+      ranged: 0
+    )
+    open = BattleScenarios.enemy(
+      entity_id: "open",
+      name: "Открытый",
+      x: 8.0,
+      y: 18.0,
+      facing: 180.0,
+      melee: 4,
+      ranged: 0
+    )
+    start = { x: actor[:x], y: actor[:y] }
+    phase = Sim::Battle::Phases::Movement.play(
+      acting_side: { player_id: "p1", combatants: [ actor, *wall ] },
+      target_side: { player_id: "bot", combatants: [ blocked, open ] }
+    )
+
+    action = phase[:actions].find { |entry| entry[:actor_id] == "swords" }
+    assert action, "swords should still act"
+    refute action.dig(:maneuver, :blocked_by_ally)
+    refute_includes action[:summary], "ждёт прохода"
+    traveled = Math.hypot(actor[:x] - start[:x], actor[:y] - start[:y])
+    assert_operator traveled, :>, 0.2
+  end
+
   test "reachable terrain obstacles are tracked as an explicit pathfinding capability" do
     definition = KNOWN_REACHABLE_GAPS.first
     result = run_case(definition, reachable: true)

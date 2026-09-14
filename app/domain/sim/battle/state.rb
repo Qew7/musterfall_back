@@ -258,7 +258,7 @@ module Sim
           side_index
         )
 
-        sync_combatant_footprint!(
+        combatant = sync_combatant_footprint!(
           {
             entity_id: entity[:id],
             name: entity[:name],
@@ -320,6 +320,12 @@ module Sim
             missile_attacks: combat[:missile_attacks] || 1
           }
         )
+        fitted = Geometry::Battlefield.fit_tray_on_battlefield(combatant)
+        if fitted
+          combatant[:x] = fitted[:x]
+          combatant[:y] = fitted[:y]
+        end
+        combatant
       end
 
       def general_flag?(entity, general_id)

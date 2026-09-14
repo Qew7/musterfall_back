@@ -527,6 +527,44 @@ class SimBattleContactChargeTest < ActiveSupport::TestCase
     assert_equal "unit-1", groups.second[:entries].first[:combatant][:entity_id]
   end
 
+  test "a failed charge does not keep a side another ally can reach" do
+    blocked = combatant(
+      entity_id: "blocked", name: "Закрытый",
+      x: 6.0, y: 12.0, facing: 0.0, movement: 8.0,
+      base_width: 2.0, base_depth: 2.0, melee: 4, ranged: 0
+    )
+    charger = combatant(
+      entity_id: "charger", name: "Открытый",
+      x: 14.0, y: 4.0, facing: 0.0, movement: 8.0,
+      base_width: 2.0, base_depth: 2.0, melee: 4, ranged: 0
+    )
+    enemy = combatant(
+      entity_id: "swords", name: "Мечники",
+      x: 22.0, y: 12.0, facing: 180.0, movement: 3.0,
+      base_width: 2.0, base_depth: 2.0, melee: 4, side_index: 1
+    )
+    wall = {
+      id: "wall", type: "house", name: "Стена",
+      x: 12.0, y: 12.0, width: 6.0, depth: 8.0,
+      impassable: true, blocks_los: true, move_cost: 1.0
+    }
+    obstacles = [ enemy, wall ]
+    entries = DecisionsMovement.plan_movement_groups(
+      [ blocked, charger ], [ enemy ],
+      terrain: [ wall ], obstacles: obstacles
+    ).flat_map { |group| group[:entries] }
+
+    charger_entry = entries.find { |entry| entry[:combatant][:entity_id] == "charger" }
+    blocked_entry = entries.find { |entry| entry[:combatant][:entity_id] == "blocked" }
+
+    assert charger_entry, "open unit should still receive a contact side"
+    assert_equal "swords", charger_entry[:nearest][:entity_id]
+    assert_equal "front", charger_entry[:contact_slot]
+    if blocked_entry && blocked_entry[:nearest][:entity_id] == "swords"
+      refute_equal "front", blocked_entry[:contact_slot]
+    end
+  end
+
   test "a second front claimer keeps the nearest enemy on a free slot" do
     prince = combatant(
       entity_id: "hero-3", name: "Демонический принц",

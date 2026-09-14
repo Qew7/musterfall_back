@@ -37,6 +37,7 @@ module Sim
             at_contact = route[:complete] && last_segment
             heading = Geometry::Battlefield.heading_to(pose, dest)
             can_march = march_allowed && straight_route?(route) && last_segment
+            restore = goal_unit && Pathing.widening_turn?(pose, goal_unit, space, remaining, contact_id: contact_id)
             plan = Maneuvers.plan_segment(
               origin: pose,
               heading: heading,
@@ -50,7 +51,8 @@ module Sim
               kernels: space.kernels,
               march_allowed: can_march,
               finish: goal || points.last,
-              allow_turn: last.nil?
+              restore_unit: goal_unit,
+              allow_turn: last.nil? || restore
             )
             break unless plan && plan[:pose]
             if index.zero? &&

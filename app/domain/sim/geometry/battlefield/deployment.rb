@@ -75,6 +75,14 @@ module Sim
           local = clamp_deployment_position(position)
           side_index.zero? ? local : mirror_deployment(local)
         end
+
+        # Local-side zone: first `deployment_depth` inches of the field.
+        def tray_in_deployment_zone?(unit)
+          min_x, max_x, min_y, max_y = tray_aabb(unit)
+          eps = 1.0e-6
+          min_x >= -eps && max_x <= CONFIG[:deployment_depth].to_f + eps &&
+            min_y >= -eps && max_y <= CONFIG[:height].to_f + eps
+        end
       end
     end
   end

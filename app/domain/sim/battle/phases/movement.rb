@@ -54,7 +54,12 @@ module Sim
           end
 
           # Flyers move first, then ground contacts per target, then the remaining units.
-          Decisions::Movement.plan_movement_groups(physical_movers, target_side[:combatants], terrain: terrain).each do |group|
+          mover_ids = physical_movers.map { |entry| entry[:entity_id] }.to_set
+          plan_obstacles = movement_obstacles(acting_side, target_side, mover_ids, terrain)
+          Decisions::Movement.plan_movement_groups(
+            physical_movers, target_side[:combatants],
+            terrain: terrain, obstacles: plan_obstacles
+          ).each do |group|
             moved += run_simultaneous_moves!(
               phase: phase,
               acting_side: acting_side,
@@ -93,7 +98,7 @@ module Sim
               before: State.snapshot_combatant(combatant),
               origin_pose: combatant.dup
             )
-            resolve_destination_conflicts!([ packed ], reposition_obstacles)
+            resolve_destination_conflicts!([ packed ], reposition_obstacles, enemies: target_side[:combatants])
             accept_maneuver_destinations!([ packed ])
             apply_intents!([ packed ])
             # Subsequent seekers treat this pose as occupied (including wait / blocked_by_ally).
@@ -173,14 +178,22 @@ module Sim
               terrain: terrain,
               chargeable: entry.fetch(:chargeable, true)
             )
+            intent ||= Decisions::Movement.retarget_approach(
+              combatant: entry[:combatant],
+              failed: entry,
+              obstacles: obstacles,
+              enemies: target_side[:combatants],
+              terrain: terrain,
+              claimed_intents: intents
+            )
             next unless intent
 
             intents << intent.merge(
               from: position_of(entry[:combatant]),
               before: State.snapshot_combatant(entry[:combatant]),
               origin_pose: entry[:combatant].dup,
-              contact_slot: entry[:contact_slot],
-              approach_mode: entry[:approach_mode] || :direct
+              contact_slot: intent[:contact_slot] || entry[:contact_slot],
+              approach_mode: intent[:approach_mode] || entry[:approach_mode] || :direct
             )
           end
 
@@ -194,7 +207,7 @@ module Sim
             terrain: terrain
           )
           occupied = obstacles + group_stayers(entries, intents).map { |entry| freeze_obstacle(entry) }
-          resolve_destination_conflicts!(intents, occupied)
+          resolve_destination_conflicts!(intents, occupied, enemies: target_side[:combatants], terrain: terrain)
           # Landing conflict can turn a co-mover into a waiter after everyone already
           # planned through their start. Re-path those sweeps; thread wrap already exists.
           reroute_around_stayers!(
@@ -205,7 +218,7 @@ module Sim
             terrain: terrain
           )
           occupied = obstacles + group_stayers(entries, intents).map { |entry| freeze_obstacle(entry) }
-          resolve_destination_conflicts!(intents, occupied)
+          resolve_destination_conflicts!(intents, occupied, enemies: target_side[:combatants], terrain: terrain)
           apply_free_aligns!(intents, occupied)
           Rules.for(:movement).prepare_melee_intents!(
             phase: phase,
@@ -251,19 +264,23 @@ module Sim
               terrain: terrain,
               chargeable: !contact_id.nil?
             )
-            if fresh.nil? || fresh[:wait] || fresh[:destination].nil?
+            if fresh && !fresh[:wait] && fresh[:destination]
+              merge_replanned_intent!(intent, fresh)
+            elsif adopt_retargeted_intent!(
+              intent,
+              obstacles: world,
+              enemies: enemies,
+              terrain: terrain,
+              claimed_intents: intents
+            )
+              nil
+            else
               intent[:wait] = true
               intent[:destination] = nil
               intent[:plan] = (intent[:plan] || {}).merge(
                 blocked_by_ally: true,
                 blocker: stayers.first.slice(:entity_id, :name)
               )
-            else
-              intent[:plan] = fresh[:plan]
-              intent[:destination] = fresh[:destination]
-              intent[:budget] = fresh[:budget]
-              intent[:march_meta] = fresh[:march_meta]
-              intent[:charge_contact_id] = fresh[:charge_contact_id] if fresh.key?(:charge_contact_id)
             end
           end
         end
@@ -349,7 +366,7 @@ module Sim
         # Simultaneous melee: moving allies vacate together — do not treat their
         # starts as obstacles while landing (orchestrator model). Only static blockers, accepted
         # landings, and units that end up waiting keep occupying space. Charge targets are soft.
-        def resolve_destination_conflicts!(intents, static_obstacles)
+        def resolve_destination_conflicts!(intents, static_obstacles, enemies: [], terrain: [])
           occupied = static_obstacles.map { |entry| freeze_obstacle(entry) }
 
           ranked = intents.reject { |intent| intent[:wait] || intent[:destination].nil? }
@@ -373,6 +390,18 @@ module Sim
             pose = destination_pose(intent)
             if destination_blocked?(pose, [], occupied, contact_id: contact_id)
               pose = nil
+            end
+
+            if pose.nil? || !meaningful_destination?(combatant, pose)
+              retargeted = adopt_retargeted_intent!(
+                intent,
+                obstacles: occupied,
+                enemies: enemies,
+                terrain: terrain,
+                claimed_intents: intents
+              )
+              pose = retargeted ? destination_pose(intent) : nil
+              pose = nil if pose && destination_blocked?(pose, [], occupied, contact_id: charge_contact_id_for(intent))
             end
 
             if pose.nil? || !meaningful_destination?(combatant, pose)
@@ -480,22 +509,21 @@ module Sim
             terrain: terrain,
             chargeable: !contact_id.nil?
           )
-          if fresh && !fresh[:wait] && fresh[:destination]
-            fresh_pose = destination_pose(fresh.merge(combatant: unit, destination: fresh[:destination]))
-            fresh_world = simultaneous_obstacles(
-              static, stayer_obstacles, intents,
-              except_id: unit[:entity_id],
-              mover_from: from,
-              mover_to: fresh_pose
-            )
-            if simultaneous_path_clear?(
-              unit, from, fresh_pose, fresh_world,
-              contact_id: contact_id,
-              motions: fresh.dig(:plan, :motion_sequence)
-            )
-              merge_replanned_intent!(intent, fresh)
-              return
-            end
+          if adopt_if_path_clear?(intent, fresh, static, stayer_obstacles, intents, unit, from, contact_id)
+            return
+          end
+
+          alt = Decisions::Movement.retarget_approach(
+            combatant: unit,
+            failed: intent,
+            obstacles: transit_world,
+            enemies: enemies,
+            terrain: terrain,
+            claimed_intents: intents
+          )
+          alt_id = alt && (alt[:charge_contact_id] || alt.dig(:nearest, :entity_id))
+          if adopt_if_path_clear?(intent, alt, static, stayer_obstacles, intents, unit, from, alt_id)
+            return
           end
 
           intent[:wait] = true
@@ -504,6 +532,26 @@ module Sim
             blocked_by_ally: true,
             blocker: intent.dig(:plan, :blocker) || { name: "союзник", entity_id: nil }
           )
+        end
+
+        def adopt_if_path_clear?(intent, fresh, static, stayer_obstacles, intents, unit, from, contact_id)
+          return false unless fresh && !fresh[:wait] && fresh[:destination]
+
+          fresh_pose = destination_pose(fresh.merge(combatant: unit, destination: fresh[:destination]))
+          fresh_world = simultaneous_obstacles(
+            static, stayer_obstacles, intents,
+            except_id: unit[:entity_id],
+            mover_from: from,
+            mover_to: fresh_pose
+          )
+          return false unless simultaneous_path_clear?(
+            unit, from, fresh_pose, fresh_world,
+            contact_id: contact_id,
+            motions: fresh.dig(:plan, :motion_sequence)
+          )
+
+          merge_replanned_intent!(intent, fresh)
+          true
         end
 
         def simultaneous_obstacles(static, stayer_obstacles, intents, except_id:, mover_from: nil, mover_to: nil)
@@ -621,7 +669,25 @@ module Sim
           intent[:budget] = fresh[:budget]
           intent[:march_meta] = fresh[:march_meta]
           intent[:charge_contact_id] = fresh[:charge_contact_id] if fresh.key?(:charge_contact_id)
+          intent[:nearest] = fresh[:nearest] if fresh[:nearest]
+          intent[:contact_slot] = fresh[:contact_slot] if fresh[:contact_slot]
+          intent[:approach_mode] = fresh[:approach_mode] if fresh[:approach_mode]
           intent[:wait] = false
+        end
+
+        def adopt_retargeted_intent!(intent, obstacles:, enemies:, terrain:, claimed_intents:)
+          fresh = Decisions::Movement.retarget_approach(
+            combatant: intent[:combatant],
+            failed: intent,
+            obstacles: obstacles,
+            enemies: enemies,
+            terrain: terrain,
+            claimed_intents: claimed_intents
+          )
+          return false unless fresh && !fresh[:wait] && fresh[:destination]
+
+          merge_replanned_intent!(intent, fresh)
+          true
         end
 
         # Thin adapter over the single Pathing::Obstacles#blocks_pose? kernel (SAT via
@@ -790,7 +856,7 @@ module Sim
           elsif plan[:turn] && plan[:turn][:cost].to_f > 0.05
             flank = plan[:turn][:delta].to_f.positive? ? "правый" : "левый"
             "#{combatant[:name]} разворачивается на #{flank} фланг и сближается с #{nearest[:name]}#{note}."
-          elsif plan[:maneuver] == :march
+          elsif plan[:maneuver].to_s == "march"
             "#{combatant[:name]} марширует к #{nearest[:name]}#{note}."
           else
             "#{combatant[:name]} сближается с #{nearest[:name]}#{note}."
@@ -876,7 +942,7 @@ module Sim
 
         def maneuver_kind(plan, wheel, turn, advance_spent, march_spent)
           return "turn" if turn && turn[:cost].to_f > 0.05
-          return "march" if plan[:maneuver] == :march || march_spent.to_f > 0.05
+          return "march" if plan[:maneuver].to_s == "march" || march_spent.to_f > 0.05
           return plan[:maneuver].to_s if plan[:maneuver]
           return "wheel" if wheel && wheel[:cost].to_f > 0.05
           return "advance" if advance_spent.to_f > 0.05

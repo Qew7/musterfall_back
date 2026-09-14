@@ -7,7 +7,7 @@ module Sim
           # rule: ground | movement | Default infantry movement AI: charge, flank/rear setup, simultaneous movement, pathfinding.
           module_function
 
-          def plan_entries(movers, enemies, claimed, terrain: [])
+          def plan_entries(movers, enemies, claimed, terrain: [], obstacles: [])
             living = Pathing.active_units(enemies)
             ranked = movers.sort_by do |combatant|
               in_arc = Decisions::Movement.enemies_in_front_arc(combatant, living)
@@ -18,73 +18,23 @@ module Sim
             end
 
             entries_by_id = {}
-
-            ranked.each do |combatant|
-              choice = choose_immediate_charge(combatant, living, claimed, terrain)
-              next unless choice
-
-              enemy = choice[:nearest]
-              side = choice[:contact_slot]
-              claimed[enemy[:entity_id]][side] = combatant[:entity_id]
-              entries_by_id[combatant[:entity_id]] = Decisions::Movement.build_entry(
-                combatant, enemy, side, choice[:approach_mode], chargeable: true
-              )
-            end
-
-            ranked.each do |combatant|
-              next if entries_by_id.key?(combatant[:entity_id])
-
-              choice = choose_natural_side(combatant, living, claimed, terrain)
-              next unless choice
-
-              enemy = choice[:nearest]
-              side = choice[:contact_slot]
-              claimed[enemy[:entity_id]][side] = combatant[:entity_id]
-              entries_by_id[combatant[:entity_id]] = Decisions::Movement.build_entry(
-                combatant, enemy, side, choice[:approach_mode], chargeable: choice.fetch(:chargeable, true)
-              )
-            end
-
-            ranked.each do |combatant|
-              next if entries_by_id.key?(combatant[:entity_id])
-
-              choice = choose_fallback_target(combatant, living, claimed, terrain)
-              next unless choice
-
-              enemy = choice[:nearest]
-              side = choice[:contact_slot]
-              claimed[enemy[:entity_id]][side] = combatant[:entity_id]
-              entries_by_id[combatant[:entity_id]] = Decisions::Movement.build_entry(
-                combatant, enemy, side, choice[:approach_mode], chargeable: choice.fetch(:chargeable, true)
-              )
-            end
-
-            ranked.each do |combatant|
-              next if entries_by_id.key?(combatant[:entity_id])
-
-              choice = choose_setup_flank_or_rear(combatant, living, claimed, terrain)
-              next unless choice
-
-              enemy = choice[:nearest]
-              side = choice[:contact_slot]
-              claimed[enemy[:entity_id]][side] = combatant[:entity_id]
-              entries_by_id[combatant[:entity_id]] = Decisions::Movement.build_entry(
-                combatant, enemy, side, choice[:approach_mode], chargeable: choice.fetch(:chargeable, true)
-              )
-            end
-
-            ranked.each do |combatant|
-              next if entries_by_id.key?(combatant[:entity_id])
-
-              choice = choose_flank_arc_facing(combatant, living, claimed, terrain)
-              next unless choice
-
-              enemy = choice[:nearest]
-              side = choice[:contact_slot]
-              claimed[enemy[:entity_id]][side] = combatant[:entity_id]
-              entries_by_id[combatant[:entity_id]] = Decisions::Movement.build_entry(
-                combatant, enemy, side, choice[:approach_mode], chargeable: choice.fetch(:chargeable, true)
-              )
+            2.times do
+              assign_reachable_wave(ranked, entries_by_id, claimed, living, terrain, obstacles) do |combatant, view|
+                choose_immediate_charge(combatant, living, view, terrain)
+              end
+              assign_reachable_wave(ranked, entries_by_id, claimed, living, terrain, obstacles) do |combatant, view|
+                choose_natural_side(combatant, living, view, terrain)
+              end
+              assign_reachable_wave(ranked, entries_by_id, claimed, living, terrain, obstacles) do |combatant, view|
+                choose_fallback_target(combatant, living, view, terrain)
+              end
+              assign_reachable_wave(ranked, entries_by_id, claimed, living, terrain, obstacles) do |combatant, view|
+                choose_setup_flank_or_rear(combatant, living, view, terrain)
+              end
+              assign_reachable_wave(ranked, entries_by_id, claimed, living, terrain, obstacles) do |combatant, view|
+                choose_flank_arc_facing(combatant, living, view, terrain)
+              end
+              Decisions::Movement.evict_stolen_sides!(entries_by_id, claimed)
             end
 
             ranked.filter_map { |combatant| entries_by_id[combatant[:entity_id]] }.each do |entry|
@@ -92,9 +42,32 @@ module Sim
             end
           end
 
+          def assign_reachable_wave(ranked, entries_by_id, claimed, living, terrain, obstacles)
+            ranked.each do |combatant|
+              next if entries_by_id.key?(combatant[:entity_id])
+
+              rejected = Hash.new { |hash, key| hash[key] = {} }
+              loop do
+                choice = yield combatant, Decisions::Movement.claimed_with(claimed, rejected)
+                break unless choice
+
+                entry = Decisions::Movement.reserve_side_if_reached(
+                  combatant, choice, claimed,
+                  obstacles: obstacles, enemies: living, terrain: terrain
+                )
+                if entry
+                  entries_by_id[combatant[:entity_id]] = entry
+                  break
+                end
+
+                rejected[choice[:nearest][:entity_id]][choice[:contact_slot].to_s] = true
+              end
+            end
+          end
+
           # Nearby front claimers settle first; later groups path around their landings.
-          def plan_groups(movers, enemies, claimed, terrain: [])
-            entries = plan_entries(movers, enemies, claimed, terrain: terrain)
+          def plan_groups(movers, enemies, claimed, terrain: [], obstacles: [])
+            entries = plan_entries(movers, enemies, claimed, terrain: terrain, obstacles: obstacles)
             contact, later = entries.partition { |entry| moves_first?(entry) }
             groups = contact.group_by { |entry| entry[:nearest][:entity_id] }.map do |_id, group|
               { entries: group }
@@ -291,7 +264,7 @@ module Sim
               budget: budget,
               obstacles: obstacles,
               contact_id: contact_id,
-              goal_unit: charging ? nearest : nil,
+              goal_unit: nearest,
               terrain: terrain,
               flying: false,
               # Charge already spends ×2; march on top would be ×4.
@@ -314,7 +287,7 @@ module Sim
                   budget: budget,
                   obstacles: obstacles,
                   contact_id: nil,
-                  goal_unit: nil,
+                  goal_unit: nearest,
                   terrain: terrain,
                   flying: false,
                   march_allowed: march_meta[:march].to_s == "active"

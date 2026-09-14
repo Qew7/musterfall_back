@@ -333,4 +333,97 @@ class SimBattleMovementManeuversTest < ActiveSupport::TestCase
     assert_equal 2, actor[:files]
     assert_equal 5, actor[:ranks]
   end
+
+  test "a column turns onto the wider face when the corridor fits and the enemy can charge" do
+    actor = BattleScenarios.combatant(
+      entity_id: "unit-col", x: 10.0, y: 12.0, facing: 90.0, movement: 4.0,
+      base_width: 2.0, base_depth: 5.0, files: 2, ranks: 5, frontage: 5
+    )
+    enemy = BattleScenarios.enemy(
+      entity_id: "unit-en", x: 18.0, y: 12.0, facing: 180.0, movement: 4.0,
+      base_width: 4.0, base_depth: 2.0
+    )
+    world = Pathing::Obstacles.merge([ actor, enemy ], [])
+
+    assert Pathing.widening_turn?(actor, enemy, world, 4.0, contact_id: enemy[:entity_id])
+
+    intent = Sim::Battle::Rules::Ground::Movement.build_approach_intent(
+      combatant: actor, nearest: enemy, obstacles: world, enemies: [ enemy ],
+      contact_slot: "front", terrain: []
+    )
+    landed = BF.merge_footprint(actor, intent[:destination])
+
+    assert intent[:plan][:turn]
+    assert_in_delta 0.0, landed[:facing], 15.0
+    assert_in_delta 5.0, landed[:base_width], 0.001
+    assert_equal 5, landed[:files]
+    assert_equal 2, landed[:ranks]
+  end
+
+  test "a column stays narrow when the corridor is thinner than the restored front" do
+    actor = BattleScenarios.combatant(
+      entity_id: "unit-col", x: 10.0, y: 12.0, facing: 90.0, movement: 4.0,
+      base_width: 2.0, base_depth: 5.0, files: 2, ranks: 5, frontage: 5
+    )
+    enemy = BattleScenarios.enemy(
+      entity_id: "unit-en", x: 18.0, y: 12.0, facing: 180.0, movement: 4.0,
+      base_width: 4.0, base_depth: 2.0
+    )
+    north = BattleScenarios.terrain(
+      id: "lake-n", type: "lake", x: 14.0, y: 8.0, width: 4.0, depth: 4.0
+    )
+    south = BattleScenarios.terrain(
+      id: "lake-s", type: "lake", x: 14.0, y: 16.0, width: 4.0, depth: 4.0
+    )
+    world = Pathing::Obstacles.merge([ actor, enemy ], [ north, south ])
+
+    refute Pathing.widening_turn?(actor, enemy, world, 4.0, contact_id: enemy[:entity_id])
+  end
+
+  test "a column widens toward an enemy who is not facing us when we can charge next turn" do
+    actor = BattleScenarios.combatant(
+      entity_id: "unit-col", x: 10.0, y: 12.0, facing: 90.0, movement: 4.0,
+      base_width: 2.0, base_depth: 5.0, files: 2, ranks: 5, frontage: 5
+    )
+    enemy = BattleScenarios.enemy(
+      entity_id: "unit-en", x: 18.0, y: 12.0, facing: 0.0, movement: 4.0,
+      base_width: 4.0, base_depth: 2.0
+    )
+    world = Pathing::Obstacles.merge([ actor, enemy ], [])
+
+    refute BF.in_front_arc?(enemy, actor, enemy[:facing])
+    assert Pathing.widening_turn?(actor, enemy, world, 4.0, contact_id: enemy[:entity_id])
+  end
+
+  test "a friend in the corridor does not block a widening turn" do
+    actor = BattleScenarios.combatant(
+      entity_id: "unit-col", x: 10.0, y: 12.0, facing: 90.0, movement: 4.0,
+      base_width: 2.0, base_depth: 5.0, files: 2, ranks: 5, frontage: 5
+    )
+    friend = BattleScenarios.combatant(
+      entity_id: "hero-1", x: 14.0, y: 12.0, facing: 90.0,
+      base_width: 1.0, base_depth: 1.0, files: 1, ranks: 1
+    )
+    enemy = BattleScenarios.enemy(
+      entity_id: "unit-en", x: 20.0, y: 12.0, facing: 180.0, movement: 4.0,
+      base_width: 4.0, base_depth: 2.0
+    )
+    world = Pathing::Obstacles.merge([ actor, friend, enemy ], [])
+
+    assert Pathing.widening_turn?(actor, enemy, world, 4.0, contact_id: enemy[:entity_id])
+  end
+
+  test "a column facing a distant enemy does not spend a turn to widen" do
+    actor = BattleScenarios.combatant(
+      entity_id: "unit-col", x: 6.0, y: 12.0, facing: 90.0, movement: 4.0,
+      base_width: 2.0, base_depth: 5.0, files: 2, ranks: 5, frontage: 5
+    )
+    enemy = BattleScenarios.enemy(
+      entity_id: "unit-en", x: 34.0, y: 12.0, facing: 0.0, movement: 4.0,
+      base_width: 4.0, base_depth: 2.0
+    )
+    world = Pathing::Obstacles.merge([ actor, enemy ], [])
+
+    refute Pathing.widening_turn?(actor, enemy, world, 4.0, contact_id: enemy[:entity_id])
+  end
 end
