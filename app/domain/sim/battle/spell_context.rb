@@ -281,7 +281,13 @@ module Sim
         return nil unless pose
 
         apply_enemy_facing!(pose)
-        summon = SpellWorld.summon!(side: acting_side, kind: kind, pose: pose, expires: expires)
+        summon = SpellWorld.summon!(
+          side: acting_side,
+          kind: kind,
+          pose: pose,
+          expires: expires,
+          all_combatants: acting_side[:combatants] + target_side[:combatants]
+        )
         summon[:current_health] = [ summon[:current_health], count.to_i ].min if count.to_i.positive?
         record_summon!(summon)
       end
@@ -304,7 +310,8 @@ module Sim
           side: acting_side,
           source: source,
           pose: pose,
-          remaining_turns: remaining_turns
+          remaining_turns: remaining_turns,
+          all_combatants: acting_side[:combatants] + target_side[:combatants]
         )
         record_summon!(summon, remaining_turns: remaining_turns)
       end

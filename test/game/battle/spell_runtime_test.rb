@@ -218,6 +218,34 @@ class SimBattleSpellRuntimeTest < ActiveSupport::TestCase
     assert_empty player[:roster]
   end
 
+  test "a new summon does not reuse a living summon's entity_id" do
+    left = { side_key: "left", combatants: [] }
+    right = { side_key: "right", combatants: [] }
+    occupied = -> { left[:combatants] + right[:combatants] }
+    first = Sim::Battle::SpellWorld.summon!(
+      side: left, kind: "zombies", pose: { x: 8.0, y: 8.0, facing: 0.0 }, all_combatants: occupied.call
+    )
+    second = Sim::Battle::SpellWorld.summon!(
+      side: left, kind: "zombies", pose: { x: 14.0, y: 8.0, facing: 0.0 }, all_combatants: occupied.call
+    )
+    other = Sim::Battle::SpellWorld.summon!(
+      side: right, kind: "spectral_hounds", pose: { x: 28.0, y: 8.0, facing: 180.0 }, all_combatants: occupied.call
+    )
+
+    assert_equal "summon-1", first[:entity_id]
+    assert_equal "summon-2", second[:entity_id]
+    assert_equal "summon-3", other[:entity_id]
+
+    left[:combatants].reject! { |entry| entry[:entity_id] == first[:entity_id] }
+    third = Sim::Battle::SpellWorld.summon!(
+      side: left, kind: "zombies", pose: { x: 20.0, y: 8.0, facing: 0.0 }, all_combatants: occupied.call
+    )
+
+    assert_equal "summon-4", third[:entity_id]
+    assert_equal [ "summon-2", "summon-4" ], left[:combatants].map { |entry| entry[:entity_id] }
+    assert_equal [ "summon-3" ], right[:combatants].map { |entry| entry[:entity_id] }
+  end
+
   test "summons and teleports face the nearest enemy at destination" do
     host = BattleScenarios.combatant(entity_id: "mage", x: 8.0, y: 12.0, spell: 10)
     ally = BattleScenarios.combatant(entity_id: "ally", x: 12.0, y: 12.0)
@@ -637,7 +665,7 @@ class SimBattleSpellRuntimeTest < ActiveSupport::TestCase
 
   test "timed summons vanish after remaining player turns" do
     clone = BattleScenarios.combatant(
-      entity_id: "summon-left-1",
+      entity_id: "summon-1",
       name: "Двойник (Мечники)",
       summoned: true,
       summon_kind: "doppelganger",
@@ -654,7 +682,7 @@ class SimBattleSpellRuntimeTest < ActiveSupport::TestCase
 
     second = Sim::Battle::Turn.play(round_number: 1, acting_side: acting, target_side: target, rng: Sim::Rng::Seeded.new(2), terrain: [])
     refute acting[:combatants].include?(clone)
-    expire = second[:phases].flat_map { |phase| phase[:actions] }.find { |action| action[:outcome] == "expired" && Array(action[:summon_ids]).include?("summon-left-1") }
+    expire = second[:phases].flat_map { |phase| phase[:actions] }.find { |action| action[:outcome] == "expired" && Array(action[:summon_ids]).include?("summon-1") }
     assert expire
     assert_match(/Двойник/, expire[:summary])
   end

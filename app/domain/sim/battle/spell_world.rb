@@ -87,9 +87,9 @@ module Sim
         nil
       end
 
-      def summon!(side:, kind:, pose:, expires: :battle)
+      def summon!(side:, kind:, pose:, expires: :battle, all_combatants: nil)
         profile = SUMMONS.fetch(kind.to_s)
-        id = next_summon_id(side)
+        id = next_summon_id(all_combatants || side[:combatants])
         health = profile.fetch(:health)
         models = profile.fetch(:models)
         model_health = (health.to_f / models).ceil
@@ -146,9 +146,9 @@ module Sim
         combatant
       end
 
-      def clone_combatant!(side:, source:, pose:, remaining_turns:)
+      def clone_combatant!(side:, source:, pose:, remaining_turns:, all_combatants: nil)
         copy = Marshal.load(Marshal.dump(source))
-        id = next_summon_id(side)
+        id = next_summon_id(all_combatants || side[:combatants])
         copy[:entity_id] = id
         copy[:name] = "Двойник (#{source[:name]})"
         copy[:x] = pose[:x]
@@ -206,8 +206,11 @@ module Sim
       end
       private_class_method :next_terrain_id
 
-      def next_summon_id(side)
-        "summon-#{side[:side_key]}-#{Array(side[:combatants]).count { |entry| entry[:summoned] } + 1}"
+      def next_summon_id(combatants)
+        sequence = Array(combatants).filter_map { |entry|
+          entry[:entity_id].to_s[/\Asummon-(\d+)\z/, 1]&.to_i
+        }.max.to_i + 1
+        "summon-#{sequence}"
       end
       private_class_method :next_summon_id
     end

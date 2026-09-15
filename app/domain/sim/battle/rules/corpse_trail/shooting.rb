@@ -34,7 +34,12 @@ module Sim
             return unless pose
 
             pose[:facing] = facing_toward_nearest_enemy(pose, target_side[:combatants])
-            summoned = SpellWorld.summon!(side: acting_side, kind: SUMMON_KIND, pose: pose)
+            summoned = SpellWorld.summon!(
+              side: acting_side,
+              kind: SUMMON_KIND,
+              pose: pose,
+              all_combatants: all_combatants
+            )
             action[:summon_ids] = Array(action[:summon_ids]) + [ summoned[:entity_id] ]
             ActionResult.append_clause!(action, "призван отряд «#{summoned[:name]}»")
             action[:details] = Array(action[:details]) + [
