@@ -8,7 +8,19 @@ module Sim
       TERRAIN_WRAP_PAD = 0.35
       ObstacleKernel = Struct.new(:id, :x, :y, :hw, :hd, :c, :s, :radius, :source)
 
+      POSE_KEYS = %i[
+        entity_id x y facing
+        base_width base_depth width depth
+        files ranks frontage movement
+      ].freeze
+
       module_function
+
+      def geometry_pose(unit)
+        return unit unless unit
+
+        POSE_KEYS.each_with_object({}) { |key, hash| hash[key] = unit[key] if unit.key?(key) }
+      end
 
       # Units + impassable terrain OBBs for collision.
       def merge_obstacles(unit_obstacles, terrain = [])
@@ -17,6 +29,8 @@ module Sim
 
       # Find a clear route to the claimed contact face and express it as maneuvers.
       def plan_approach(origin:, goal_point:, budget:, obstacles:, contact_id: nil, goal_unit: nil, terrain: [], flying: false, march_allowed: false)
+        origin = geometry_pose(origin)
+        goal_unit = geometry_pose(goal_unit) if goal_unit
         world = Obstacles.coerce(obstacles)
         anchor = Route.anchor(
           origin: origin,

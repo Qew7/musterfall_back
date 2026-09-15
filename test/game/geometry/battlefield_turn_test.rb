@@ -3,6 +3,11 @@ require "test_helper"
 class SimGeometryBattlefieldTurnTest < ActiveSupport::TestCase
   BF = Sim::Geometry::Battlefield
 
+  test "normalize_facing treats nil as 0" do
+    assert_in_delta 0.0, BF.normalize_facing(nil), 0.001
+    assert_in_delta 90.0, BF.normalize_facing(90), 0.001
+  end
+
   test "turn right costs half of base MV, keeps the center, and swaps the tray onto the old flank" do
     unit = BattleScenarios.combatant(
       x: 8.0,

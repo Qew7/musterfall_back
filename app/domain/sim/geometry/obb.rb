@@ -1,6 +1,6 @@
 module Sim
   module Geometry
-    # Allocation-free 2D OBB kernel (SAT overlap + clamp distance).
+    # 2D OBB kernel (SAT overlap + clamp distance).
     # Optional C implementation in ext/sim_obb loads as Obb::Native.
     module Obb
       EPS = 1.0e-12
@@ -132,7 +132,17 @@ module Sim
   end
 end
 
-begin
-  require File.expand_path("../../../../ext/sim_obb/sim_obb", __dir__)
-rescue LoadError
+mode = ENV.fetch("SIM_OBB_MODE", "auto")
+raise ArgumentError, "SIM_OBB_MODE must be auto, ruby or native" unless %w[auto ruby native].include?(mode)
+
+unless mode == "ruby"
+  begin
+    require File.expand_path("../../../../ext/sim_obb/sim_obb", __dir__)
+    unless Sim::Geometry::Obb::Native.respond_to?(:segments_clear)
+      Sim::Geometry::Obb.send(:remove_const, :Native)
+      raise LoadError, "OBB extension is stale; rebuild with bin/rails sim:compile_obb"
+    end
+  rescue LoadError => error
+    raise LoadError, "Native OBB unavailable (bin/rails sim:compile_obb): #{error.message}" if mode == "native"
+  end
 end

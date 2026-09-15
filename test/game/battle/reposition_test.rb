@@ -228,6 +228,60 @@ class SimBattleRepositionTest < ActiveSupport::TestCase
            "advance should respect MV budget, not teleport"
   end
 
+  test "reposition seekers do not walk into a standing allied seeker tray" do
+    # matchup 679 R1: kamikaze unit-10 and goblin archers unit-21, both left seekers.
+    kami = missile_host(
+      entity_id: "unit-10",
+      name: "Катапульта-камикадзе",
+      x: 5.0,
+      y: 16.0,
+      facing: 0.0,
+      base_width: 2.0,
+      base_depth: 2.0,
+      movement: 2.0,
+      initiative: 10,
+      ranged: 4
+    )
+    goblins = missile_host(
+      entity_id: "unit-21",
+      name: "Гоблины-лучники",
+      x: 8.0,
+      y: 13.0,
+      facing: 0.0,
+      base_width: 5.0,
+      base_depth: 3.0,
+      movement: 4.0,
+      initiative: 1,
+      ranged: 5
+    )
+    enemy_unit = combatant(
+      entity_id: "unit-29",
+      name: "Отряд грабителей",
+      x: 30.0,
+      y: 15.0,
+      facing: 180.0,
+      base_width: 5.0,
+      base_depth: 2.0,
+      melee: 4,
+      ranged: 0,
+      movement: 3,
+      side_index: 1
+    )
+
+    acting_side = { player_id: "p1", combatants: [ kami, goblins ] }
+    target_side = { player_id: "p2", combatants: [ enemy_unit ] }
+    Sim::Battle::Phases::Movement.play(
+      acting_side: acting_side,
+      target_side: target_side,
+      round_number: 1
+    )
+
+    refute Sim::Geometry::Obb.overlap_units?(kami, goblins),
+           "kami=(#{kami[:x]},#{kami[:y]}) f#{kami[:facing]} ∩ goblins=(#{goblins[:x]},#{goblins[:y]})"
+    assert_operator Sim::Geometry::Battlefield.distance_between_units(kami, goblins),
+                    :>=, Sim::Battle::Pathing::CONTACT
+  end
+
   test "waiting reposition seeker still blocks subsequent ally seekers" do
     contact = Sim::Battle::Pathing::CONTACT
     front = treeman_seeker(entity_id: "front", x: 7, y: 8, initiative: 10, row: "front")

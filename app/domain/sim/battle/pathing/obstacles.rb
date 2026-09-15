@@ -15,6 +15,8 @@ module Sim
           terrain_type: "edge",
           obstacle_kind: :terrain
         }.freeze
+        BOARD_W = Geometry::Battlefield::CONFIG[:width].to_f
+        BOARD_H = Geometry::Battlefield::CONFIG[:height].to_f
 
         def self.merge(units, terrain = [])
           new(Pathing.merge_obstacles(units, terrain))
@@ -44,8 +46,7 @@ module Sim
         end
 
         def initialize(entries)
-          @entries = Array(entries).select { |entry| usable?(entry) }
-          @kernels = @entries.map { |entry| compile(entry) }
+          remember_kernels(Array(entries).select { |entry| usable?(entry) }.map { |entry| compile(entry) })
         end
 
         # Build directly from already-compiled kernels — skips coerce/compile so
@@ -80,16 +81,22 @@ module Sim
           self.class.from_compiled(@kernels + other_kernels)
         end
 
-        def first_blocker(pose, contact_id: nil)
+        def first_blocker(pose, contact_id: nil, x: pose[:x], y: pose[:y], facing: pose[:facing])
+          px = x.to_f
+          py = y.to_f
+          phw, phd = cached_half(pose)
+          pc, ps = Geometry::Obb.trig(facing)
+          if Geometry::Obb.native?
+            return decode_hit(native_hit(px, py, phw, phd, pc, ps, pose[:entity_id], contact_id, board: true))
+          end
+
+          unless x == pose[:x] && y == pose[:y] && facing == pose[:facing]
+            pose = pose.merge(x: px, y: py, facing: facing)
+          end
           return BATTLEFIELD_EDGE unless Geometry::Battlefield.tray_on_battlefield?(pose)
 
-          px = pose[:x].to_f
-          py = pose[:y].to_f
-          phw, phd = Geometry::Obb.half_sizes(pose)
-          pc, ps = Geometry::Obb.trig(pose[:facing])
-          pr = Math.hypot(phw, phd) + Pathing::CONTACT
           pid = pose[:entity_id]
-
+          pr = Math.hypot(phw, phd) + Pathing::CONTACT
           @kernels.each do |kernel|
             next if kernel.id == pid
 
@@ -110,20 +117,32 @@ module Sim
         end
 
         def translation_clear?(mover, from, to, contact_id: nil)
-          start = mover.merge(x: from[:x], y: from[:y], facing: from[:facing])
-          finish = mover.merge(x: to[:x], y: to[:y], facing: to[:facing])
-          return false unless Geometry::Battlefield.tray_on_battlefield?(start)
-          return false unless Geometry::Battlefield.tray_on_battlefield?(finish)
+          from_facing = (from[:facing] || mover[:facing]).to_f
+          to_facing = (to[:facing] || mover[:facing]).to_f
+          phw, phd = cached_half(mover)
+          pid = mover[:entity_id]
+          if Geometry::Obb.native?
+            fc, fs = Geometry::Obb.trig(from_facing)
+            tc, ts = Geometry::Obb.trig(to_facing)
+            return false unless native_on_board?(from[:x].to_f, from[:y].to_f, phw, phd, fc, fs)
+            return false unless native_on_board?(to[:x].to_f, to[:y].to_f, phw, phd, tc, ts)
+          else
+            start = mover.merge(x: from[:x], y: from[:y], facing: from_facing)
+            finish = mover.merge(x: to[:x], y: to[:y], facing: to_facing)
+            return false unless Geometry::Battlefield.tray_on_battlefield?(start)
+            return false unless Geometry::Battlefield.tray_on_battlefield?(finish)
+          end
 
           length = Geometry::Battlefield.distance_between(from, to)
-          phw, phd = Geometry::Obb.half_sizes(mover)
-          pc, ps = Geometry::Obb.trig(to[:facing])
           mx = (from[:x].to_f + to[:x].to_f) * 0.5
           my = (from[:y].to_f + to[:y].to_f) * 0.5
           swept_hd = phd + (length * 0.5)
-          pid = mover[:entity_id]
-          pr = Math.hypot(phw, swept_hd) + Pathing::CONTACT
+          pc, ps = Geometry::Obb.trig(to_facing)
+          if Geometry::Obb.native?
+            return native_hit(mx, my, phw, swept_hd, pc, ps, pid, contact_id, board: false).nil?
+          end
 
+          pr = Math.hypot(phw, swept_hd) + Pathing::CONTACT
           @kernels.each do |kernel|
             next if kernel.id == pid
 
@@ -142,12 +161,38 @@ module Sim
         def segment_clear?(mover, from, to, contact_id: nil)
           return true if same_point?(from, to)
 
-          heading = Geometry::Battlefield.heading_to(from, to)
-          start = mover.merge(x: from[:x], y: from[:y], facing: heading)
-          dest = mover.merge(x: to[:x], y: to[:y], facing: heading)
-          return false if first_blocker(dest, contact_id: contact_id)
+          if Geometry::Obb.native?
+            phw, phd = cached_half(mover)
+            skip = @index_by_id.fetch(mover[:entity_id], -1)
+            contact = contact_id ? @index_by_id.fetch(contact_id, -1) : -1
+            return Geometry::Obb::Native.segment_clear?(
+              from[:x].to_f, from[:y].to_f, to[:x].to_f, to[:y].to_f, phw, phd,
+              @packed, skip, contact, Pathing::CONTACT, BOARD_W, BOARD_H
+            )
+          end
 
+          heading = Geometry::Battlefield.heading_to(from, to)
+          return false if first_blocker(mover, contact_id: contact_id, x: to[:x], y: to[:y], facing: heading)
+
+          start = { x: from[:x], y: from[:y], facing: heading }
+          dest = { x: to[:x], y: to[:y], facing: heading }
           translation_clear?(mover, start, dest, contact_id: contact_id)
+        end
+
+        def segments_open_mask(mover, from, dests, contact_id)
+          return "" if dests.empty?
+          return dests.map { |dest| segment_clear?(mover, from, dest, contact_id: contact_id) ? "\x01" : "\x00" }.join unless Geometry::Obb.native?
+
+          phw, phd = cached_half(mover)
+          skip = @index_by_id.fetch(mover[:entity_id], -1)
+          contact = contact_id ? @index_by_id.fetch(contact_id, -1) : -1
+          coordinates = []
+          dests.each { |dest| coordinates << dest[:x].to_f << dest[:y].to_f }
+          packed = coordinates.pack("d*")
+          Geometry::Obb::Native.segments_clear(
+            from[:x].to_f, from[:y].to_f, phw, phd, @packed, skip, contact, Pathing::CONTACT,
+            BOARD_W, BOARD_H, packed
+          )
         end
 
         # First hop from the live pose: wheel+translate, or turn+translate when the
@@ -180,11 +225,22 @@ module Sim
           delta = Geometry::Battlefield.shortest_facing_delta(mover[:facing], heading)
           return true if delta.abs <= 0.05
 
+          if Geometry::Obb.native?
+            phw, phd = cached_half(mover)
+            pc, ps = Geometry::Obb.trig(mover[:facing])
+            skip = @index_by_id.fetch(mover[:entity_id], -1)
+            contact = contact_id ? @index_by_id.fetch(contact_id, -1) : -1
+            return Geometry::Obb::Native.wheel_clear?(
+              mover[:x].to_f, mover[:y].to_f, phw, phd, pc, ps,
+              mover[:facing].to_f, heading.to_f,
+              @packed, skip, contact, Pathing::CONTACT, BOARD_W, BOARD_H
+            )
+          end
+
           steps = [ [ 8, (delta.abs / 10).ceil ].max, 20 ].min
           steps.times do |index|
             pose = Geometry::Battlefield.wheel_pose(mover, delta * ((index + 1).to_f / steps))
-            sample = mover.merge(x: pose[:x], y: pose[:y], facing: pose[:facing])
-            return false if first_blocker(sample, contact_id: contact_id)
+            return false if first_blocker(mover, contact_id: contact_id, x: pose[:x], y: pose[:y], facing: pose[:facing])
           end
           true
         end
@@ -195,14 +251,19 @@ module Sim
           heading = Geometry::Battlefield.heading_to(from, to)
           dist = Geometry::Battlefield.distance_between(from, to)
           steps = [ [ 8, (dist / 0.25).ceil ].max, 32 ].min
+          fx = from[:x].to_f
+          fy = from[:y].to_f
+          dx = to[:x].to_f - fx
+          dy = to[:y].to_f - fy
           steps.times do |index|
             t = (index + 1).to_f / steps
-            pose = mover.merge(
-              x: from[:x] + ((to[:x] - from[:x]) * t),
-              y: from[:y] + ((to[:y] - from[:y]) * t),
+            hit = first_blocker(
+              mover,
+              contact_id: contact_id,
+              x: fx + (dx * t),
+              y: fy + (dy * t),
               facing: heading
             )
-            hit = first_blocker(pose, contact_id: contact_id)
             return hit if hit
           end
           nil
@@ -236,6 +297,8 @@ module Sim
         end
 
         def route_points(mover, contact_id: nil)
+          return native_route_points(mover, contact_id) if Geometry::Obb.native?
+
           seen = {}
           @kernels.filter_map do |kernel|
             next if kernel.id == mover[:entity_id]
@@ -258,8 +321,72 @@ module Sim
         private
 
         def init_from_compiled(kernels)
+          remember_kernels(kernels)
+        end
+
+        def remember_kernels(kernels)
           @kernels = kernels
           @entries = kernels.map(&:source)
+          if Geometry::Obb.native?
+            @index_by_id = {}
+            kernels.each_with_index { |kernel, index| @index_by_id[kernel.id] = index if kernel.id }
+            @packed = pack_kernels(kernels)
+          end
+          @half = {}
+        end
+
+        def pack_kernels(kernels)
+          kernels.flat_map do |kernel|
+            pad = terrain_kernel?(kernel) ? Pathing::TERRAIN_WRAP_PAD : Pathing::CONTACT
+            [ kernel.x, kernel.y, kernel.hw, kernel.hd, kernel.c, kernel.s, kernel.radius, pad ]
+          end.pack("d*")
+        end
+
+        def native_hit(px, py, phw, phd, pc, ps, pid, contact_id, board:)
+          skip = @index_by_id.fetch(pid, -1)
+          contact = contact_id ? @index_by_id.fetch(contact_id, -1) : -1
+          Geometry::Obb::Native.blocker_index(
+            px, py, phw, phd, pc, ps, @packed, skip, contact, Pathing::CONTACT,
+            board ? BOARD_W : -1.0, BOARD_H
+          )
+        end
+
+        def native_on_board?(px, py, phw, phd, pc, ps)
+          Geometry::Obb::Native.blocker_index(
+            px, py, phw, phd, pc, ps, "".freeze, -1, -1, Pathing::CONTACT, BOARD_W, BOARD_H
+          ) != -1
+        end
+
+        def native_route_points(mover, contact_id)
+          phw, phd = cached_half(mover)
+          pc, ps = Geometry::Obb.trig(mover[:facing])
+          skip = @index_by_id.fetch(mover[:entity_id], -1)
+          contact = contact_id ? @index_by_id.fetch(contact_id, -1) : -1
+          seen = {}
+          Geometry::Obb::Native.route_points(
+            phw, phd, pc, ps, @packed, skip, contact,
+            UNIT_WRAP_PAD, Pathing::TERRAIN_WRAP_PAD, BOARD_W, BOARD_H, Pathing::CONTACT
+          ).unpack("d*").each_slice(2).filter_map do |x, y|
+            key = [ x.round(2), y.round(2) ]
+            next if seen[key]
+
+            seen[key] = true
+            { x: x, y: y }
+          end
+        end
+
+        def cached_half(pose)
+          w = pose[:base_width] || pose[:width]
+          d = pose[:base_depth] || pose[:depth]
+          slot = (@half[w] ||= {})
+          slot[d] ||= Geometry::Obb.half_sizes(pose)
+        end
+
+        def decode_hit(hit)
+          return BATTLEFIELD_EDGE if hit == -1
+          return @kernels[hit].source if hit
+
+          nil
         end
 
         def usable?(entry)

@@ -1,6 +1,6 @@
-require "test_helper"
+require "sim_test_helper"
 
-class SimBattlePathingRouteTest < ActiveSupport::TestCase
+class SimBattlePathingRouteTest < SimTestCase
   BF = Sim::Geometry::Battlefield
   Pathing = Sim::Battle::Pathing
   Route = Sim::Battle::Pathing::Route

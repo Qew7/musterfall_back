@@ -72,9 +72,9 @@ module Sim
 
           melee_ids = physical_movers.map { |entry| entry[:entity_id] }.to_set
           seeker_units = seekers.reject { |entry| melee_ids.include?(entry[:entity_id]) }
-          seeker_ids = seeker_units.map { |entry| entry[:entity_id] }.to_set
-          # After melee moved, every non-seeker is a hard obstacle (including allies who just advanced).
-          reposition_obstacles = movement_obstacles(acting_side, target_side, seeker_ids, terrain)
+          # Reposition is sequential. Other seekers are still standing — their trays
+          # stay in the collision world. first_blocker skips the acting unit by id.
+          reposition_obstacles = movement_obstacles(acting_side, target_side, [], terrain)
           reposition_intents = []
 
           seeker_units.sort_by { |entry| -entry[:initiative].to_i }.each do |combatant|
@@ -87,7 +87,6 @@ module Sim
               terrain: terrain
             )
             unless intent
-              # Seekers are excluded from initial obstacles; a no-op still occupies its slot.
               reposition_obstacles = reposition_obstacles.reject { |entry| entry[:entity_id] == combatant[:entity_id] }
               reposition_obstacles << freeze_obstacle(combatant)
               next

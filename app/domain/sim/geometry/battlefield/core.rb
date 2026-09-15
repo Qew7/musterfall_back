@@ -7,7 +7,7 @@ module Sim
         end
 
         def normalize_facing(value)
-          ((value % 360) + 360) % 360
+          ((value.to_f % 360) + 360) % 360
         end
 
         def rotate_facing(facing, delta)

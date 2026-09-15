@@ -81,8 +81,17 @@ jobs:
         with:
           bundler-cache: true
 
+      - name: Compile native geometry
+        run: bundle exec rake sim:compile_obb
+
+      - name: Test Ruby geometry without Rails or PostgreSQL
+        env:
+          SIM_OBB_MODE: ruby
+        run: bundle exec ruby -Itest -e 'ARGV.each { |path| require_relative path }' test/game/battle/pathing_route_test.rb test/game/battle/pathing_obstacles_test.rb test/game/battle/obb_geometry_test.rb test/game/battle/route_search_test.rb
+
       - name: Run tests
         env:
+          SIM_OBB_MODE: native
           RAILS_ENV: test
           DATABASE_URL: postgres://postgres:postgres@localhost:5432
           # RAILS_MASTER_KEY: ${{ secrets.RAILS_MASTER_KEY }}

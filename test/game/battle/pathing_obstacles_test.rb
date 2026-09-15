@@ -1,6 +1,6 @@
-require "test_helper"
+require "sim_test_helper"
 
-class SimBattlePathingObstaclesTest < ActiveSupport::TestCase
+class SimBattlePathingObstaclesTest < SimTestCase
   BF = Sim::Geometry::Battlefield
   Obstacles = Sim::Battle::Pathing::Obstacles
 

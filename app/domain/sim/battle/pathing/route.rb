@@ -12,10 +12,12 @@ module Sim
           wrap = space.except(mover[:entity_id], goal[:entity_id], contact_id)
           return { points: [ start ], blocker: nil, complete: true } if same?(start, finish)
 
-          path = visible_path(mover, start, finish, wrap, contact_id)
-          hit = wrap.first_hit(mover, start, finish, contact_id: contact_id)
+          search = Search.new(mover, start, finish, wrap, contact_id)
+          path = search.call
           reached = path && same?(path.last, finish)
-          pack(mover, path, finish, wrap, contact_id, reached ? nil : hit)
+          hit = reached ? nil : wrap.first_hit(mover, start, finish, contact_id: contact_id)
+          points = taut(mover, path, wrap, contact_id, search: search)
+          { points: points, blocker: hit, complete: hit.nil? && same?(points.last, finish) }
         end
 
         def anchor(origin:, goal_point:, goal_unit:, contact_id:, **)
@@ -25,16 +27,7 @@ module Sim
           goal_point || goal_unit || origin
         end
 
-        def pack(mover, raw, finish, world, contact_id, blocker)
-          points = taut(mover, raw, world, contact_id)
-          {
-            points: points,
-            blocker: blocker,
-            complete: blocker.nil? && same?(points.last, finish)
-          }
-        end
-
-        def taut(mover, points, kernels, contact_id)
+        def taut(mover, points, kernels, contact_id, search: nil)
           world = Obstacles.coerce(kernels)
           return points if points.length <= 2
 
@@ -45,10 +38,17 @@ module Sim
             jump = finish_index
             while jump > index + 1
               visible = if index.zero?
-                world.first_segment_clear?(mover, points[jump], contact_id: contact_id) &&
-                  !receding_turn?(mover, points[jump], points.last, world, contact_id)
+                if search
+                  search.first_hop_open?(points[jump], points.last)
+                else
+                  first_hop_open?(world, mover, points[jump], points.last, contact_id)
+                end
               else
-                world.segment_clear?(mover, points[index], points[jump], contact_id: contact_id)
+                if search
+                  search.segment_open?(points[index], points[jump])
+                else
+                  world.segment_clear?(mover, points[index], points[jump], contact_id: contact_id)
+                end
               end
               break if visible
 
@@ -68,57 +68,9 @@ module Sim
           Obstacles.coerce(nil, kernels).first_hit(mover, from, to, contact_id: contact_id)
         end
 
-        def visible_path(mover, start, finish, world, contact_id)
-          nodes = [ start ]
-          world.route_points(mover, contact_id: contact_id).each do |vertex|
-            nodes << vertex unless same?(vertex, start) || same?(vertex, finish)
-          end
-          nodes << finish
-
-          return [ start, finish ] if world.first_segment_clear?(mover, finish, contact_id: contact_id)
-
-          edges = Array.new(nodes.length) { [] }
-          finish_index = nodes.length - 1
-          nodes.each_index do |i|
-            ((i + 1)...nodes.length).each do |j|
-              visible = if i.zero?
-                world.first_segment_clear?(mover, nodes[j], contact_id: contact_id) &&
-                  !receding_turn?(mover, nodes[j], finish, world, contact_id)
-              else
-                world.segment_clear?(mover, nodes[i], nodes[j], contact_id: contact_id)
-              end
-              next unless visible
-
-              weight = Geometry::Battlefield.distance_between(nodes[i], nodes[j])
-              weight += if i.zero?
-                first_hop_cost(mover, nodes[i], nodes[j], world, contact_id)
-              else
-                corner_turn_cost(mover, nodes[0], nodes[i], nodes[j])
-              end
-              edges[i] << [ j, weight ]
-              edges[j] << [ i, weight ]
-            end
-          end
-
-          if edges[0].empty?
-            (1...finish_index).each do |index|
-              next unless world.segment_clear?(mover, nodes[0], nodes[index], contact_id: contact_id)
-
-              weight = Geometry::Battlefield.distance_between(nodes[0], nodes[index])
-              weight += first_hop_cost(mover, nodes[0], nodes[index], world, contact_id)
-              edges[0] << [ index, weight ]
-              edges[index] << [ 0, weight ]
-            end
-          end
-
-          dist, prev = distances(nodes, edges, 0)
-          target = nodes.length - 1
-          return reconstruct(nodes, prev, target) unless dist[target].infinite?
-
-          nearest = nearest_index(nodes, dist, finish)
-          return [ start ] if nearest.nil? || nearest.zero?
-
-          reconstruct(nodes, prev, nearest)
+        def first_hop_open?(world, mover, vertex, finish, contact_id)
+          world.first_segment_clear?(mover, vertex, contact_id: contact_id) &&
+            !receding_turn?(mover, vertex, finish, world, contact_id)
         end
 
         def receding_turn?(mover, vertex, finish, world, contact_id)
@@ -145,71 +97,6 @@ module Sim
           else
             Geometry::Battlefield.wheel_cost(mover, mover[:facing], heading)
           end
-        end
-
-        def corner_turn_cost(mover, start, from, to)
-          incoming = Geometry::Battlefield.heading_to(start, from)
-          outgoing = Geometry::Battlefield.heading_to(from, to)
-          delta = Geometry::Battlefield.shortest_facing_delta(incoming, outgoing)
-          return 0.0 unless Geometry::Battlefield.turn_delta?(delta)
-
-          Geometry::Battlefield.turn_cost(mover)
-        end
-
-        def distances(nodes, edges, source)
-          dist = Array.new(nodes.length, Float::INFINITY)
-          prev = Array.new(nodes.length)
-          dist[source] = 0.0
-          visited = {}
-
-          nodes.length.times do
-            u = nil
-            best = Float::INFINITY
-            dist.each_with_index do |cost, index|
-              next if visited[index] || cost >= best
-
-              best = cost
-              u = index
-            end
-            break if u.nil? || best.infinite?
-
-            visited[u] = true
-            edges[u].each do |index, weight|
-              alt = dist[u] + weight
-              next unless alt < dist[index]
-
-              dist[index] = alt
-              prev[index] = u
-            end
-          end
-          [ dist, prev ]
-        end
-
-        def nearest_index(nodes, dist, finish)
-          best = nil
-          best_d = Float::INFINITY
-          finish_index = nodes.length - 1
-          nodes.each_index do |index|
-            next if index == finish_index
-            next if dist[index].infinite?
-
-            d = Geometry::Battlefield.distance_between(nodes[index], finish)
-            next unless d < best_d
-
-            best_d = d
-            best = index
-          end
-          best
-        end
-
-        def reconstruct(nodes, prev, target)
-          path = []
-          cursor = target
-          while cursor
-            path.unshift(nodes[cursor])
-            cursor = prev[cursor]
-          end
-          path
         end
 
         def point(entry)

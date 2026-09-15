@@ -1,6 +1,6 @@
-require "test_helper"
+require "sim_test_helper"
 
-class SimGeometryObbTest < ActiveSupport::TestCase
+class SimGeometryObbTest < SimTestCase
   BF = Sim::Geometry::Battlefield
   Obb = Sim::Geometry::Obb
   Pathing = Sim::Battle::Pathing
@@ -92,6 +92,78 @@ class SimGeometryObbTest < ActiveSupport::TestCase
     assert_in_delta 4.0, Obb.distance(*args), 0.0001
   end
 
+  test "native blocker_index matches Ruby first_blocker" do
+    skip "OBB C kernel not compiled (bin/rails sim:compile_obb)" unless Obb.native?
+
+    actor = BattleScenarios.combatant(x: 10.0, y: 12.0, facing: 0.0, base_width: 2.0, base_depth: 2.0)
+    target = BattleScenarios.enemy(x: 12.3, y: 12.0, facing: 180.0, base_width: 2.0, base_depth: 2.0)
+    world = Pathing::Obstacles.new([ actor, target ])
+
+    assert_nil world.first_blocker(actor, contact_id: target[:entity_id])
+    assert_equal target[:entity_id], world.first_blocker(actor)[:entity_id]
+  end
+
+  test "matchup 679 kamikaze dest is blocked when allied goblins are in the world" do
+    # Stored clip: unit-10 (5,16)->(6.96,15.96) ∩ unit-21 (8,13) 5x3. C/Ruby both see it.
+    actor = BattleScenarios.combatant(
+      entity_id: "unit-10", x: 5.0, y: 16.0, facing: 0.0, base_width: 2.0, base_depth: 2.0
+    )
+    ally = BattleScenarios.combatant(
+      entity_id: "unit-21", x: 8.0, y: 13.0, facing: 0.0, base_width: 5.0, base_depth: 3.0
+    )
+    dest = actor.merge(x: 6.96, y: 15.96, facing: 357.7)
+    world = Pathing::Obstacles.new([ actor, ally ])
+    empty = Pathing::Obstacles.new([ actor ])
+
+    assert Obb.overlap_units?(dest, ally)
+    assert_in_delta 0.5, Obb.distance_units(actor, ally), 0.05
+    assert_equal "unit-21", world.first_blocker(dest)[:entity_id]
+    refute world.segment_clear?(actor, { x: 5.0, y: 16.0 }, { x: 6.96, y: 15.96 })
+    assert empty.segment_clear?(actor, { x: 5.0, y: 16.0 }, { x: 6.96, y: 15.96 })
+  end
+
+  test "native segment_clear matches Ruby translation of a short hop" do
+    skip "OBB C kernel not compiled (bin/rails sim:compile_obb)" unless Obb.native?
+
+    actor = BattleScenarios.combatant(x: 8.0, y: 12.0, facing: 0.0, base_width: 2.0, base_depth: 2.0)
+    blocker = BattleScenarios.enemy(x: 20.0, y: 12.0, facing: 180.0, base_width: 4.0, base_depth: 4.0)
+    world = Pathing::Obstacles.new([ actor, blocker ])
+    from = { x: 8.0, y: 12.0 }
+    open_to = { x: 12.0, y: 12.0 }
+    blocked_to = { x: 20.0, y: 12.0 }
+
+    assert world.segment_clear?(actor, from, open_to)
+    refute world.segment_clear?(actor, from, blocked_to)
+  end
+
+  test "native wheel_clear matches the sampled Ruby wheel" do
+    skip "OBB C kernel not compiled (bin/rails sim:compile_obb)" unless Obb.native?
+
+    actor = BattleScenarios.combatant(x: 10.0, y: 12.0, facing: 0.0, base_width: 4.0, base_depth: 2.0)
+    house = BattleScenarios.terrain(id: "house", x: 12.5, y: 14.0, width: 3.0, depth: 3.0)
+    world = Pathing::Obstacles.merge([ actor ], [ house ])
+
+    [ 0.0, 45.0, 90.0, 135.0, -90.0, 180.0 ].each do |heading|
+      assert_equal ruby_wheel_clear?(world, actor, heading), world.wheel_clear?(actor, heading), heading
+    end
+  end
+
+  test "native route_points match the Ruby wrap vertices" do
+    skip "OBB C kernel not compiled (bin/rails sim:compile_obb)" unless Obb.native?
+
+    actor = BattleScenarios.combatant(
+      entity_id: "unit-1", x: 8.0, y: 10.0, facing: 20.0, base_width: 4.0, base_depth: 2.0
+    )
+    ally = BattleScenarios.combatant(
+      entity_id: "unit-2", x: 16.0, y: 12.0, facing: 180.0, base_width: 5.0, base_depth: 3.0
+    )
+    house = BattleScenarios.terrain(id: "house", x: 22.0, y: 8.0, width: 3.0, depth: 4.0)
+    world = Pathing::Obstacles.merge([ actor, ally ], [ house ])
+
+    assert_equal ruby_route_points(world, actor), world.route_points(actor)
+    assert_equal ruby_route_points(world, actor, "unit-2"), world.route_points(actor, contact_id: "unit-2")
+  end
+
   test "tray_on_battlefield matches corner containment" do
     rng = Random.new(1)
     width = BF::CONFIG[:width].to_f
@@ -112,5 +184,37 @@ class SimGeometryObbTest < ActiveSupport::TestCase
 
       assert_equal by_corners, BF.tray_on_battlefield?(pose), pose.inspect
     end
+  end
+
+  def ruby_wheel_clear?(world, mover, heading)
+    delta = BF.shortest_facing_delta(mover[:facing], heading)
+    return true if delta.abs <= 0.05
+
+    steps = [ [ 8, (delta.abs / 10).ceil ].max, 20 ].min
+    steps.times do |index|
+      pose = BF.wheel_pose(mover, delta * ((index + 1).to_f / steps))
+      return false if world.first_blocker(mover, x: pose[:x], y: pose[:y], facing: pose[:facing])
+    end
+    true
+  end
+
+  def ruby_route_points(world, mover, contact_id = nil)
+    seen = {}
+    world.kernels.filter_map do |kernel|
+      next if kernel.id == mover[:entity_id]
+      next if contact_id && kernel.id == contact_id
+
+      world.send(:minkowski_points, mover, kernel).filter_map do |vertex|
+        pose = BF.fit_tray_on_battlefield(mover.merge(x: vertex[:x], y: vertex[:y]))
+        next unless pose
+        next unless world.clear?(pose, contact_id: contact_id)
+
+        key = [ pose[:x].round(2), pose[:y].round(2) ]
+        next if seen[key]
+
+        seen[key] = true
+        { x: pose[:x], y: pose[:y] }
+      end
+    end.flatten
   end
 end

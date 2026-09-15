@@ -3,7 +3,7 @@ namespace :sim do
   task :compile_obb do
     dir = File.expand_path("../../ext/sim_obb", __dir__)
     Dir.chdir(dir) do
-      sh "ruby extconf.rb"
+      sh RbConfig.ruby, "extconf.rb"
       sh "make clean"
       sh "make"
     end
