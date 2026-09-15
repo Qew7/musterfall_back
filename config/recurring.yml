@@ -6,9 +6,15 @@ morning_balance_simulation: &morning_balance_simulation
   queue: balance
   schedule: "0 6,7,8,9 * * * Europe/Moscow"
 
+purge_old_battles: &purge_old_battles
+  class: PurgeOldBattlesJob
+  schedule: "0 3 * * 1 Europe/Moscow"
+
 development:
   balance_morning_simulation:
     <<: *morning_balance_simulation
+  purge_old_battles:
+    <<: *purge_old_battles
 
 production:
   clear_solid_queue_finished_jobs:
@@ -16,3 +22,6 @@ production:
     schedule: every hour at minute 12
   balance_morning_simulation:
     <<: *morning_balance_simulation
+  purge_old_battles:
+    <<: *purge_old_battles
+

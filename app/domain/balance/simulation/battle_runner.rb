@@ -22,7 +22,7 @@ module Balance
 
         loop do
           run.reload
-          break if run.stopping? || run.status == "stopped"
+          break if run.stopping? || run.status.in?(%w[stopped failed])
           break if run.limit_reached?
 
           play_one_battle!(run, catalog, rng: rng)
@@ -86,8 +86,13 @@ module Balance
         run.increment!(:battles_completed)
       rescue StandardError => error
         run.increment!(:battles_failed)
-        run.update!(error_message: error.message)
+        run.update!(error_message: format_error(error))
         run.update!(status: "failed", finished_at: Time.current) if run.battles_failed >= MAX_FAILURES
+      end
+
+      def format_error(error)
+        loc = error.backtrace&.first.to_s.sub("#{Rails.root}/", "")
+        "#{error.message} @ #{loc}"
       end
 
       def finalize!(run)

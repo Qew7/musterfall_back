@@ -21,4 +21,16 @@ class BalanceSimulationJobTest < ActiveJob::TestCase
     assert_equal "completed", run.status
     assert_equal 2, run.battles_completed
   end
+
+  test "records crash file and line" do
+    error = NoMethodError.new("undefined method `%' for nil:NilClass")
+    error.set_backtrace([ "#{Rails.root}/app/domain/sim/geometry/battlefield/core.rb:10:in `normalize_facing'" ])
+
+    text = Balance::Simulation::BattleRunner.format_error(error)
+
+    assert_equal(
+      "undefined method `%' for nil:NilClass @ app/domain/sim/geometry/battlefield/core.rb:10:in `normalize_facing'",
+      text
+    )
+  end
 end

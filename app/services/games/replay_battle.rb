@@ -73,7 +73,7 @@ module Games
 
     def present(matchup, fresh, battle)
       payload = camelize_battle(fresh.merge(matchup_id: matchup.id, seed: matchup.seed, battle_id: battle.id))
-      payload[:terrain] = camelize_terrain(fresh[:terrain])
+      payload["terrain"] = camelize_terrain(fresh[:terrain])
       payload
     end
 

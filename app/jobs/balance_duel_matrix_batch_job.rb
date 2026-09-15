@@ -29,7 +29,8 @@ class BalanceDuelMatrixBatchJob < ApplicationJob
         run.increment!(:matchups_completed)
       rescue StandardError => error
         run.increment!(:matchups_failed)
-        run.update!(error_message: error.message, status: "failed", finished_at: Time.current)
+        loc = error.backtrace&.first.to_s.sub("#{Rails.root}/", "")
+        run.update!(error_message: "#{error.message} @ #{loc}", status: "failed", finished_at: Time.current)
         break
       end
     end
