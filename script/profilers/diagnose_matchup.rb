@@ -1,5 +1,5 @@
 # Replay one RoundMatchup with call counts + coarse timers. No sim source changes.
-# docker exec musterfall-backend-1 bin/rails runner script/diagnose_matchup.rb 660
+# docker exec musterfall-backend-1 bin/rails runner script/profilers/diagnose_matchup.rb 660
 matchup_id = Integer(ARGV[0] || ENV.fetch("MATCHUP_ID", "660"))
 clock = -> { Process.clock_gettime(Process::CLOCK_MONOTONIC) }
 stats = Hash.new { |h, k| h[k] = { n: 0, t: 0.0 } }

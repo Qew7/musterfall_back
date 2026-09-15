@@ -36,6 +36,7 @@ gem "image_processing", "~> 1.2"
 gem "rack-cors"
 
 group :development, :test do
+  gem "stackprof", "~> 0.2", require: false
   gem "lefthook", require: false
   gem "leftovers", require: false
   # See https://guides.rubyonrails.org/debugging_rails_applications.html#debugging-with-the-debug-gem
