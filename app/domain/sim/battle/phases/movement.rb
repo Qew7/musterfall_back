@@ -139,7 +139,7 @@ module Sim
             next unless feature
 
             factor = Rules.for(:movement).terrain_damage_factor(combatant, feature)
-            damage = [ (feature[:entry_damage].to_f * factor).round, combatant[:current_health].to_i ].min
+            damage = [ (feature[:entry_damage].to_f * factor).round, combatant[:current_health].to_f ].min
             next unless damage.positive?
 
             combatant[:current_health] -= damage
@@ -837,7 +837,7 @@ module Sim
             facing: entry[:facing].to_f,
             base_width: entry[:base_width].to_f,
             base_depth: entry[:base_depth].to_f,
-            current_health: entry[:current_health].to_i
+            current_health: entry[:current_health].to_f
           )
         end
 

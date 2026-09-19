@@ -34,14 +34,14 @@ module Sim
 
           planned.each do |entry|
             host = hosts[entry[:host_id]]
-            next unless host && host[:current_health].to_i > 0 && !host[:is_routing]
+            next unless host && host[:current_health].to_f > 0 && !host[:is_routing]
 
             contributor = (host.dig(:contributors, :ranged) || []).find { |item| item[:entity_id] == entry[:actor_id] }
             next unless contributor
 
             actor = Decisions::MissileChoice.build_actor(host, contributor)
             target = target_side[:combatants].find { |enemy| enemy[:entity_id] == entry[:target_id] }
-            next unless target && target[:current_health].to_i > 0
+            next unless target && target[:current_health].to_f > 0
 
             unless Decisions::MissileChoice.valid_target?(actor, target, attack_type, all_combatants, terrain: terrain)
               selection = Decisions::Targeting.choose_target(

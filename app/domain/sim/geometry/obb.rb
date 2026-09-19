@@ -137,9 +137,16 @@ raise ArgumentError, "SIM_OBB_MODE must be auto, ruby or native" unless %w[auto 
 
 unless mode == "ruby"
   begin
-    require File.expand_path("../../../../ext/sim_obb/sim_obb", __dir__)
-    unless Sim::Geometry::Obb::Native.respond_to?(:segments_clear)
-      Sim::Geometry::Obb.send(:remove_const, :Native)
+    ext = File.expand_path("../../../../ext/sim_obb/sim_obb.#{RbConfig::CONFIG['DLEXT']}", __dir__)
+    require ext
+    # Zeitwerk reload unloads Native; the .so stays in $LOADED_FEATURES so require is a no-op.
+    unless Sim::Geometry::Obb.const_defined?(:Native, false)
+      $LOADED_FEATURES.delete(ext)
+      require ext
+    end
+    native = Sim::Geometry::Obb.const_defined?(:Native, false) && Sim::Geometry::Obb.const_get(:Native, false)
+    unless native.respond_to?(:segments_clear)
+      Sim::Geometry::Obb.send(:remove_const, :Native) if native
       raise LoadError, "OBB extension is stale; rebuild with bin/rails sim:compile_obb"
     end
   rescue LoadError => error

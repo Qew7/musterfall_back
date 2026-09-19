@@ -4,7 +4,7 @@ abilities = [
   { key: "bannerAura", name: "Banner Aura", category: "aura", description: "Если герой встроен в отряд, ML отряда +1." },
   { key: "disciplined", name: "Disciplined", category: "trait", description: "Порог проверки морали +1." },
   { key: "boarCharge", name: "Кабаний обход", category: "combat", description: "Фланговый или тыловой заряд: союзник с Ferocious в той же рубке получает +1 SK на этот раунд." },
-  { key: "corpseTrail", name: "Поднятие мёртвых", category: "combat", description: "Попадание призывает отряд поднятых мертвецов на свободном месте рядом с целью; смотрят на ближайшего врага." },
+  { key: "corpseTrail", name: "Поднятие мёртвых", category: "combat", description: "Попадание призывает отряд поднятых мертвецов на свободном месте: сначала рядом с целью, иначе на поле. Смотрят на ближайшего врага." },
   { key: "dodge", name: "Dodge", category: "trait", description: "Шанс попадания по этому отряду ×0.8." },
   { key: "slingCatapult", name: "Катапульта-камикадзе", category: "siege", description: "Перед выстрелом тратит 1 модель союзных расходников в 6″. Тогда атака идёт взрывным шаблоном. Без расходника — обычный выстрел." },
   { key: "fast", name: "Fast", category: "mobility", description: "Кавалерийский профиль: MV 7, база cavalry." },
@@ -133,15 +133,20 @@ def default_morale_for(attributes)
   5
 end
 
-# Cost in hundreds-ish from tier + stats + rules. Rounded to 25.
-def computed_template_cost(attributes)
-  tier = attributes.fetch(:kind) == "hero" ? "hero" : attributes.fetch(:recruit_tier)
-  mult = { "line" => 1.0, "elite" => 1.45, "rare" => 2.1, "hero" => 1.7 }.fetch(tier)
-  power = attributes.fetch(:melee) + (attributes.fetch(:ranged) * 1.2) + (attributes.fetch(:spell) * 1.3)
-  body = Math.sqrt(attributes.fetch(:models) * attributes.fetch(:model_health))
-  ability_factor = 1 + normalized_abilities_for(attributes).size * 0.08
-  raw = (4 + power) * body * (attributes.fetch(:skill) / 3.0) * Math.sqrt(attributes.fetch(:attacks)) * ability_factor * mult * 3.5
-  ((raw / 25.0).round * 25).clamp(50, 400)
+# Price the same default profile that will be persisted below.
+def template_cost_profile(attributes)
+  attributes.merge(
+    abilities: normalized_abilities_for(attributes),
+    model_class: attributes[:model_class] || default_model_class_for(attributes),
+    movement: attributes[:movement] || default_movement_for(attributes),
+    morale: attributes[:morale] || default_morale_for(attributes),
+    shooting_range: attributes[:shooting_range] || default_shooting_range_for(attributes),
+    shooting_template: attributes[:shooting_template] || default_shooting_template_for(attributes)
+  )
+end
+
+def computed_template_cost(attributes, reference_profiles:)
+  Balance::TemplateCost.compute(attributes, reference_profiles: reference_profiles)
 end
 
 factions = [
@@ -185,82 +190,84 @@ factions = [
 templates = [
   # ── Империя (empire) ───────────────────────────────────────
   # line
-  { template_key: "state_swords", kind: "unit", recruit_tier: "line", faction_slug: "empire", name: "Имперские мечники", cost: 8, models: 14, model_health: 1, width: 4, armor_type: "medium", weapon_type: "slash", melee: 4, ranged: 0, spell: 0, initiative: 3, abilities: [ "shieldwall" ], skill: 3, mounted: false, attacks: 1 },
-  { template_key: "halberdiers", kind: "unit", recruit_tier: "line", faction_slug: "empire", name: "Алебардисты", cost: 200, models: 14, model_health: 1, width: 4, armor_type: "light", weapon_type: "puncture", melee: 4, ranged: 0, spell: 0, initiative: 3, abilities: [ "antiLarge", "supportRank" ], skill: 4, mounted: false, attacks: 1 },
-  { template_key: "handgunners", kind: "unit", recruit_tier: "line", faction_slug: "empire", name: "Аркебузиры", cost: 9, models: 10, model_health: 1, width: 5, armor_type: "light", weapon_type: "ranged", melee: 3, ranged: 5, spell: 0, initiative: 4, abilities: [ "ranged", "armorPiercing" ], skill: 3, mounted: false, attacks: 1 },
+  { template_key: "state_swords", kind: "unit", recruit_tier: "line", faction_slug: "empire", name: "Имперские мечники", cost: nil, models: 14, model_health: 1, width: 4, armor_type: "medium", weapon_type: "slash", melee: 1, ranged: 0, spell: 0, initiative: 3, abilities: [ "shieldwall" ], skill: 3, mounted: false, attacks: 1 },
+  { template_key: "halberdiers", kind: "unit", recruit_tier: "line", faction_slug: "empire", name: "Алебардисты", cost: 200, models: 14, model_health: 1, width: 4, armor_type: "light", weapon_type: "puncture", melee: 1, ranged: 0, spell: 0, initiative: 3, abilities: [ "antiLarge", "supportRank" ], skill: 4, mounted: false, attacks: 1 },
+  { template_key: "handgunners", kind: "unit", recruit_tier: "line", faction_slug: "empire", name: "Аркебузиры", cost: nil, models: 10, model_health: 1, width: 5, armor_type: "light", weapon_type: "ranged", melee: 1, ranged: 1, spell: 0, initiative: 4, abilities: [ "ranged", "armorPiercing" ], skill: 3, mounted: false, attacks: 1 },
   # elite
-  { template_key: "outriders", kind: "unit", recruit_tier: "elite", faction_slug: "empire", name: "Аутрайдеры", cost: 225, models: 6, model_health: 2, width: 3, armor_type: "medium", weapon_type: "ranged", melee: 3, ranged: 5, spell: 0, initiative: 4, abilities: [ "ranged", "fast", "outrider" ], skill: 4, mounted: true, attacks: 1, shooting_range: 10, shooting_template: "common" },
+  { template_key: "outriders", kind: "unit", recruit_tier: "elite", faction_slug: "empire", name: "Аутрайдеры", cost: 225, models: 6, model_health: 2, width: 3, armor_type: "medium", weapon_type: "ranged", melee: 1, ranged: 1, spell: 0, initiative: 4, abilities: [ "ranged", "fast", "outrider" ], skill: 4, mounted: true, attacks: 1, shooting_range: 10, shooting_template: "common" },
   # rare
   { template_key: "great_cannon", kind: "unit", recruit_tier: "rare", faction_slug: "empire", name: "Большая пушка", cost: 225, models: 1, model_health: 10, width: 2, armor_type: "machine", weapon_type: "demolish", melee: 2, ranged: 7, spell: 0, initiative: 4, abilities: [ "ranged", "machine", "heavyBlast" ], skill: 2, mounted: false, attacks: 1, shooting_range: 10 },
-  { template_key: "sky_lancers", kind: "unit", recruit_tier: "rare", faction_slug: "empire", name: "Небесные копейщики", cost: 15, models: 6, model_health: 2, width: 3, armor_type: "heavy", weapon_type: "puncture", melee: 6, ranged: 0, spell: 0, initiative: 5, abilities: [ "flying", "momentumCharge" ], skill: 5, mounted: true, attacks: 1 },
+  { template_key: "sky_lancers", kind: "unit", recruit_tier: "rare", faction_slug: "empire", name: "Небесные копейщики", cost: nil, models: 6, model_health: 2, width: 3, armor_type: "heavy", weapon_type: "puncture", melee: 1, ranged: 0, spell: 0, initiative: 5, abilities: [ "flying", "momentumCharge" ], skill: 5, mounted: true, attacks: 1 },
   # heroes
-  { template_key: "captain_general", kind: "hero", recruit_tier: "line", faction_slug: "empire", name: "Генерал Империи", cost: 12, models: 1, model_health: 3, width: 1, armor_type: "heavy", weapon_type: "slash", melee: 4, ranged: 0, spell: 0, initiative: 5, abilities: [ "leader" ], skill: 5, mounted: false, attacks: 2 },
-  { template_key: "battle_wizard", kind: "hero", recruit_tier: "line", faction_slug: "empire", name: "Боевой маг", cost: 14, models: 1, model_health: 2, width: 1, armor_type: "magic", weapon_type: "magic", melee: 2, ranged: 4, spell: 5, initiative: 5, abilities: [ "wizard", "leader" ], skill: 5, mounted: false, attacks: 2 },
-  { template_key: "engineer_captain", kind: "hero", recruit_tier: "line", faction_slug: "empire", name: "Инженер-капитан", cost: 13, models: 1, model_health: 2, width: 1, armor_type: "light", weapon_type: "ranged", melee: 2, ranged: 5, spell: 0, initiative: 5, abilities: [ "ranged", "armorPiercing" ], skill: 4, mounted: false, attacks: 2, shooting_range: 10 },
+  { template_key: "captain_general", kind: "hero", recruit_tier: "line", faction_slug: "empire", name: "Генерал Империи", cost: nil, models: 1, model_health: 3, width: 1, armor_type: "heavy", weapon_type: "slash", melee: 1, ranged: 0, spell: 0, initiative: 5, abilities: [ "leader" ], skill: 5, mounted: false, attacks: 2 },
+  { template_key: "battle_wizard", kind: "hero", recruit_tier: "line", faction_slug: "empire", name: "Боевой маг", cost: nil, models: 1, model_health: 2, width: 1, armor_type: "magic", weapon_type: "magic", melee: 1, ranged: 1, spell: 5, initiative: 5, abilities: [ "wizard", "leader" ], skill: 5, mounted: false, attacks: 2 },
+  { template_key: "engineer_captain", kind: "hero", recruit_tier: "line", faction_slug: "empire", name: "Инженер-капитан", cost: nil, models: 1, model_health: 2, width: 1, armor_type: "light", weapon_type: "ranged", melee: 1, ranged: 1, spell: 0, initiative: 5, abilities: [ "ranged", "armorPiercing" ], skill: 4, mounted: false, attacks: 2, shooting_range: 10 },
 
   # ── Зеленокожие (greenskins) ───────────────────────────────
   # line
-  { template_key: "orc_brutes", kind: "unit", recruit_tier: "line", faction_slug: "greenskins", name: "Орки-громилы", cost: 8, models: 14, model_health: 1, width: 4, armor_type: "medium", weapon_type: "slash", melee: 4, ranged: 0, spell: 0, initiative: 3, abilities: [ "ferocious" ], skill: 3, mounted: false, attacks: 1 },
-  { template_key: "goblin_archers", kind: "unit", recruit_tier: "line", faction_slug: "greenskins", name: "Гоблины-лучники", cost: 55, models: 15, model_health: 1, width: 5, armor_type: "light", weapon_type: "ranged", melee: 2, ranged: 3, spell: 0, initiative: 4, abilities: [ "ranged", "skirmisher", "slingFodder" ], skill: 2, mounted: false, attacks: 1, shooting_template: "common" },
+  { template_key: "orc_brutes", kind: "unit", recruit_tier: "line", faction_slug: "greenskins", name: "Орки-громилы", cost: nil, models: 14, model_health: 1, width: 4, armor_type: "medium", weapon_type: "slash", melee: 2, ranged: 0, spell: 0, initiative: 3, abilities: [ "ferocious" ], skill: 3, mounted: false, attacks: 1 },
+  { template_key: "goblin_archers", kind: "unit", recruit_tier: "line", faction_slug: "greenskins", name: "Гоблины-лучники", cost: 55, models: 15, model_health: 1, width: 5, armor_type: "light", weapon_type: "ranged", melee: 1, ranged: 1, spell: 0, initiative: 4, abilities: [ "ranged", "skirmisher", "slingFodder" ], skill: 2, mounted: false, attacks: 1, shooting_template: "common" },
   # elite
-  { template_key: "boar_riders", kind: "unit", recruit_tier: "elite", faction_slug: "greenskins", name: "Наездники на кабанах", cost: 11, models: 6, model_health: 1, width: 3, armor_type: "heavy", weapon_type: "blunt", melee: 6, ranged: 0, spell: 0, initiative: 3, abilities: [ "fast", "boarCharge", "momentumCharge" ], skill: 4, mounted: false, attacks: 1 },
-  { template_key: "sling_catapult", kind: "unit", recruit_tier: "elite", faction_slug: "greenskins", name: "Катапульта-камикадзе", cost: 12, models: 1, model_health: 8, width: 2, armor_type: "machine", weapon_type: "demolish", melee: 1, ranged: 7, spell: 0, initiative: 4, abilities: [ "ranged", "machine", "slingCatapult" ], skill: 2, mounted: false, attacks: 1, shooting_template: "single" },
+  { template_key: "boar_riders", kind: "unit", recruit_tier: "elite", faction_slug: "greenskins", name: "Наездники на кабанах", cost: nil, models: 6, model_health: 1, width: 3, armor_type: "heavy", weapon_type: "blunt", melee: 2, ranged: 0, spell: 0, initiative: 3, abilities: [ "fast", "boarCharge", "momentumCharge" ], skill: 4, mounted: false, attacks: 1 },
+  { template_key: "sling_catapult", kind: "unit", recruit_tier: "elite", faction_slug: "greenskins", name: "Катапульта-камикадзе", cost: nil, models: 1, model_health: 8, width: 2, armor_type: "machine", weapon_type: "demolish", melee: 1, ranged: 7, spell: 0, initiative: 4, abilities: [ "ranged", "machine", "slingCatapult" ], skill: 2, mounted: false, attacks: 1, shooting_template: "single" },
   # rare
-  { template_key: "stone_trolls", kind: "unit", recruit_tier: "rare", faction_slug: "greenskins", name: "Каменные тролли", cost: 13, models: 3, model_health: 6, width: 3, armor_type: "heavy", weapon_type: "blunt", melee: 6, ranged: 0, spell: 0, initiative: 3, abilities: [ "regen", "lavaSpit" ], skill: 4, mounted: false, attacks: 2 },
+  { template_key: "stone_trolls", kind: "unit", recruit_tier: "rare", faction_slug: "greenskins", name: "Каменные тролли", cost: nil, models: 3, model_health: 6, width: 3, armor_type: "heavy", weapon_type: "blunt", melee: 2, ranged: 0, spell: 0, initiative: 3, abilities: [ "regen", "lavaSpit" ], skill: 4, mounted: false, attacks: 2 },
   # heroes
-  { template_key: "war_chief", kind: "hero", recruit_tier: "line", faction_slug: "greenskins", name: "Вождь орды", cost: 12, models: 1, model_health: 4, width: 1, armor_type: "heavy", weapon_type: "slash", melee: 5, ranged: 0, spell: 0, initiative: 5, abilities: [ "leader", "ferocious" ], skill: 5, mounted: false, attacks: 2 },
-  { template_key: "shaman", kind: "hero", recruit_tier: "line", faction_slug: "greenskins", name: "Шаман", cost: 14, models: 1, model_health: 2, width: 1, armor_type: "magic", weapon_type: "magic", melee: 2, ranged: 4, spell: 5, initiative: 5, abilities: [ "wizard" ], skill: 5, mounted: false, attacks: 2 },
-  { template_key: "iron_maw", kind: "hero", recruit_tier: "line", faction_slug: "greenskins", name: "Железная челюсть", cost: 13, models: 1, model_health: 5, width: 1, armor_type: "heavy", weapon_type: "blunt", melee: 6, ranged: 0, spell: 0, initiative: 4, abilities: [ "ferocious", "regen" ], skill: 4, mounted: false, attacks: 2 },
+  { template_key: "war_chief", kind: "hero", recruit_tier: "line", faction_slug: "greenskins", name: "Вождь орды", cost: nil, models: 1, model_health: 4, width: 1, armor_type: "heavy", weapon_type: "slash", melee: 2, ranged: 0, spell: 0, initiative: 5, abilities: [ "leader", "ferocious" ], skill: 5, mounted: false, attacks: 2 },
+  { template_key: "shaman", kind: "hero", recruit_tier: "line", faction_slug: "greenskins", name: "Шаман", cost: nil, models: 1, model_health: 2, width: 1, armor_type: "magic", weapon_type: "magic", melee: 2, ranged: 1, spell: 5, initiative: 5, abilities: [ "wizard" ], skill: 5, mounted: false, attacks: 2 },
+  { template_key: "iron_maw", kind: "hero", recruit_tier: "line", faction_slug: "greenskins", name: "Железная челюсть", cost: nil, models: 1, model_health: 5, width: 1, armor_type: "heavy", weapon_type: "blunt", melee: 2, ranged: 0, spell: 0, initiative: 4, abilities: [ "ferocious", "regen" ], skill: 4, mounted: false, attacks: 2 },
 
   # ── Нежить (undead) ────────────────────────────────────────
   # line
-  { template_key: "skeleton_block", kind: "unit", recruit_tier: "line", faction_slug: "undead", name: "Скелетный блок", cost: 6, models: 15, model_health: 1, width: 5, armor_type: "light", weapon_type: "slash", melee: 3, ranged: 0, spell: 0, initiative: 3, abilities: [ "undead", "fear", "resolute" ], skill: 3, mounted: false, attacks: 1 },
-  { template_key: "ghoul_pack", kind: "unit", recruit_tier: "line", faction_slug: "undead", name: "Упырская стая", cost: 125, models: 12, model_health: 1, width: 4, armor_type: "light", weapon_type: "puncture", melee: 3, ranged: 0, spell: 0, initiative: 3, abilities: [ "fear", "skirmisher", "poison" ], skill: 3, mounted: false, attacks: 1 },
+  { template_key: "skeleton_block", kind: "unit", recruit_tier: "line", faction_slug: "undead", name: "Скелетный блок", cost: nil, models: 15, model_health: 1, width: 5, armor_type: "light", weapon_type: "slash", melee: 1, ranged: 0, spell: 0, initiative: 3, abilities: [ "undead", "fear", "resolute" ], skill: 3, mounted: false, attacks: 1 },
+  { template_key: "ghoul_pack", kind: "unit", recruit_tier: "line", faction_slug: "undead", name: "Упырская стая", cost: 125, models: 12, model_health: 1, width: 4, armor_type: "light", weapon_type: "puncture", melee: 1, ranged: 0, spell: 0, initiative: 3, abilities: [ "fear", "skirmisher", "poison" ], skill: 3, mounted: false, attacks: 1 },
   # elite
-  { template_key: "crypt_guard", kind: "unit", recruit_tier: "elite", faction_slug: "undead", name: "Криптовая стража", cost: 10, models: 10, model_health: 1, width: 5, armor_type: "heavy", weapon_type: "slash", melee: 5, ranged: 0, spell: 0, initiative: 3, abilities: [ "undead", "fear", "armorPiercing" ], skill: 4, mounted: false, attacks: 1 },
-  { template_key: "shadow_riders", kind: "unit", recruit_tier: "elite", faction_slug: "undead", name: "Теневые всадники", cost: 12, models: 6, model_health: 1, width: 3, armor_type: "heavy", weapon_type: "puncture", melee: 6, ranged: 0, spell: 0, initiative: 3, abilities: [ "fear", "fast", "momentumCharge" ], skill: 4, mounted: false, attacks: 1 },
-  { template_key: "corpse_cart", kind: "unit", recruit_tier: "elite", faction_slug: "undead", name: "Труповозка", cost: 11, models: 1, model_health: 9, width: 2, base_depth: 2, model_class: "machine", armor_type: "magic", weapon_type: "magic", melee: 2, ranged: 4, spell: 0, initiative: 4, abilities: [ "ranged", "machine", "corpseTrail", "undead", "fear" ], skill: 3, mounted: false, attacks: 1 },
+  { template_key: "crypt_guard", kind: "unit", recruit_tier: "elite", faction_slug: "undead", name: "Криптовая стража", cost: nil, models: 10, model_health: 1, width: 5, armor_type: "heavy", weapon_type: "slash", melee: 1, ranged: 0, spell: 0, initiative: 3, abilities: [ "undead", "fear", "armorPiercing" ], skill: 4, mounted: false, attacks: 1 },
+  { template_key: "shadow_riders", kind: "unit", recruit_tier: "elite", faction_slug: "undead", name: "Теневые всадники", cost: nil, models: 6, model_health: 1, width: 3, armor_type: "heavy", weapon_type: "puncture", melee: 1, ranged: 0, spell: 0, initiative: 3, abilities: [ "fear", "fast", "momentumCharge" ], skill: 4, mounted: false, attacks: 1 },
+  { template_key: "corpse_cart", kind: "unit", recruit_tier: "elite", faction_slug: "undead", name: "Труповозка", cost: nil, models: 1, model_health: 9, width: 2, base_depth: 2, model_class: "machine", armor_type: "magic", weapon_type: "magic", melee: 1, ranged: 4, spell: 0, initiative: 4, abilities: [ "ranged", "machine", "corpseTrail", "undead", "fear" ], skill: 3, mounted: false, attacks: 1 },
   # rare
-  { template_key: "bone_dragon", kind: "unit", recruit_tier: "rare", faction_slug: "undead", name: "Костяной дракон", cost: 15, models: 1, model_health: 6, width: 2, armor_type: "light", weapon_type: "breath", melee: 3, ranged: 4, spell: 0, initiative: 4, abilities: [ "flying", "fear", "undead", "ranged" ], skill: 5, mounted: false, attacks: 2 },
+  { template_key: "bone_dragon", kind: "unit", recruit_tier: "rare", faction_slug: "undead", name: "Костяной дракон", cost: nil, models: 1, model_health: 6, width: 2, armor_type: "light", weapon_type: "breath", melee: 1, ranged: 1, spell: 0, initiative: 4, abilities: [ "flying", "fear", "undead", "ranged" ], skill: 5, mounted: false, attacks: 2 },
   # heroes
-  { template_key: "night_lord", kind: "hero", recruit_tier: "line", faction_slug: "undead", name: "Ночной лорд", cost: 12, models: 1, model_health: 4, width: 1, armor_type: "heavy", weapon_type: "slash", melee: 5, ranged: 3, spell: 4, initiative: 5, abilities: [ "wizard", "leader", "regen" ], skill: 5, mounted: false, attacks: 2 },
-  { template_key: "necromancer", kind: "hero", recruit_tier: "line", faction_slug: "undead", name: "Некромант", cost: 14, models: 1, model_health: 2, width: 1, armor_type: "magic", weapon_type: "magic", melee: 1, ranged: 5, spell: 5, initiative: 5, abilities: [ "wizard" ], skill: 5, mounted: false, attacks: 2 },
-  { template_key: "barrow_king", kind: "hero", recruit_tier: "line", faction_slug: "undead", name: "Король курганов", cost: 12, models: 1, model_health: 3, width: 1, armor_type: "heavy", weapon_type: "puncture", melee: 4, ranged: 0, spell: 0, initiative: 5, abilities: [ "leader", "undead" ], skill: 5, mounted: false, attacks: 2 },
+  { template_key: "night_lord", kind: "hero", recruit_tier: "line", faction_slug: "undead", name: "Ночной лорд", cost: nil, models: 1, model_health: 4, width: 1, armor_type: "heavy", weapon_type: "slash", melee: 1, ranged: 1, spell: 4, initiative: 5, abilities: [ "wizard", "leader", "regen" ], skill: 5, mounted: false, attacks: 2 },
+  { template_key: "necromancer", kind: "hero", recruit_tier: "line", faction_slug: "undead", name: "Некромант", cost: nil, models: 1, model_health: 2, width: 1, armor_type: "magic", weapon_type: "magic", melee: 1, ranged: 1, spell: 5, initiative: 5, abilities: [ "wizard" ], skill: 5, mounted: false, attacks: 2 },
+  { template_key: "barrow_king", kind: "hero", recruit_tier: "line", faction_slug: "undead", name: "Король курганов", cost: nil, models: 1, model_health: 3, width: 1, armor_type: "heavy", weapon_type: "puncture", melee: 1, ranged: 0, spell: 0, initiative: 5, abilities: [ "leader", "undead" ], skill: 5, mounted: false, attacks: 2 },
 
   # ── Диколесье (wildwood) ───────────────────────────────────
   # line
-  { template_key: "grove_archers", kind: "unit", recruit_tier: "line", faction_slug: "wildwood", name: "Стража поляны", cost: 175, models: 10, model_health: 1, width: 5, armor_type: "light", weapon_type: "ranged", melee: 2, ranged: 4, spell: 0, initiative: 4, abilities: [ "ranged", "precision", "forestborn", "wildborn" ], skill: 4, mounted: false, attacks: 1, shooting_template: "common" },
-  { template_key: "war_dancers", kind: "unit", recruit_tier: "line", faction_slug: "wildwood", name: "Танцоры войны", cost: 9, models: 10, model_health: 1, width: 5, armor_type: "light", weapon_type: "slash", melee: 5, ranged: 0, spell: 0, initiative: 3, abilities: [ "skirmisher", "dodge", "wildborn" ], skill: 4, mounted: false, attacks: 1 },
+  { template_key: "grove_archers", kind: "unit", recruit_tier: "line", faction_slug: "wildwood", name: "Стража поляны", cost: 175, models: 10, model_health: 1, width: 5, armor_type: "light", weapon_type: "ranged", melee: 1, ranged: 1, spell: 0, initiative: 4, abilities: [ "ranged", "precision", "forestborn", "wildborn" ], skill: 4, mounted: false, attacks: 1, shooting_template: "common" },
+  { template_key: "war_dancers", kind: "unit", recruit_tier: "line", faction_slug: "wildwood", name: "Танцоры войны", cost: nil, models: 10, model_health: 1, width: 5, armor_type: "light", weapon_type: "slash", melee: 1, ranged: 0, spell: 0, initiative: 3, abilities: [ "skirmisher", "dodge", "wildborn" ], skill: 4, mounted: false, attacks: 1 },
   # elite
-  { template_key: "dryad_grove", kind: "unit", recruit_tier: "elite", faction_slug: "wildwood", name: "Стайка дриад", cost: 10, models: 8, model_health: 2, width: 4, armor_type: "magic", weapon_type: "slash", melee: 4, ranged: 0, spell: 0, initiative: 3, abilities: [ "fear", "forestkin" ], skill: 3, mounted: false, attacks: 1 },
-  { template_key: "stag_knights", kind: "unit", recruit_tier: "elite", faction_slug: "wildwood", name: "Рыцари на оленях", cost: 12, models: 6, model_health: 1, width: 3, armor_type: "medium", weapon_type: "puncture", melee: 6, ranged: 0, spell: 0, initiative: 3, abilities: [ "fast", "fearless", "momentumCharge", "wildborn" ], skill: 4, mounted: false, attacks: 1 },
+  { template_key: "dryad_grove", kind: "unit", recruit_tier: "elite", faction_slug: "wildwood", name: "Стайка дриад", cost: nil, models: 8, model_health: 2, width: 4, armor_type: "magic", weapon_type: "slash", melee: 1, ranged: 0, spell: 0, initiative: 3, abilities: [ "fear", "forestkin" ], skill: 3, mounted: false, attacks: 1 },
+  { template_key: "stag_knights", kind: "unit", recruit_tier: "elite", faction_slug: "wildwood", name: "Рыцари на оленях", cost: nil, models: 6, model_health: 1, width: 3, armor_type: "medium", weapon_type: "puncture", melee: 1, ranged: 0, spell: 0, initiative: 3, abilities: [ "fast", "fearless", "momentumCharge", "wildborn" ], skill: 4, mounted: false, attacks: 1 },
   # rare
-  { template_key: "treeman", kind: "unit", recruit_tier: "rare", faction_slug: "wildwood", name: "Древочеловек", cost: 14, models: 3, model_health: 4, width: 3, armor_type: "heavy", weapon_type: "blunt", melee: 5, ranged: 2, spell: 0, initiative: 4, abilities: [ "fear", "ranged", "throwRocks", "forestkin" ], skill: 5, mounted: false, attacks: 2, shooting_range: 8 },
-  { template_key: "grove_hawk", kind: "unit", recruit_tier: "rare", faction_slug: "wildwood", name: "Великий ястреб рощи", cost: 12, models: 1, model_health: 5, width: 2, armor_type: "medium", weapon_type: "puncture", melee: 5, ranged: 0, spell: 0, initiative: 5, abilities: [ "flying", "fast", "forestborn", "wildborn" ], skill: 4, mounted: false, attacks: 2 },
+  { template_key: "treeman", kind: "unit", recruit_tier: "rare", faction_slug: "wildwood", name: "Древочеловек", cost: nil, models: 3, model_health: 4, width: 3, armor_type: "heavy", weapon_type: "blunt", melee: 1, ranged: 1, spell: 0, initiative: 4, abilities: [ "fear", "ranged", "throwRocks", "forestkin" ], skill: 5, mounted: false, attacks: 2, shooting_range: 8 },
+  { template_key: "grove_hawk", kind: "unit", recruit_tier: "rare", faction_slug: "wildwood", name: "Великий ястреб рощи", cost: nil, models: 1, model_health: 5, width: 2, armor_type: "medium", weapon_type: "puncture", melee: 1, ranged: 0, spell: 0, initiative: 5, abilities: [ "flying", "fast", "forestborn", "wildborn" ], skill: 4, mounted: false, attacks: 2 },
   # heroes
-  { template_key: "path_stalker", kind: "hero", recruit_tier: "line", faction_slug: "wildwood", name: "Следопыт", cost: 14, models: 1, model_health: 2, width: 1, armor_type: "light", weapon_type: "ranged", melee: 2, ranged: 5, spell: 0, initiative: 5, abilities: [ "leader", "ranged", "wildborn" ], skill: 5, mounted: false, attacks: 2 },
-  { template_key: "grove_weaver", kind: "hero", recruit_tier: "line", faction_slug: "wildwood", name: "Лесной чародей", cost: 14, models: 1, model_health: 2, width: 1, armor_type: "magic", weapon_type: "magic", melee: 2, ranged: 5, spell: 5, initiative: 5, abilities: [ "wizard", "wildborn" ], skill: 5, mounted: false, attacks: 2 },
-  { template_key: "forest_warden", kind: "hero", recruit_tier: "line", faction_slug: "wildwood", name: "Лесной страж", cost: 13, models: 1, model_health: 3, width: 1, armor_type: "medium", weapon_type: "slash", melee: 5, ranged: 0, spell: 0, initiative: 5, abilities: [ "wildborn", "forestkin", "skirmisher" ], skill: 5, mounted: false, attacks: 2 },
+  { template_key: "path_stalker", kind: "hero", recruit_tier: "line", faction_slug: "wildwood", name: "Следопыт", cost: nil, models: 1, model_health: 2, width: 1, armor_type: "light", weapon_type: "ranged", melee: 1, ranged: 1, spell: 0, initiative: 5, abilities: [ "leader", "ranged", "wildborn" ], skill: 5, mounted: false, attacks: 2 },
+  { template_key: "grove_weaver", kind: "hero", recruit_tier: "line", faction_slug: "wildwood", name: "Лесной чародей", cost: nil, models: 1, model_health: 2, width: 1, armor_type: "magic", weapon_type: "magic", melee: 1, ranged: 1, spell: 5, initiative: 5, abilities: [ "wizard", "wildborn" ], skill: 5, mounted: false, attacks: 2 },
+  { template_key: "forest_warden", kind: "hero", recruit_tier: "line", faction_slug: "wildwood", name: "Лесной страж", cost: nil, models: 1, model_health: 3, width: 1, armor_type: "medium", weapon_type: "slash", melee: 1, ranged: 0, spell: 0, initiative: 5, abilities: [ "wildborn", "forestkin", "skirmisher" ], skill: 5, mounted: false, attacks: 2 },
 
   # ── Хаос (chaos) ───────────────────────────────────────────
   # line
-  { template_key: "reaver_band", kind: "unit", recruit_tier: "line", faction_slug: "chaos", name: "Отряд грабителей", cost: 7, models: 10, model_health: 1, width: 5, armor_type: "medium", weapon_type: "slash", melee: 4, ranged: 0, spell: 0, initiative: 3, abilities: [], skill: 3, mounted: false, attacks: 1 },
+  { template_key: "reaver_band", kind: "unit", recruit_tier: "line", faction_slug: "chaos", name: "Отряд грабителей", cost: nil, models: 10, model_health: 1, width: 5, armor_type: "medium", weapon_type: "slash", melee: 1, ranged: 0, spell: 0, initiative: 3, abilities: [], skill: 3, mounted: false, attacks: 1 },
   # elite
-  { template_key: "rift_heavies", kind: "unit", recruit_tier: "elite", faction_slug: "chaos", name: "Тяжёлая гвардия", cost: 11, models: 10, model_health: 1, width: 5, armor_type: "heavy", weapon_type: "slash", melee: 3, ranged: 0, spell: 0, initiative: 3, abilities: [ "disciplined", "fearless", "runeArmor" ], skill: 5, mounted: false, attacks: 1 },
-  { template_key: "rift_knights", kind: "unit", recruit_tier: "elite", faction_slug: "chaos", name: "Рыцари разлома", cost: 13, models: 6, model_health: 1, width: 3, armor_type: "heavy", weapon_type: "puncture", melee: 7, ranged: 0, spell: 0, initiative: 3, abilities: [ "fast", "momentumCharge" ], skill: 5, mounted: false, attacks: 1 },
+  { template_key: "rift_heavies", kind: "unit", recruit_tier: "elite", faction_slug: "chaos", name: "Тяжёлая гвардия", cost: nil, models: 10, model_health: 1, width: 5, armor_type: "heavy", weapon_type: "slash", melee: 1, ranged: 0, spell: 0, initiative: 3, abilities: [ "disciplined", "fearless", "runeArmor" ], skill: 5, mounted: false, attacks: 1 },
+  { template_key: "rift_knights", kind: "unit", recruit_tier: "elite", faction_slug: "chaos", name: "Рыцари разлома", cost: nil, models: 6, model_health: 1, width: 3, armor_type: "heavy", weapon_type: "puncture", melee: 1, ranged: 0, spell: 0, initiative: 3, abilities: [ "fast", "momentumCharge" ], skill: 5, mounted: false, attacks: 1 },
   # rare
-  { template_key: "rift_mutant", kind: "unit", recruit_tier: "rare", faction_slug: "chaos", name: "Мутант разлома", cost: 12, models: 1, model_health: 6, width: 1, armor_type: "magic", weapon_type: "blunt", melee: 5, ranged: 0, spell: 0, initiative: 3, abilities: [ "fear" ], skill: 4, mounted: false, attacks: 2 },
-  { template_key: "inferno_cannon", kind: "unit", recruit_tier: "rare", faction_slug: "chaos", name: "Пушка преисподней", cost: 320, models: 1, model_health: 5, width: 2, armor_type: "machine", weapon_type: "demolish", melee: 2, ranged: 8, spell: 0, initiative: 4, abilities: [ "ranged", "machine", "fear", "antiFlying" ], skill: 2, mounted: false, attacks: 1, shooting_template: "line" },
+  { template_key: "rift_mutant", kind: "unit", recruit_tier: "rare", faction_slug: "chaos", name: "Мутант разлома", cost: nil, models: 1, model_health: 6, width: 1, armor_type: "magic", weapon_type: "blunt", melee: 1, ranged: 0, spell: 0, initiative: 3, abilities: [ "fear" ], skill: 4, mounted: false, attacks: 2 },
+  { template_key: "inferno_cannon", kind: "unit", recruit_tier: "rare", faction_slug: "chaos", name: "Пушка преисподней", cost: 320, models: 1, model_health: 5, width: 2, armor_type: "machine", weapon_type: "demolish", melee: 1, ranged: 8, spell: 0, initiative: 4, abilities: [ "ranged", "machine", "fear", "antiFlying" ], skill: 2, mounted: false, attacks: 1, shooting_template: "line" },
   # heroes
-  { template_key: "rift_lord", kind: "hero", recruit_tier: "line", faction_slug: "chaos", name: "Лорд разлома", cost: 12, models: 1, model_health: 4, width: 1, armor_type: "heavy", weapon_type: "slash", melee: 6, ranged: 0, spell: 0, initiative: 5, abilities: [ "leader", "fear" ], skill: 6, mounted: false, attacks: 2 },
-  { template_key: "sorcerer", kind: "hero", recruit_tier: "line", faction_slug: "chaos", name: "Чародей Хаоса", cost: 14, models: 1, model_health: 2, width: 1, armor_type: "magic", weapon_type: "magic", melee: 2, ranged: 5, spell: 5, initiative: 5, abilities: [ "wizard" ], skill: 5, mounted: false, attacks: 2 },
-  { template_key: "blood_champion", kind: "hero", recruit_tier: "line", faction_slug: "chaos", name: "Чемпион крови", cost: 13, models: 1, model_health: 3, width: 1, armor_type: "heavy", weapon_type: "slash", melee: 6, ranged: 0, spell: 0, initiative: 5, abilities: [ "fearless", "runeArmor" ], skill: 5, mounted: false, attacks: 2 }
+  { template_key: "rift_lord", kind: "hero", recruit_tier: "line", faction_slug: "chaos", name: "Лорд разлома", cost: nil, models: 1, model_health: 4, width: 1, armor_type: "heavy", weapon_type: "slash", melee: 1, ranged: 0, spell: 0, initiative: 5, abilities: [ "leader", "fear" ], skill: 6, mounted: false, attacks: 2 },
+  { template_key: "sorcerer", kind: "hero", recruit_tier: "line", faction_slug: "chaos", name: "Чародей Хаоса", cost: nil, models: 1, model_health: 2, width: 1, armor_type: "magic", weapon_type: "magic", melee: 1, ranged: 1, spell: 5, initiative: 5, abilities: [ "wizard" ], skill: 5, mounted: false, attacks: 2 },
+  { template_key: "blood_champion", kind: "hero", recruit_tier: "line", faction_slug: "chaos", name: "Чемпион крови", cost: nil, models: 1, model_health: 3, width: 1, armor_type: "heavy", weapon_type: "slash", melee: 1, ranged: 0, spell: 0, initiative: 5, abilities: [ "fearless", "runeArmor" ], skill: 5, mounted: false, attacks: 2 }
 ]
 
-templates.map! do |attributes|
-  attributes = apply_monster_trait!(attributes)
-  cost = attributes.fetch(:cost)
-  cost = computed_template_cost(attributes) if cost < 50
+# Normalize the complete population before calculating any prices.
+reference_profiles = templates.map { |attributes| template_cost_profile(apply_monster_trait!(attributes)) }
+
+templates = reference_profiles.map do |attributes|
+  cost = attributes[:cost]
+  cost = computed_template_cost(attributes, reference_profiles: reference_profiles) if cost.nil? || cost == 0
   attributes.merge(cost: cost)
 end
 

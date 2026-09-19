@@ -13,15 +13,15 @@ module Sim
             margin = check[:failure_margin].to_i
             model_health = [ combatant[:model_health].to_i, 1 ].max
             damage = if combatant[:kind] == "hero"
-              [ margin, combatant[:current_health].to_i ].min
+              [ margin, combatant[:current_health].to_f ].min
             else
-              [ margin * model_health, combatant[:current_health].to_i ].min
+              [ margin * model_health, combatant[:current_health].to_f ].min
             end
             combatant[:current_health] = [ 0, combatant[:current_health] - damage ].max
             State.sync_combatant_footprint!(combatant)
             clause = if combatant[:kind] == "hero"
               "#{combatant[:name]} проваливает проверку морали и теряет #{damage} здоровья вместо бегства"
-            elsif damage >= before[:current_health].to_i
+            elsif damage >= before[:current_health].to_f
               "#{combatant[:name]} проваливает проверку морали и рассыпается"
             else
               models_lost = damage / model_health

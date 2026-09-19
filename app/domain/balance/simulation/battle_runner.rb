@@ -25,7 +25,7 @@ module Balance
           break if run.stopping? || run.status.in?(%w[stopped failed])
           break if run.limit_reached?
 
-          play_one_battle!(run, catalog, rng: rng)
+          play_one_battle!(run, catalog, rng: rng, battle_no: run.battles_completed + run.battles_failed)
         end
 
         finalize!(run)
@@ -48,7 +48,7 @@ module Balance
           break unless slot
 
           battle_no, rng = slot
-          play_one_battle!(run, catalog, rng: rng)
+          play_one_battle!(run, catalog, rng: rng, battle_no: battle_no)
         end
       ensure
         worker_finished!(run) if run
@@ -81,8 +81,8 @@ module Balance
         end
       end
 
-      def play_one_battle!(run, catalog, rng:)
-        Balance::Synthetic::Play.call!(run: run, catalog: catalog, rng: rng)
+      def play_one_battle!(run, catalog, rng:, battle_no: 0)
+        Balance::Synthetic::Play.call!(run: run, catalog: catalog, rng: rng, battle_no: battle_no)
         run.increment!(:battles_completed)
       rescue StandardError => error
         run.increment!(:battles_failed)

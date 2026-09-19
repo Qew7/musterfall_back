@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_08_22_001000) do
+ActiveRecord::Schema[8.1].define(version: 2026_09_19_000000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -97,7 +97,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_08_22_001000) do
     t.string "key", null: false
     t.string "matchup_type", default: "all", null: false
     t.bigint "n", default: 0, null: false
-    t.bigint "sum", default: 0, null: false
+    t.float "sum", default: 0.0, null: false
     t.datetime "updated_at", null: false
     t.index ["catalog_version_id", "bucket", "key", "matchup_type"], name: "index_balance_counters_unique", unique: true
     t.index ["catalog_version_id"], name: "index_balance_counters_on_catalog_version_id"

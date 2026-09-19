@@ -11,7 +11,8 @@ module Api
         heroes: Hero.includes(:faction, :abilities_records).order(:name).map { |template| serialize_template(template) },
         abilities: Ability.order(:key).map { |ability| serialize_ability(ability) },
         hero_upgrades: HeroUpgrade.includes(:faction).order(:position).map { |upgrade| serialize_upgrade(upgrade) },
-        magicSchools: serialize_magic_schools
+        magicSchools: serialize_magic_schools,
+        weaponVsArmor: serialize_weapon_vs_armor
       }
     end
 
@@ -93,6 +94,14 @@ module Api
         minLevel: upgrade.min_level,
         generalOnly: upgrade.general_only
       }
+    end
+
+    def serialize_weapon_vs_armor
+      assigned = Sim::Upgrades::Draft.combat_type_assignments
+      Sim::Constants.combat_type_catalog(
+        armor_types: ArmyTemplate.distinct.pluck(:armor_type) | assigned.fetch(:armor_type),
+        weapon_types: ArmyTemplate.distinct.pluck(:weapon_type) | assigned.fetch(:weapon_type)
+      )
     end
 
     def serialize_magic_schools

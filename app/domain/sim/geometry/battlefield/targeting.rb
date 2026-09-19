@@ -8,7 +8,7 @@ module Sim
 
           unit_hits = blockers.select do |blocker|
             next false if blocker[:entity_id] == attacker[:entity_id] || blocker[:entity_id] == defender[:entity_id]
-            next false if blocker[:current_health].to_i <= 0
+            next false if blocker[:current_health].to_f <= 0
 
             line_intersects_unit?(line_start, line_end, blocker)
           end
@@ -21,7 +21,7 @@ module Sim
         end
 
         def attack_victims(attacker, primary_target, enemies, attack_type)
-          living = enemies.select { |entry| entry[:current_health].to_i > 0 }
+          living = enemies.select { |entry| entry[:current_health].to_f > 0 }
 
           rule = ::Sim::Battle::Rules.for(:shooting).find_applicable(attacker, attack_type)
           return rule.attack_victims(attacker, primary_target, living) if rule&.respond_to?(:attack_victims)

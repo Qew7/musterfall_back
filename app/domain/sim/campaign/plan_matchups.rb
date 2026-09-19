@@ -69,7 +69,7 @@ module Sim
       end
 
       def ensure_deployment!(player)
-        deployable = player[:roster].select { |entry| entry.dig(:state, :current_health).to_i > 0 }
+        deployable = player[:roster].select { |entry| entry.dig(:state, :current_health).to_f > 0 }
         visible = deployable.select do |entry|
           Entities::Footprint.deployable?(entry) || (entry[:kind] == "hero" && entry[:state][:attached_to])
         end

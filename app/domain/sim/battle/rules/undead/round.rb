@@ -23,7 +23,7 @@ module Sim
           def wounded_undead_units(side)
             side[:combatants].select do |entry|
               Array(entry[:abilities]).include?("undead") &&
-                entry[:current_health].to_i.between?(1, entry[:max_health].to_i - 1)
+                entry[:current_health].to_f.positive? && entry[:current_health].to_f < entry[:max_health].to_f
             end
           end
           private_class_method :wounded_undead_units

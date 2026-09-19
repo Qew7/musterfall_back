@@ -161,6 +161,18 @@ module Sim
 
       module_function
 
+      def combat_type_assignments
+        weapons = []
+        armors = []
+        EFFECTS.each_value do |effect|
+          hero = probe_hero
+          effect.call(hero)
+          weapons << hero.dig(:components, :combat, :weapon_type)
+          armors << hero.dig(:components, :combat, :armor_type)
+        end
+        { weapon_type: weapons.compact.map(&:to_s).uniq, armor_type: armors.compact.map(&:to_s).uniq }
+      end
+
       def apply_mount!(hero, upgrade_id)
         revert_mount!(hero)
         spec = MOUNTS.fetch(upgrade_id)
@@ -192,7 +204,7 @@ module Sim
         hero[:components][:combat][:ranged] -= spec.fetch(:ranged, 0)
         if (health = spec.fetch(:health, 0)).positive?
           hero[:components][:health][:max] -= health
-          hero[:state][:current_health] = [ hero[:state][:current_health].to_i - health, 1 ].max
+          hero[:state][:current_health] = [ hero[:state][:current_health].to_f - health, 1 ].max
         end
         abilities = hero[:components][:abilities]
         spec.fetch(:abilities, []).each { |key| abilities.delete(key) }
@@ -320,6 +332,20 @@ module Sim
         progression[:pending_draft] = []
         true
       end
+
+      def probe_hero
+        {
+          components: {
+            combat: { melee: 0, ranged: 0, spell: 0, movement: 3, weapon_type: nil, armor_type: nil },
+            abilities: [],
+            health: { max: 1 },
+            hero: {},
+            formation: { model_class: "infantry", model_width: 1, model_depth: 1 }
+          },
+          state: { current_health: 1 }
+        }
+      end
+      private_class_method :probe_hero
     end
   end
 end

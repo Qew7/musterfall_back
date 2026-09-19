@@ -16,7 +16,7 @@ module Sim
           facing: Battlefield.normalize_facing(facing.nil? ? formation[:facing] : facing),
           base_width: formation[:width].to_f,
           base_depth: formation[:depth].to_f,
-          current_health: entity.dig(:state, :current_health).to_i
+          current_health: entity.dig(:state, :current_health).to_f
         }
       end
 
@@ -29,7 +29,7 @@ module Sim
       def conflicting_entities(candidate, roster, ignore_id: nil)
         roster.select do |entry|
           next false if entry[:id] == ignore_id || entry[:id] == candidate[:entity_id]
-          next false if entry.dig(:state, :current_health).to_i <= 0
+          next false if entry.dig(:state, :current_health).to_f <= 0
           next false if entry[:kind] == "hero" && entry[:state][:attached_to]
           next false if entry.dig(:components, :formation, :row) == "reserve"
 
@@ -63,25 +63,83 @@ module Sim
         clash_reason(entity, position, roster, ignore_id: ignore_id).nil?
       end
 
-      # Largest first, generals before other heroes. Parks everyone in reserve, then
-      # fills every legal pose that still fits.
+      # Place a combat line first, then support and partners. Every candidate still
+      # passes the same geometry checks as manual deployment.
       def pack_roster!(roster)
         units = packable_entities(roster)
         units.each { |entity| park_in_reserve!(entity) }
-        units.each_with_index do |entity, index|
-          row = Constants::BATTLE_ROWS[[ 2, index / 3 ].min]
-          lane = Constants::LANE_ORDER[index % Constants::LANE_ORDER.length]
-          position = find_clear_position(entity, row, lane, roster, ignore_id: entity[:id])
+        placed = []
+        role_counts = Hash.new(0)
+        row_offsets = Hash.new(1.0)
+        units.each do |entity|
+          role = ArmyComposition.role(ArmyComposition.profile(entity))
+          index = role_counts[role]
+          role_counts[role] += 1
+          row = role == :frontline || role == :flanker ? "front" : "support"
+          row = "rear" if role == :artillery
+          lanes = role == :flanker ? %w[left right center] : %w[center left right]
+          lane = lanes[index % lanes.size]
+          partners = ArmyComposition.partners(entity, placed)
+          position = find_partner_position(entity, partners, roster)
+          unless position || role == :flanker
+            width = entity.dig(:components, :formation, :width).to_f
+            candidate = Battlefield.default_deployment(row, lane).merge(y: row_offsets[row] + width / 2.0, facing: 0)
+            if mirrored_position?(entity, candidate) && clear_position?(entity, candidate, roster, ignore_id: entity[:id])
+              position = candidate.merge(Battlefield.sync_formation_slots_from_deployment(candidate))
+              row_offsets[row] += width + MIN_SEPARATION + 0.1
+            end
+          end
+          position ||= find_clear_position(entity, row, lane, roster, ignore_id: entity[:id], mirrored: true)
           if position
             apply_pack_position!(entity, position)
+            placed << entity
           else
             park_in_reserve!(entity)
           end
         end
       end
 
+      def find_partner_position(entity, partners, roster)
+        return nil if partners.empty?
+
+        targets = partners.map { |ally, range, center| [ footprint_from_entity(ally), range, center ] }
+        best = nil
+        best_coverage = 0
+        flanker = ArmyComposition.role(ArmyComposition.profile(entity)) == :flanker
+        angles = flanker ? [ 3, 9, 2, 10, 4, 8, 1, 11, 5, 7, 0, 6 ] : [ 6, 5, 7, 4, 8, 3, 9, 2, 10, 1, 11, 0 ]
+        # Bounded local search; no pathfinding or battle simulations during packing.
+        targets.each do |anchor, _range, _center|
+          (1..8).each do |radius|
+            angles.each do |step|
+              angle = step * Math::PI / 6
+              position = { x: anchor[:x] + Math.cos(angle) * radius, y: anchor[:y] + Math.sin(angle) * radius, facing: 0 }
+              next unless mirrored_position?(entity, position)
+              candidate = footprint_from_entity(entity, **position)
+              coverage = targets.count do |target, range, center|
+                distance = center ? Battlefield.distance_between(candidate, target) : Battlefield.distance_between_units(candidate, target)
+                distance <= range
+              end
+              next unless coverage > best_coverage
+              next unless clear_position?(entity, position, roster, ignore_id: entity[:id])
+
+              best = position.merge(Battlefield.sync_formation_slots_from_deployment(position))
+              best_coverage = coverage
+              return best if coverage == targets.size
+            end
+          end
+        end
+        best
+      end
+
+      def mirrored_position?(entity, position)
+        return false if Battlefield.sync_formation_slots_from_deployment(position)[:row] == "reserve"
+
+        pose = Battlefield.battle_position(position, 1)
+        Battlefield.tray_on_battlefield?(footprint_from_entity(entity, x: pose[:x], y: pose[:y], facing: pose[:facing]))
+      end
+
       # Search near the row/lane anchor, then other battle slots, for a legal pose.
-      def find_clear_position(entity, preferred_row, preferred_lane, roster, ignore_id: nil)
+      def find_clear_position(entity, preferred_row, preferred_lane, roster, ignore_id: nil, mirrored: false)
         facing = entity.dig(:components, :formation, :facing) || 0
         ignore = ignore_id || entity[:id]
         slot_order = [ [ preferred_row, preferred_lane ] ] +
@@ -90,7 +148,10 @@ module Sim
         slot_order.each do |row, lane|
           base = Battlefield.default_deployment(row, lane).merge(facing: facing)
           each_deployment_offset(base) do |position|
-            return position.merge(row: row, lane: lane) if clear_position?(entity, position, roster, ignore_id: ignore)
+            next unless clear_position?(entity, position, roster, ignore_id: ignore)
+            next if mirrored && !mirrored_position?(entity, position)
+
+            return position.merge(row: row, lane: lane)
           end
         end
 
@@ -115,7 +176,7 @@ module Sim
 
       def packable_entities(roster)
         roster
-          .select { |entry| entry.dig(:state, :current_health).to_i > 0 }
+          .select { |entry| entry.dig(:state, :current_health).to_f > 0 }
           .reject { |entry| entry[:kind] == "hero" && entry[:state][:attached_to] }
           .sort_by { |entity| pack_sort_key(entity) }
       end
@@ -124,13 +185,9 @@ module Sim
         Entities::Footprint.sync_entity!(entity)
         formation = entity[:components][:formation]
         area = -(formation[:width].to_f * formation[:depth].to_f)
-        if entity[:kind] == "hero"
-          return [ 0, 0, area ] if entity.dig(:components, :hero, :general)
-
-          return [ 1, 0, area ]
-        end
-
-        [ 2, 0, area ]
+        role = ArmyComposition.role(ArmyComposition.profile(entity))
+        priority = { frontline: 0, artillery: 1, supply: 2, flanker: 3, ranged: 4, hero: 5 }.fetch(role)
+        [ priority, area ]
       end
 
       def park_in_reserve!(entity)

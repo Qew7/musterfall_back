@@ -14,6 +14,7 @@ module Balance
         selected_version_id: version.id,
         matchup_type: scoped_type,
         summary: summary_payload(counters, battles.count),
+        army_stages: ArmyStageReport.build(battles),
         faction_wins: faction_wins(counters),
         faction_matchups: faction_matchups(battles),
         template_wins: template_wins(counters),
@@ -239,8 +240,8 @@ module Balance
         {
           spell_key: key,
           casts: cast_row&.n.to_i,
-          total_damage: damage_row&.sum.to_i,
-          avg_damage: average(damage_row&.sum.to_i, cast_row&.n.to_i)
+          total_damage: damage_row&.sum.to_f,
+          avg_damage: average(damage_row&.sum.to_f, cast_row&.n.to_i)
         }
       end.sort_by { |row| -row[:casts] }
     end

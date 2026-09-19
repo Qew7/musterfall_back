@@ -17,16 +17,16 @@ module Sim
       end
 
       def living?(side)
-        side[:combatants].any? { |entry| entry[:current_health].to_i > 0 }
+        side[:combatants].any? { |entry| entry[:current_health].to_f > 0 }
       end
 
       def all_routing?(sides)
-        living = sides.flat_map { |side| side[:combatants] }.select { |entry| entry[:current_health].to_i > 0 }
+        living = sides.flat_map { |side| side[:combatants] }.select { |entry| entry[:current_health].to_f > 0 }
         living.any? && living.all? { |entry| entry[:is_routing] }
       end
 
       def side_health(side)
-        side[:combatants].sum { |entry| entry[:current_health].to_i }
+        side[:combatants].sum { |entry| entry[:current_health].to_f }
       end
 
       def standing_cost(side)
@@ -55,7 +55,7 @@ module Sim
       end
 
       def fighting?(unit)
-        unit[:current_health].to_i > 0 && !unit[:is_routing]
+        unit[:current_health].to_f > 0 && !unit[:is_routing]
       end
 
       def apply_faction_passives!(side, enemy_side: nil, terrain: [], rng: nil)
@@ -65,7 +65,7 @@ module Sim
       def resolve_summons_end_round!(side)
         events = []
         side[:combatants].each do |combatant|
-          next unless combatant[:summoned] && combatant[:current_health].to_i > 0
+          next unless combatant[:summoned] && combatant[:current_health].to_f > 0
           next unless combatant[:summon_kind] == "rift_mutant"
 
           combatant[:current_health] -= 1
@@ -73,7 +73,7 @@ module Sim
           events << "#{combatant[:name]} теряет 1 здоровье из-за нестабильной мутации."
         end
         side[:combatants].reject! do |combatant|
-          combatant[:summoned] && (combatant[:current_health].to_i <= 0 || combatant[:summon_expires] == :round)
+          combatant[:summoned] && (combatant[:current_health].to_f <= 0 || combatant[:summon_expires] == :round)
         end
         events
       end
@@ -105,7 +105,7 @@ module Sim
 
       def snapshot_battlefield(sides)
         sides.flat_map { |side| side[:combatants] }
-          .select { |entry| entry[:current_health].to_i > 0 }
+          .select { |entry| entry[:current_health].to_f > 0 }
           .map { |entry| combatant_public(entry).merge(side_key: entry[:side_key]) }
       end
 
@@ -143,6 +143,7 @@ module Sim
           is_routing: combatant[:is_routing],
           armor_type: combatant[:armor_type],
           weapon_type: combatant[:weapon_type],
+          abilities: Array(combatant[:abilities]),
           attached_heroes: combatant[:attached_heroes] || [],
           spell_effects: SpellEffects.public_for(combatant),
           summoned: !!combatant[:summoned],
@@ -188,11 +189,11 @@ module Sim
         general_id = player[:general_id].presence || general_entity_id(player[:roster])
 
         player[:roster]
-          .select { |entry| entry[:kind] == "hero" && entry.dig(:state, :current_health).to_i > 0 && entry.dig(:state, :attached_to) }
+          .select { |entry| entry[:kind] == "hero" && entry.dig(:state, :current_health).to_f > 0 && entry.dig(:state, :attached_to) }
           .each { |hero| heroes_by_host[hero[:state][:attached_to]] << hero }
 
         combatants = player[:roster]
-          .select { |entry| entry.dig(:state, :current_health).to_i > 0 }
+          .select { |entry| entry.dig(:state, :current_health).to_f > 0 }
           .reject { |entry| entry[:kind] == "hero" && entry.dig(:state, :attached_to) && units_by_id.key?(entry[:state][:attached_to]) }
           .select { |entry| Entities::Footprint.deployable?(entry) }
           .map { |entity| build_combatant(entity, heroes_by_host[entity[:id]] || [], side_key, side_index, general_id: general_id) }
@@ -338,7 +339,7 @@ module Sim
       private_class_method :general_flag?
 
       def combatant_models_remaining(combatant)
-        return 0 if combatant[:current_health].to_i <= 0
+        return 0 if combatant[:current_health].to_f <= 0
         if combatant[:kind] == "hero"
           models = combatant[:formation_models].to_i
           return models if models.positive?
@@ -408,7 +409,7 @@ module Sim
 
           entity[:state][:attached_hero_ids] = Array(entity[:state][:attached_hero_ids]).select do |hero_id|
             hero = player[:roster].find { |candidate| candidate[:id] == hero_id }
-            hero && hero.dig(:state, :current_health).to_i > 0
+            hero && hero.dig(:state, :current_health).to_f > 0
           end
         end
       end
@@ -440,6 +441,12 @@ module Sim
           movement: entry[:movement],
           morale: entry[:morale],
           skill: entry[:skill],
+          melee: entry[:melee],
+          ranged: entry[:ranged],
+          spell: entry[:spell],
+          armor_type: entry[:armor_type],
+          weapon_type: entry[:weapon_type],
+          abilities: Array(entry[:abilities]),
           shooting_range: entry[:shooting_range],
           spell_range: entry[:spell_range],
           shooting_template: entry[:shooting_template],

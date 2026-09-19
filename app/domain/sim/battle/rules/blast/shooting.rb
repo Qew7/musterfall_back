@@ -12,7 +12,7 @@ module Sim
           end
 
           def attack_victims(attacker, primary_target, enemies)
-            living = enemies.select { |entry| entry[:current_health].to_i > 0 }
+            living = enemies.select { |entry| entry[:current_health].to_f > 0 }
             living
               .select { |entry| Geometry::Battlefield.distance_between(entry, primary_target) <= blast_radius(attacker) }
               .map { |entry| { target: entry, multiplier: entry[:entity_id] == primary_target[:entity_id] ? 1 : 0.75 } }

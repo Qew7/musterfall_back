@@ -38,7 +38,7 @@ module Sim
         when :ally_unit
           allies
         when :damaged_ally_unit
-          allies.select { |entry| entry[:current_health].to_i < entry[:max_health].to_i }
+          allies.select { |entry| entry[:current_health].to_f < entry[:max_health].to_i }
         when :enemy_caster
           enemies.select { |entry| caster?(entry) }
         when :caster, :battlefield
@@ -53,7 +53,7 @@ module Sim
       end
 
       def score(profile, target, spell:)
-        health = target[:current_health].to_i
+        health = target[:current_health].to_f
         missing_health = [ target[:max_health].to_i - health, 0 ].max
         nearby_enemies = enemies.count { |entry| distance(target, entry) <= 4.0 }
         nearby_allies = allies.count { |entry| distance(target, entry) <= 4.0 }
@@ -99,7 +99,7 @@ module Sim
         total = 0
         effect_targets(target, area, enemies).each do |victim|
           [ hits.to_i, 1 ].max.times do
-            break if victim[:current_health].to_i <= 0
+            break if victim[:current_health].to_f <= 0
 
             profile = caster.merge(spell: power.to_i, weapon_type: type.to_s)
             vector = Geometry::Battlefield.classify_attack_vector(caster, victim)
@@ -111,7 +111,7 @@ module Sim
               round_number,
               weapon_type: type.to_s
             )
-            dealt = [ dealt, victim[:current_health].to_i ].min
+            dealt = [ dealt, victim[:current_health].to_f ].min
             victim[:current_health] -= dealt
             State.sync_combatant_footprint!(victim)
             total += dealt
@@ -126,7 +126,7 @@ module Sim
 
       def heal!(target, amount:, area: nil)
         effect_targets(target, area, allies).sum do |recipient|
-          before = recipient[:current_health].to_i
+          before = recipient[:current_health].to_f
           recipient[:current_health] = [ before + amount.to_i, recipient[:max_health].to_i ].min
           State.sync_combatant_footprint!(recipient)
           healed = recipient[:current_health] - before
@@ -272,15 +272,20 @@ module Sim
             candidate = SpellWorld.contact_pose(prototype, target, vector: vector)
             obstacles = Pathing::Obstacles.around(candidate, units: all_combatants, terrain: terrain)
             candidate if SpellWorld.inside_battlefield?(candidate) && obstacles.clear?(candidate, contact_id: target[:entity_id])
-          end.first
+          end.first || SpellWorld.random_free_pose(
+            rng, unit: prototype, all_combatants: all_combatants, terrain: terrain, center: target, radius: 6.0, expand: true
+          )
         elsif point
-          SpellWorld.random_free_pose(rng, unit: prototype, all_combatants: all_combatants, terrain: terrain, center: point, radius: 5.0)
+          SpellWorld.random_free_pose(
+            rng, unit: prototype, all_combatants: all_combatants, terrain: terrain, center: point, radius: 5.0, expand: true
+          )
         elsif target
-          SpellWorld.random_free_pose(rng, unit: prototype, all_combatants: all_combatants, terrain: terrain, center: target, radius: 6.0)
+          SpellWorld.random_free_pose(
+            rng, unit: prototype, all_combatants: all_combatants, terrain: terrain, center: target, radius: 6.0, expand: true
+          )
         end
         return nil unless pose
 
-        apply_enemy_facing!(pose)
         summon = SpellWorld.summon!(
           side: acting_side,
           kind: kind,
@@ -294,18 +299,21 @@ module Sim
 
       def clone_unit!(source, remaining_turns: nil)
         remaining_turns ||= rng.rand(3) + 2
-        # Drop entity_id so Obstacles.around does not treat the original as "self".
+        # Search with the post-sync tray: a 90° turn swaps width/depth, then
+        # sync_combatant_footprint! restores frontage and the clone would grow in place.
+        stub = source.merge(entity_id: nil)
+        State.sync_combatant_footprint!(stub)
         pose = SpellWorld.random_free_pose(
           rng,
-          unit: source.merge(entity_id: nil),
+          unit: stub,
           all_combatants: all_combatants,
           terrain: terrain,
           center: source,
-          radius: 8.0
+          radius: 8.0,
+          expand: true
         )
         return nil unless pose
 
-        apply_enemy_facing!(pose)
         summon = SpellWorld.clone_combatant!(
           side: acting_side,
           source: source,
@@ -498,7 +506,7 @@ module Sim
       end
 
       def living(entries)
-        Array(entries).select { |entry| entry[:current_health].to_i > 0 }
+        Array(entries).select { |entry| entry[:current_health].to_f > 0 }
       end
 
       def duplicate_effect_penalty(target, spell)
@@ -513,6 +521,13 @@ module Sim
 
       def record_summon!(summon, remaining_turns: nil)
         State.sync_combatant_footprint!(summon)
+        unless SpellWorld.nudge_to_clear_pose!(
+          summon, rng: rng, all_combatants: all_combatants, terrain: terrain
+        )
+          acting_side[:combatants].delete(summon)
+          return nil
+        end
+        apply_enemy_facing!(summon)
         @summon_ids << summon[:entity_id]
         @affected_ids << summon[:entity_id]
         @effect_log << {
@@ -542,39 +557,13 @@ module Sim
       end
 
       def apply_enemy_facing!(unit)
-        enemy = nearest(unit, enemies)
-        return unit unless enemy
-
-        desired = Geometry::Battlefield.heading_to(unit, enemy)
-        obstacles = Pathing::Obstacles.around(unit, units: all_combatants, terrain: terrain)
-        facing = nearest_clear_facing(unit, desired, obstacles, unit[:entity_id])
-        unit[:facing] = facing if facing
-        unit
+        SpellWorld.face_nearest_enemy!(
+          unit, enemies: enemies, all_combatants: all_combatants, terrain: terrain
+        )
       end
 
       def nearest_clear_facing(unit, desired, obstacles, contact_id)
-        return desired if facing_clear?(unit, desired, obstacles, contact_id)
-
-        best = nil
-        best_gap = Float::INFINITY
-        (1..18).each do |step|
-          offset = step * 10.0
-          [ offset, -offset ].each do |delta|
-            gap = delta.abs
-            next if gap >= best_gap
-
-            facing = Geometry::Battlefield.normalize_facing(desired + delta)
-            next unless facing_clear?(unit, facing, obstacles, contact_id)
-
-            best = facing
-            best_gap = gap
-          end
-        end
-        best
-      end
-
-      def facing_clear?(unit, facing, obstacles, contact_id)
-        obstacles.clear?(unit.merge(facing: facing), contact_id: contact_id)
+        SpellWorld.nearest_clear_facing(unit, desired, obstacles, contact_id)
       end
 
       def spell_pose_viable?(unit, pose, obstacles)
@@ -589,18 +578,7 @@ module Sim
       end
 
       def summon_prototype(kind)
-        profile = SpellWorld::SUMMONS.fetch(kind.to_s)
-        files = [ profile.fetch(:models), 3 ].min
-        ranks = (profile.fetch(:models).to_f / files).ceil
-        {
-          entity_id: "summon-preview",
-          x: caster[:x],
-          y: caster[:y],
-          facing: caster[:facing],
-          base_width: files.to_f,
-          base_depth: ranks.to_f,
-          current_health: profile[:health]
-        }
+        SpellWorld.summon_prototype(kind, pose: caster)
       end
     end
   end

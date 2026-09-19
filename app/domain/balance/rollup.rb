@@ -126,7 +126,7 @@ module Balance
 
     def damage_matrix(actions, template_map)
       actions.each_with_object({}) do |action, memo|
-        damage = action[:damage].to_i
+        damage = action[:damage].to_f
         next if damage <= 0
 
         type = action[:type].to_s
@@ -154,7 +154,7 @@ module Balance
 
           starting = (combatant[:starting_models] || combatant[:models_remaining]).to_i
           remaining = combatant[:models_remaining].to_i
-          remaining = 0 if combatant[:current_health].to_i <= 0
+          remaining = 0 if combatant[:current_health].to_f <= 0
           lost = [ starting - remaining, 0 ].max
           next if lost <= 0
 
@@ -195,7 +195,7 @@ module Balance
 
         bucket = memo[spell_key.to_s] ||= { "casts" => 0, "damage" => 0, "failed" => 0 }
         bucket["casts"] += 1
-        bucket["damage"] += action[:damage].to_i
+        bucket["damage"] += action[:damage].to_f
         bucket["failed"] += 1 if action[:outcome].to_s == "failed"
       end
     end
@@ -228,7 +228,7 @@ module Balance
       end
       metrics.fetch(:damage_matrix, {}).each do |pair, stats|
         DAMAGE_TYPES.each do |phase|
-          damage = stats[phase].to_i
+          damage = stats[phase].to_f
           next if damage <= 0
 
           hits = stats["hits"].to_i
@@ -246,7 +246,7 @@ module Balance
       end
       metrics.fetch(:spells, {}).each do |spell_key, stats|
         add_counter.call("spell_cast", spell_key.to_s, n: stats["casts"].to_i)
-        add_counter.call("spell_damage", spell_key.to_s, n: stats["casts"].to_i, sum: stats["damage"].to_i)
+        add_counter.call("spell_damage", spell_key.to_s, n: stats["casts"].to_i, sum: stats["damage"].to_f)
       end
       metrics.fetch(:winning_roster, []).each do |template_id|
         add_counter.call("template_win", template_id.to_s)

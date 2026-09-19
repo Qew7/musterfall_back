@@ -390,7 +390,7 @@ module Sim
         end
 
         def usable?(entry)
-          entry && !entry[:x].nil? && !entry[:y].nil? && entry[:current_health].to_i > 0
+          entry && !entry[:x].nil? && !entry[:y].nil? && entry[:current_health].to_f > 0
         end
 
         def compile(entry)

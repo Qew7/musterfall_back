@@ -38,7 +38,7 @@ module Sim
           victims.each do |entry|
             victim = entry[:target]
             models_hit = entry[:models_hit].to_i
-            next if victim[:current_health].to_i <= 0 || models_hit <= 0
+            next if victim[:current_health].to_f <= 0 || models_hit <= 0
 
             per_model = Phases::AttackResolution.damage(profile, victim, attack_type, vector, round_number)
             damage = strike_damage(victim, models_hit, per_model)
@@ -68,13 +68,13 @@ module Sim
 
           raw = per_model.to_i * count
           cap = count * [ victim[:model_health].to_i, 1 ].max
-          [ raw, cap, victim[:current_health].to_i ].min
+          [ raw, cap, victim[:current_health].to_f ].min
         end
 
         protected
 
         def living_enemies(enemies)
-          enemies.select { |entry| entry[:current_health].to_i > 0 }
+          enemies.select { |entry| entry[:current_health].to_f > 0 }
         end
 
         def build_victim_entry(entry, models_hit, **extra)

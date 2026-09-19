@@ -9,6 +9,10 @@ module Sim
           # rule: flying | movement | Flyer movement AI: leap, rear/flank charge priority, ignores ground obstacles.
           module_function
 
+          def army_role(profile)
+            :flanker if Array(profile[:abilities]).include?("flying")
+          end
+
           def plan_entries(movers, enemies, claimed, terrain: [], obstacles: [])
             living = Pathing.active_units(enemies)
             ranked = movers.sort_by { |combatant| [ combatant[:entity_id].to_s ] }

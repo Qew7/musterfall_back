@@ -6,7 +6,7 @@ module Sim
         module_function
 
         def choose_target(attacker, enemies, attack_type, all_combatants, terrain: [])
-          living = enemies.select { |entry| entry[:current_health].to_i > 0 }
+          living = enemies.select { |entry| entry[:current_health].to_f > 0 }
           return nil if living.empty?
 
           if attack_type == "melee"
@@ -71,7 +71,7 @@ module Sim
           uy = unit[:y].to_f
           all_combatants.any? do |entry|
             next false if entry[:entity_id] == unit[:entity_id]
-            next false if entry[:current_health].to_i <= 0
+            next false if entry[:current_health].to_f <= 0
             next false if same_side?(unit, entry)
 
             dx = ux - entry[:x].to_f

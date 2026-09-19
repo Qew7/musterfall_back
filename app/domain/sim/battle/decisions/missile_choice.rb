@@ -89,7 +89,7 @@ module Sim
 
         def missile_actors(acting_side)
           acting_side[:combatants]
-            .select { |host| host[:current_health].to_i > 0 && !host[:is_routing] }
+            .select { |host| host[:current_health].to_f > 0 && !host[:is_routing] }
             .flat_map do |host|
               ranged = host.dig(:contributors, :ranged) || []
               ranged.filter_map do |contributor|
@@ -128,7 +128,7 @@ module Sim
         end
 
         def valid_target?(actor, target, attack_type, all_combatants, terrain: [])
-          return false if target[:current_health].to_i <= 0
+          return false if target[:current_health].to_f <= 0
 
           Targeting.can_target_missile?(actor, target, attack_type, all_combatants, terrain: terrain)
         end

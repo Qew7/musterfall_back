@@ -7,6 +7,9 @@ class BalanceCostAuditTest < ActiveSupport::TestCase
   end
 
   test "build flags overcosted weak line unit" do
+    # The test describes an expensive loser, independent of evolving seed prices.
+    ArmyTemplate.find_by!(template_key: "handgunners").update!(cost: 400)
+    ArmyTemplate.find_by!(template_key: "state_swords").update!(cost: 100)
     BalanceDuelRun.create!(
       catalog_version: @version,
       left_template: "handgunners",
@@ -25,6 +28,6 @@ class BalanceCostAuditTest < ActiveSupport::TestCase
     row = payload[:by_tier]["line"][:rows].find { |entry| entry[:template_key] == "handgunners" }
 
     assert_not_nil row
-    assert_includes %w[overcosted_weak underperformer fair low_sample], row[:verdict]
+    assert_equal "overcosted_weak", row[:verdict]
   end
 end

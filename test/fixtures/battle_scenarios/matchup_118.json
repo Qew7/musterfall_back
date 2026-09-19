@@ -581,14 +581,14 @@
     "winner_id": "player-5",
     "rounds": 6,
     "side_health": {
-      "left": 20.0,
+      "left": 14.0,
       "right": 4.0
     },
     "action_counts": {
-      "fear_check": 3,
-      "melee": 11,
-      "morale": 4,
-      "movement": 33,
+      "fear_check": 4,
+      "melee": 13,
+      "morale": 2,
+      "movement": 34,
       "shooting": 4
     },
     "contacts": [
@@ -609,17 +609,23 @@
         "kind": "flyer_charge"
       },
       {
-        "actor_id": "unit-20",
+        "actor_id": "unit-23",
+        "target_id": "unit-20",
+        "slot": "rear",
+        "kind": "flyer_charge"
+      },
+      {
+        "actor_id": "unit-21",
         "kind": ""
       }
     ],
     "rule_effects": {
-      "dodge": 4,
-      "fear": 4,
-      "flying": 2,
-      "forestborn": 2,
-      "march": 16,
-      "skirmisher": 4,
+      "dodge": 6,
+      "fear": 5,
+      "flying": 3,
+      "forestborn": 3,
+      "march": 15,
+      "skirmisher": 6,
       "volley": 2
     },
     "actions": [
@@ -845,7 +851,7 @@
         "actor_id": "unit-23",
         "target_id": "unit-21",
         "maneuver": {},
-        "damage": 2,
+        "damage": 2.0,
         "morale": {},
         "trace": {
           "version": 1,
@@ -974,7 +980,7 @@
         "actor_id": "hero-5",
         "target_id": "unit-23",
         "maneuver": {},
-        "damage": 3,
+        "damage": 2.0,
         "morale": {},
         "trace": {
           "version": 1,
@@ -990,7 +996,7 @@
         "actor_id": "unit-20",
         "target_id": "hero-6",
         "maneuver": {},
-        "damage": 1,
+        "damage": 1.0,
         "morale": {},
         "trace": {
           "version": 1,
@@ -1244,7 +1250,7 @@
         "actor_id": "hero-5",
         "target_id": "unit-23",
         "maneuver": {},
-        "damage": 3,
+        "damage": 2.0,
         "morale": {},
         "trace": {
           "version": 1,
@@ -1260,7 +1266,7 @@
         "actor_id": "unit-20",
         "target_id": "hero-6",
         "maneuver": {},
-        "damage": 1,
+        "damage": 1.0,
         "morale": {},
         "trace": {
           "version": 1,
@@ -1294,6 +1300,54 @@
       {
         "path": "R3/T2/movement/A2",
         "type": "fear_check",
+        "actor_id": "unit-23",
+        "target_id": "unit-20",
+        "maneuver": {},
+        "damage": 0,
+        "morale": {},
+        "trace": {
+          "version": 1,
+          "rule_keys": [
+            "fear"
+          ],
+          "result": "charge_halted"
+        }
+      },
+      {
+        "path": "R3/T2/movement/A3",
+        "type": "movement",
+        "actor_id": "unit-23",
+        "target_id": "unit-20",
+        "from": {
+          "x": 10.043,
+          "y": 11.357,
+          "facing": 43.57
+        },
+        "to": {
+          "x": 14.501,
+          "y": 15.405,
+          "facing": 22.05
+        },
+        "maneuver": {
+          "kind": "flyer_charge",
+          "contact_slot": "rear",
+          "approach_mode": "flyer_charge",
+          "truncated": true,
+          "blocked_by_ally": false
+        },
+        "morale": {},
+        "trace": {
+          "version": 1,
+          "rule_keys": [
+            "flying",
+            "forestborn"
+          ],
+          "result": "flyer_charge"
+        }
+      },
+      {
+        "path": "R3/T2/movement/A4",
+        "type": "fear_check",
         "actor_id": "unit-22",
         "target_id": "unit-20",
         "maneuver": {},
@@ -1308,7 +1362,7 @@
         }
       },
       {
-        "path": "R3/T2/movement/A3",
+        "path": "R3/T2/movement/A5",
         "type": "movement",
         "actor_id": "unit-22",
         "target_id": "unit-20",
@@ -1336,7 +1390,7 @@
         }
       },
       {
-        "path": "R3/T2/movement/A4",
+        "path": "R3/T2/movement/A6",
         "type": "movement",
         "actor_id": "unit-24",
         "target_id": "unit-20",
@@ -1389,7 +1443,7 @@
         "actor_id": "unit-20",
         "target_id": "unit-22",
         "maneuver": {},
-        "damage": 2,
+        "damage": 2.0,
         "morale": {},
         "trace": {
           "version": 1,
@@ -1445,20 +1499,20 @@
         "path": "R4/T1/movement/A2",
         "type": "movement",
         "actor_id": "unit-21",
-        "target_id": "unit-24",
+        "target_id": "unit-23",
         "from": {
           "x": 7.31,
           "y": 10.62,
           "facing": 20.37
         },
         "to": {
-          "x": 10.142,
-          "y": 10.906,
-          "facing": 349.55
+          "x": 12.638,
+          "y": 14.65,
+          "facing": 22.05
         },
         "maneuver": {
           "kind": "wheel",
-          "contact_slot": "front",
+          "contact_slot": "rear",
           "approach_mode": "direct",
           "truncated": false,
           "blocked_by_ally": false
@@ -1466,9 +1520,6 @@
         "morale": {},
         "trace": {
           "version": 1,
-          "rule_keys": [
-            "march"
-          ],
           "result": "wheel"
         }
       },
@@ -1507,7 +1558,7 @@
         "actor_id": "unit-20",
         "target_id": "unit-22",
         "maneuver": {},
-        "damage": 4,
+        "damage": 4.0,
         "morale": {},
         "trace": {
           "version": 1,
@@ -1517,10 +1568,10 @@
       {
         "path": "R4/T1/melee/A2",
         "type": "melee",
-        "actor_id": "unit-22",
-        "target_id": "unit-20",
+        "actor_id": "unit-21",
+        "target_id": "unit-23",
         "maneuver": {},
-        "damage": 0,
+        "damage": 1.0,
         "morale": {},
         "trace": {
           "version": 1,
@@ -1528,51 +1579,24 @@
             "dodge",
             "skirmisher"
           ],
-          "result": "miss"
+          "result": "hit"
         }
       },
       {
         "path": "R4/T1/melee/A3",
-        "type": "morale",
+        "type": "melee",
         "actor_id": "unit-22",
-        "from": {
-          "x": 24.479,
-          "y": 19.503,
-          "facing": 180.53
-        },
-        "to": {
-          "x": 24.479,
-          "y": 19.503,
-          "facing": 0.53
-        },
+        "target_id": "unit-20",
         "maneuver": {},
-        "damage": 0,
+        "damage": 4.0,
         "morale": {},
         "trace": {
           "version": 1,
-          "result": "routing"
-        }
-      },
-      {
-        "path": "R4/T2/start/A1",
-        "type": "morale",
-        "actor_id": "unit-22",
-        "from": {
-          "x": 24.479,
-          "y": 19.503,
-          "facing": 0.53
-        },
-        "to": {
-          "x": 24.479,
-          "y": 19.503,
-          "facing": 0.53
-        },
-        "maneuver": {},
-        "damage": 0,
-        "morale": {},
-        "trace": {
-          "version": 1,
-          "result": "routing"
+          "rule_keys": [
+            "dodge",
+            "skirmisher"
+          ],
+          "result": "hit"
         }
       },
       {
@@ -1609,10 +1633,27 @@
       {
         "path": "R4/T2/melee/A1",
         "type": "melee",
+        "actor_id": "unit-22",
+        "target_id": "unit-20",
+        "maneuver": {},
+        "damage": 2.0,
+        "morale": {},
+        "trace": {
+          "version": 1,
+          "rule_keys": [
+            "dodge",
+            "skirmisher"
+          ],
+          "result": "hit"
+        }
+      },
+      {
+        "path": "R4/T2/melee/A2",
+        "type": "melee",
         "actor_id": "unit-20",
         "target_id": "unit-22",
         "maneuver": {},
-        "damage": 2,
+        "damage": 2.0,
         "morale": {},
         "trace": {
           "version": 1,
@@ -1653,26 +1694,24 @@
         "actor_id": "unit-20",
         "target_id": "unit-24",
         "from": {
-          "x": 21.969,
-          "y": 19.48,
+          "x": 22.969,
+          "y": 19.489,
           "facing": 0.53
         },
         "to": {
-          "x": 21.981,
-          "y": 18.167,
-          "facing": 270.53
+          "x": 22.969,
+          "y": 19.489,
+          "facing": 0.53
         },
         "maneuver": {
-          "kind": "turn",
-          "contact_slot": "rear",
-          "approach_mode": "direct",
-          "truncated": false,
-          "blocked_by_ally": false
+          "kind": "blocked_by_ally",
+          "truncated": true,
+          "blocked_by_ally": true
         },
         "morale": {},
         "trace": {
           "version": 1,
-          "result": "turn"
+          "result": "blocked_by_ally"
         }
       },
       {
@@ -1681,14 +1720,14 @@
         "actor_id": "unit-21",
         "target_id": "unit-24",
         "from": {
-          "x": 10.142,
-          "y": 10.906,
-          "facing": 349.55
+          "x": 12.638,
+          "y": 14.65,
+          "facing": 22.05
         },
         "to": {
-          "x": 13.797,
-          "y": 9.94,
-          "facing": 343.41
+          "x": 16.241,
+          "y": 16.216,
+          "facing": 24.01
         },
         "maneuver": {
           "kind": "wheel",
@@ -1717,9 +1756,9 @@
           "facing": 27.24
         },
         "to": {
-          "x": 11.59,
-          "y": 7.456,
-          "facing": 26.64
+          "x": 11.665,
+          "y": 7.497,
+          "facing": 25.81
         },
         "maneuver": {
           "kind": "reposition",
@@ -1785,7 +1824,7 @@
         "actor_id": "unit-24",
         "target_id": "unit-19",
         "maneuver": {},
-        "damage": 4,
+        "damage": 4.0,
         "morale": {},
         "trace": {
           "version": 1,
@@ -1798,7 +1837,7 @@
         "actor_id": "unit-19",
         "target_id": "unit-24",
         "maneuver": {},
-        "damage": 4,
+        "damage": 4.0,
         "morale": {},
         "trace": {
           "version": 1,
@@ -1812,21 +1851,49 @@
       {
         "path": "R6/T1/movement/A1",
         "type": "movement",
-        "actor_id": "unit-21",
+        "actor_id": "unit-20",
         "target_id": "unit-24",
         "from": {
-          "x": 13.797,
-          "y": 9.94,
-          "facing": 343.41
+          "x": 22.969,
+          "y": 19.489,
+          "facing": 0.53
         },
         "to": {
-          "x": 15.87,
-          "y": 9.403,
-          "facing": 40.65
+          "x": 24.746,
+          "y": 19.862,
+          "facing": 2.58
         },
         "maneuver": {
           "kind": "wheel",
           "contact_slot": "front",
+          "approach_mode": "direct",
+          "truncated": false,
+          "blocked_by_ally": false
+        },
+        "morale": {},
+        "trace": {
+          "version": 1,
+          "result": "wheel"
+        }
+      },
+      {
+        "path": "R6/T1/movement/A2",
+        "type": "movement",
+        "actor_id": "unit-21",
+        "target_id": "unit-24",
+        "from": {
+          "x": 16.241,
+          "y": 16.216,
+          "facing": 24.01
+        },
+        "to": {
+          "x": 18.921,
+          "y": 16.657,
+          "facing": 349.84
+        },
+        "maneuver": {
+          "kind": "wheel",
+          "contact_slot": "flank",
           "approach_mode": "direct",
           "truncated": false,
           "blocked_by_ally": false
@@ -1841,40 +1908,12 @@
         }
       },
       {
-        "path": "R6/T1/movement/A2",
-        "type": "movement",
-        "actor_id": "unit-20",
-        "target_id": "unit-24",
-        "from": {
-          "x": 21.981,
-          "y": 18.167,
-          "facing": 270.53
-        },
-        "to": {
-          "x": 21.981,
-          "y": 18.167,
-          "facing": 0.53
-        },
-        "maneuver": {
-          "kind": "turn",
-          "contact_slot": "flank",
-          "approach_mode": "direct",
-          "truncated": false,
-          "blocked_by_ally": false
-        },
-        "morale": {},
-        "trace": {
-          "version": 1,
-          "result": "turn"
-        }
-      },
-      {
         "path": "R6/T1/melee/A1",
         "type": "melee",
         "actor_id": "unit-19",
         "target_id": "unit-24",
         "maneuver": {},
-        "damage": 4,
+        "damage": 4.0,
         "morale": {},
         "trace": {
           "version": 1,
@@ -1891,7 +1930,7 @@
         "actor_id": "unit-24",
         "target_id": "unit-19",
         "maneuver": {},
-        "damage": 3,
+        "damage": 3.0,
         "morale": {},
         "trace": {
           "version": 1,
@@ -1924,7 +1963,7 @@
         "actor_id": "unit-24",
         "target_id": "unit-19",
         "maneuver": {},
-        "damage": 1,
+        "damage": 1.0,
         "morale": {},
         "trace": {
           "version": 1,

@@ -11,7 +11,7 @@ module Sim
       end
 
       def formation_models_remaining(entity)
-        return 0 if entity.dig(:state, :current_health).to_i <= 0
+        return 0 if entity.dig(:state, :current_health).to_f <= 0
         return entity.dig(:components, :formation, :models).to_i if entity[:kind] == "hero"
         return 1 if entity.dig(:components, :formation, :model_class).to_s == "machine"
 
@@ -36,7 +36,7 @@ module Sim
       end
 
       def deployable?(entity)
-        entity.dig(:components, :formation, :row) != "reserve" && entity.dig(:state, :current_health).to_i > 0
+        entity.dig(:components, :formation, :row) != "reserve" && entity.dig(:state, :current_health).to_f > 0
       end
     end
   end

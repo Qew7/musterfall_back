@@ -1027,14 +1027,14 @@
     "winner_id": "player-8",
     "rounds": 6,
     "side_health": {
-      "left": 36.0,
-      "right": 53.0
+      "left": 37.0,
+      "right": 51.0
     },
     "action_counts": {
       "magic": 1,
-      "morale": 8,
-      "movement": 56,
-      "shooting": 17
+      "morale": 12,
+      "movement": 55,
+      "shooting": 10
     },
     "contacts": [],
     "rule_effects": {
@@ -1042,8 +1042,8 @@
       "blast": 2,
       "forestborn": 6,
       "machine": 2,
-      "march": 44,
-      "volley": 12
+      "march": 43,
+      "volley": 5
     },
     "actions": [
       {
@@ -2049,7 +2049,7 @@
         "actor_id": "hero-2",
         "target_id": "unit-29",
         "maneuver": {},
-        "damage": 2,
+        "damage": 2.0,
         "morale": {},
         "trace": {
           "version": 1,
@@ -2062,7 +2062,7 @@
         "actor_id": "unit-9",
         "target_id": "unit-28",
         "maneuver": {},
-        "damage": 4,
+        "damage": 4.0,
         "morale": {},
         "trace": {
           "version": 1,
@@ -2079,7 +2079,7 @@
         "actor_id": "unit-10",
         "target_id": "hero-8",
         "maneuver": {},
-        "damage": 3,
+        "damage": 2.0,
         "morale": {},
         "trace": {
           "version": 1,
@@ -2232,7 +2232,7 @@
         "actor_id": "unit-30",
         "target_id": "unit-10",
         "maneuver": {},
-        "damage": 3,
+        "damage": 5.0,
         "morale": {},
         "trace": {
           "version": 1,
@@ -2244,38 +2244,6 @@
       },
       {
         "path": "R3/T2/shooting/A2",
-        "type": "shooting",
-        "actor_id": "unit-30",
-        "target_id": "unit-10",
-        "maneuver": {},
-        "damage": 3,
-        "morale": {},
-        "trace": {
-          "version": 1,
-          "rule_keys": [
-            "volley"
-          ],
-          "result": "hit"
-        }
-      },
-      {
-        "path": "R3/T2/shooting/A3",
-        "type": "shooting",
-        "actor_id": "unit-30",
-        "target_id": "unit-10",
-        "maneuver": {},
-        "damage": 9,
-        "morale": {},
-        "trace": {
-          "version": 1,
-          "rule_keys": [
-            "volley"
-          ],
-          "result": "hit"
-        }
-      },
-      {
-        "path": "R3/T2/shooting/A4",
         "type": "morale",
         "actor_id": "unit-10",
         "from": {
@@ -2438,11 +2406,28 @@
         "actor_id": "hero-2",
         "target_id": "unit-29",
         "maneuver": {},
+        "damage": 2.0,
+        "morale": {},
+        "trace": {
+          "version": 1,
+          "result": "hit"
+        }
+      },
+      {
+        "path": "R4/T1/shooting/A2",
+        "type": "morale",
+        "actor_id": "unit-29",
+        "from": {
+          "x": 25.079,
+          "y": 3.991,
+          "facing": 167.28
+        },
+        "maneuver": {},
         "damage": 0,
         "morale": {},
         "trace": {
           "version": 1,
-          "result": "miss"
+          "result": "passed"
         }
       },
       {
@@ -2674,7 +2659,7 @@
         "actor_id": "hero-2",
         "target_id": "unit-28",
         "maneuver": {},
-        "damage": 2,
+        "damage": 2.0,
         "morale": {},
         "trace": {
           "version": 1,
@@ -2801,7 +2786,7 @@
         "actor_id": "unit-30",
         "target_id": "unit-35",
         "maneuver": {},
-        "damage": 3,
+        "damage": 8.0,
         "morale": {},
         "trace": {
           "version": 1,
@@ -2817,7 +2802,7 @@
         "actor_id": "unit-31",
         "target_id": "unit-41",
         "maneuver": {},
-        "damage": 3,
+        "damage": 5.0,
         "morale": {},
         "trace": {
           "version": 1,
@@ -2829,101 +2814,96 @@
       },
       {
         "path": "R5/T2/shooting/A3",
-        "type": "shooting",
-        "actor_id": "unit-31",
-        "target_id": "unit-41",
+        "type": "morale",
+        "actor_id": "unit-35",
+        "from": {
+          "x": 13.099,
+          "y": 18.256,
+          "facing": 3.08
+        },
+        "to": {
+          "x": 10.586,
+          "y": 19.895,
+          "facing": 146.89
+        },
         "maneuver": {},
-        "damage": 3,
+        "damage": 0,
         "morale": {},
         "trace": {
           "version": 1,
-          "rule_keys": [
-            "volley"
-          ],
-          "result": "hit"
+          "result": "routing"
         }
       },
       {
         "path": "R5/T2/shooting/A4",
-        "type": "shooting",
-        "actor_id": "unit-31",
-        "target_id": "unit-41",
+        "type": "morale",
+        "actor_id": "unit-41",
+        "from": {
+          "x": 16.141,
+          "y": 9.076,
+          "facing": 335.08
+        },
         "maneuver": {},
-        "damage": 3,
+        "damage": 0,
         "morale": {},
         "trace": {
           "version": 1,
-          "rule_keys": [
-            "volley"
-          ],
-          "result": "hit"
+          "result": "passed"
         }
       },
       {
-        "path": "R5/T2/shooting/A5",
-        "type": "shooting",
-        "actor_id": "unit-31",
-        "target_id": "unit-41",
+        "path": "R6/T1/start/A1",
+        "type": "morale",
+        "actor_id": "unit-35",
+        "from": {
+          "x": 10.586,
+          "y": 19.895,
+          "facing": 146.89
+        },
+        "to": {
+          "x": 10.586,
+          "y": 22.895,
+          "facing": 90.0
+        },
         "maneuver": {},
-        "damage": 3,
+        "damage": 0,
         "morale": {},
         "trace": {
           "version": 1,
-          "rule_keys": [
-            "volley"
-          ],
-          "result": "hit"
-        }
-      },
-      {
-        "path": "R5/T2/shooting/A6",
-        "type": "shooting",
-        "actor_id": "unit-31",
-        "target_id": "unit-41",
-        "maneuver": {},
-        "damage": 15,
-        "morale": {},
-        "trace": {
-          "version": 1,
-          "rule_keys": [
-            "volley"
-          ],
-          "result": "hit"
+          "result": "routing"
         }
       },
       {
         "path": "R6/T1/movement/A1",
         "type": "movement",
-        "actor_id": "unit-35",
+        "actor_id": "unit-41",
         "target_id": "unit-28",
         "from": {
-          "x": 12.6,
-          "y": 18.23,
-          "facing": 3.08
+          "x": 16.141,
+          "y": 9.076,
+          "facing": 335.08
         },
         "to": {
-          "x": 15.407,
-          "y": 18.265,
-          "facing": 357.63
+          "x": 16.141,
+          "y": 9.076,
+          "facing": 335.08
         },
         "maneuver": {
-          "kind": "wheel",
-          "contact_slot": "rear",
-          "approach_mode": "direct",
+          "kind": "blocked_by_ally",
           "truncated": false,
-          "blocked_by_ally": false
+          "blocked_by_ally": true
         },
         "morale": {},
         "trace": {
           "version": 1,
-          "result": "wheel"
+          "result": "blocked_by_ally"
         }
       },
       {
         "path": "R6/T1/movement/A2",
         "type": "movement",
         "actor_id": "unit-34",
-        "target_id": "unit-28",
+        "target_id": "unit-29",
         "from": {
           "x": 8.14,
           "y": 10.177,
@@ -2936,7 +2916,7 @@
         },
         "maneuver": {
           "kind": "wheel",
-          "contact_slot": "flank",
+          "contact_slot": "front",
           "approach_mode": "direct",
           "truncated": false,
           "blocked_by_ally": false
@@ -2961,8 +2941,8 @@
           "facing": 4.83
         },
         "to": {
-          "x": 13.385,
-          "y": 6.43,
+          "x": 13.542,
+          "y": 4.581,
           "facing": 94.83
         },
         "maneuver": {
@@ -2982,7 +2962,7 @@
         "actor_id": "hero-2",
         "target_id": "unit-28",
         "maneuver": {},
-        "damage": 3,
+        "damage": 3.0,
         "morale": {},
         "trace": {
           "version": 1,
@@ -2993,7 +2973,7 @@
         "path": "R6/T1/shooting/A1",
         "type": "shooting",
         "actor_id": "unit-9",
-        "target_id": "unit-28",
+        "target_id": "unit-30",
         "maneuver": {},
         "damage": 0,
         "morale": {},
@@ -3032,7 +3012,7 @@
         "path": "R6/T2/movement/A1",
         "type": "movement",
         "actor_id": "unit-42",
-        "target_id": "unit-11",
+        "target_id": "unit-35",
         "from": {
           "x": 31.961,
           "y": 14.637,
@@ -3061,41 +3041,12 @@
         }
       },
       {
-        "path": "R6/T2/movement/A2",
-        "type": "movement",
-        "actor_id": "unit-31",
-        "target_id": "hero-2",
-        "from": {
-          "x": 26.089,
-          "y": 9.685,
-          "facing": 182.16
-        },
-        "to": {
-          "x": 23.253,
-          "y": 9.512,
-          "facing": 185.7
-        },
-        "maneuver": {
-          "kind": "reposition",
-          "truncated": false,
-          "blocked_by_ally": false
-        },
-        "morale": {},
-        "trace": {
-          "version": 1,
-          "rule_keys": [
-            "march"
-          ],
-          "result": "reposition"
-        }
-      },
-      {
         "path": "R6/T2/shooting/A1",
         "type": "shooting",
-        "actor_id": "unit-30",
-        "target_id": "unit-35",
+        "actor_id": "unit-31",
+        "target_id": "unit-41",
         "maneuver": {},
-        "damage": 3,
+        "damage": 8.0,
         "morale": {},
         "trace": {
           "version": 1,
@@ -3107,33 +3058,17 @@
       },
       {
         "path": "R6/T2/shooting/A2",
-        "type": "shooting",
-        "actor_id": "unit-31",
-        "target_id": "hero-2",
-        "maneuver": {},
-        "damage": 2,
-        "morale": {},
-        "trace": {
-          "version": 1,
-          "rule_keys": [
-            "volley"
-          ],
-          "result": "hit"
-        }
-      },
-      {
-        "path": "R6/T2/shooting/A3",
         "type": "morale",
-        "actor_id": "unit-35",
+        "actor_id": "unit-41",
         "from": {
-          "x": 15.907,
-          "y": 18.244,
-          "facing": 357.63
+          "x": 17.048,
+          "y": 8.654,
+          "facing": 335.08
         },
         "to": {
-          "x": 13.755,
-          "y": 20.335,
-          "facing": 135.82
+          "x": 14.079,
+          "y": 8.223,
+          "facing": 188.27
         },
         "maneuver": {},
         "damage": 0,

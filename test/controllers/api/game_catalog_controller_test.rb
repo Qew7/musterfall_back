@@ -26,5 +26,17 @@ class Api::GameCatalogControllerTest < ActionDispatch::IntegrationTest
     assert_equal "Пиромантия", payload["magicSchools"].first.fetch("name")
     assert_equal [ "fireball", "inferno" ], payload["magicSchools"].first.fetch("spellKeys")
     assert_equal "Огненный шар", payload["magicSchools"].first.fetch("spells").first.fetch("name")
+    matrix = payload.fetch("weaponVsArmor")
+    used_weapons = ArmyTemplate.distinct.pluck(:weapon_type) | Sim::Upgrades::Draft.combat_type_assignments.fetch(:weapon_type)
+    used_armors = ArmyTemplate.distinct.pluck(:armor_type) | Sim::Upgrades::Draft.combat_type_assignments.fetch(:armor_type)
+    assert_equal used_weapons.sort, matrix.fetch("weaponTypes").sort
+    assert_equal used_armors.sort, matrix.fetch("armorTypes").sort
+    assert_includes matrix.fetch("weaponTypes"), "breath"
+    assert_includes matrix.fetch("weaponTypes"), "demolish"
+    refute_includes matrix.fetch("weaponTypes"), "fire"
+    refute_includes matrix.fetch("weaponTypes"), "lightning"
+    assert_equal "рубящий", matrix.fetch("weaponLabels").fetch("slash")
+    assert_equal "тяжёлая", matrix.fetch("armorLabels").fetch("heavy")
+    assert_equal 0.85, matrix.fetch("multipliers").fetch("heavy").fetch("slash")
   end
 end

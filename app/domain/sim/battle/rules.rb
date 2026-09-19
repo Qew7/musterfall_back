@@ -79,6 +79,18 @@ module Sim
         RuleSet.new(Array(REGISTRY.fetch(phase.to_sym, -> { [] }).call))
       end
 
+      def army_rules
+        REGISTRY.values.flat_map(&:call).uniq
+      end
+
+      def army_synergies
+        army_rules.flat_map { |rule| rule.respond_to?(:army_synergies) ? rule.army_synergies : [] }
+      end
+
+      def army_roles(profile)
+        army_rules.filter_map { |rule| rule.army_role(profile) if rule.respond_to?(:army_role) }
+      end
+
       def planner_for_movement(combatant)
         Array(combatant[:abilities]).include?("flying") ? Flying::Movement : Ground::Movement
       end
@@ -136,6 +148,11 @@ module Sim
 
         def find_applicable(profile, attack_type)
           @rules.find { |rule| rule.respond_to?(:applies?) && rule.applies?(profile, attack_type) }
+        end
+
+        def fractional_damage?(profile, attack_type)
+          rule = find_applicable(profile, attack_type)
+          rule&.respond_to?(:fractional_damage?) && rule.fractional_damage?(profile, attack_type)
         end
 
         # Product of per-rule multipliers (missing hook => 1.0).

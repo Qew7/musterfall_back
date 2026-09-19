@@ -213,7 +213,7 @@ module Sim
       end
 
       def active_units(combatants)
-        combatants.select { |entry| entry[:current_health].to_i > 0 }
+        combatants.select { |entry| entry[:current_health].to_f > 0 }
       end
 
       def first_blocker(projected, obstacles, contact_id: nil, origin: nil, kernels: nil)

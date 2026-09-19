@@ -39,7 +39,7 @@ module Sim
 
         starting = (combatant[:starting_models] || combatant["starting_models"]).to_i
         remaining = (combatant[:models_remaining] || combatant["models_remaining"]).to_i
-        remaining = 0 if (combatant[:current_health] || combatant["current_health"]).to_i <= 0
+        remaining = 0 if (combatant[:current_health] || combatant["current_health"]).to_f <= 0
         lost = [ starting - remaining, 0 ].max
 
         sides = death_sides(entity)

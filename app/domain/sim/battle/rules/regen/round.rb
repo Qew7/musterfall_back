@@ -13,11 +13,11 @@ module Sim
             rng = side[:rng]
             side[:combatants].filter_map do |combatant|
               next unless Array(combatant[:abilities]).include?("regen")
-              next unless combatant[:current_health].to_i.between?(1, combatant[:max_health].to_i - 1)
+              next unless combatant[:current_health].to_f.positive? && combatant[:current_health].to_f < combatant[:max_health].to_f
               next unless regen_proc?(rng)
 
               before = State.snapshot_combatant(combatant)
-              combatant[:current_health] = [ combatant[:current_health].to_i + HEAL_AMOUNT, combatant[:max_health].to_i ].min
+              combatant[:current_health] = [ combatant[:current_health].to_f + HEAL_AMOUNT, combatant[:max_health].to_i ].min
               State.sync_combatant_footprint!(combatant)
               ActionResult.text_for(
                 actor: {

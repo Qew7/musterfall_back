@@ -5,13 +5,19 @@ module Balance
 
       RECRUIT_STRATEGIES = %w[balanced horde push_elite heroes].freeze
 
-      def call!(run:, catalog:, rng:)
+      def call!(run:, catalog:, rng:, battle_no: 0)
         config = effective_config(run.config.deep_symbolize_keys, rng)
+        config = ArmyStage.resolve(config, battle_no: battle_no)
         round = config[:round].to_i.clamp(1, Sim::Constants::MAX_CAMPAIGN_ROUNDS)
         left_faction, right_faction = pick_factions(catalog, config, rng)
         left_budget, right_budget = budgets_for(config, rng)
         hero_level = hero_level_for(config, rng)
         strategy = config[:recruit_strategy].presence || "balanced"
+        army_options = {
+          battle_only: config[:army_stage].present?,
+          recruit_access: config.fetch(:recruit_access, 3),
+          recruit_tiers: config[:recruit_tiers]
+        }
 
         left = Army.build!(
           catalog: catalog,
@@ -20,7 +26,8 @@ module Balance
           hero_level: hero_level,
           rng: rng,
           player_id: "sim-left",
-          recruit_strategy: strategy
+          recruit_strategy: strategy,
+          **army_options
         )
         right = Army.build!(
           catalog: catalog,
@@ -29,7 +36,8 @@ module Balance
           hero_level: hero_level,
           rng: rng,
           player_id: "sim-right",
-          recruit_strategy: strategy
+          recruit_strategy: strategy,
+          **army_options
         )
 
         battle_seed = rng.rand(0x7FFFFFFF)
@@ -55,7 +63,10 @@ module Balance
             left_budget: left_budget,
             right_budget: right_budget,
             hero_level: hero_level,
-            recruit_strategy: strategy
+            recruit_strategy: strategy,
+            army_stage: config[:army_stage] || "legacy",
+            left_recruitment: left[:recruitment],
+            right_recruitment: right[:recruitment]
           }
         )
       end

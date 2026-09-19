@@ -96,8 +96,10 @@ class BalanceSyntheticDuelTest < ActiveSupport::TestCase
   end
 
   test "random_first_turn swaps simulator player order" do
-    order = 5.times.map do
-      rng = Sim::Rng::Seeded.new(rand(0x7FFFFFFF))
+    # Exercise both branches deterministically; five coin flips can all agree.
+    order = [ 0, 1 ].map do |roll|
+      rng = Object.new
+      rng.define_singleton_method(:rand) { |_max| roll }
       left = { id: "duel-left" }
       right = { id: "duel-right" }
       first, = Balance::Synthetic::Duel.pick_turn_order(left, right, rng: rng, randomize: true)

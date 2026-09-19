@@ -10,7 +10,7 @@ module Sim
             defender = ctx[:defender]
             return unless poison_attacker?(ctx)
             return if Array(defender[:abilities]).include?("undead")
-            return if defender[:current_health].to_i <= 0
+            return if defender[:current_health].to_f <= 0
 
             action = ctx[:action]
             return if action[:poison_model_applied]
@@ -20,13 +20,13 @@ module Sim
             machine = machine_defender?(defender)
             return if model_health <= 1 || machine
 
-            damage = [ model_health, defender[:current_health].to_i ].min
+            damage = [ model_health, defender[:current_health].to_f ].min
             return if damage <= 0
 
             action[:poison_model_applied] = true
             defender[:current_health] -= damage
             State.sync_combatant_footprint!(defender)
-            action[:damage] = action[:damage].to_i + damage
+            action[:damage] = action[:damage].to_f + damage
             action[:target_state_after] = State.snapshot_combatant(defender)
             action[:snapshot] = State.snapshot_battlefield([ ctx[:acting_side], ctx[:target_side] ])
             (action[:details] ||= []) << "poison_model_kill damage=#{damage}"

@@ -20,11 +20,15 @@ class SimBattleDamageTest < ActiveSupport::TestCase
     assert_operator rear, :>, front
   end
 
-  test "damage is at least one when base power positive" do
+  test "weak melee can round to zero while ordinary shooting preserves fractions" do
     attacker = { melee: 1, abilities: [], weapon_type: "slash" }
     defender = { armor_type: "heavy", abilities: [] }
 
-    assert_operator Attack.damage(attacker, defender, "melee", "front", 1), :>=, 1
+    assert_equal 0, Attack.damage(attacker, defender, "melee", "front", 1)
+    shooter = attacker.merge(ranged: 1, weapon_type: "ranged", shooting_template: "common")
+    shot = Attack.damage(shooter, defender, "shooting", "front", 1)
+    assert_operator shot, :>, 0
+    assert_operator shot, :<, 1
   end
 
   test "charge boosts only a strike made after actual charge movement" do

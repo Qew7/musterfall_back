@@ -7,8 +7,8 @@ module Sim
 
         # Face directly away from the threat that caused the break (not a blind +180 from current facing).
         def flee_facing_for(combatant, engaged_enemies, enemies)
-          threats = Array(engaged_enemies).select { |enemy| enemy[:current_health].nil? || enemy[:current_health].to_i > 0 }
-          threats = Array(enemies).select { |enemy| enemy[:current_health].to_i > 0 } if threats.empty?
+          threats = Array(engaged_enemies).select { |enemy| enemy[:current_health].nil? || enemy[:current_health].to_f > 0 }
+          threats = Array(enemies).select { |enemy| enemy[:current_health].to_f > 0 } if threats.empty?
           return nil if threats.empty?
 
           heading_away(combatant, threats)
@@ -54,7 +54,7 @@ module Sim
         end
 
         def nearest_enemy(combatant, enemies)
-          enemies.select { |enemy| enemy[:current_health].to_i > 0 }
+          enemies.select { |enemy| enemy[:current_health].to_f > 0 }
             .min_by { |enemy| [ enemy[:is_routing] ? 0 : 1, Geometry::Battlefield.distance_between(combatant, enemy) ] }
         end
       end

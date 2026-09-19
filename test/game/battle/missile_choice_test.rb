@@ -209,6 +209,8 @@ class SimBattleMissileChoiceTest < ActiveSupport::TestCase
       name: "Лучники",
       kind: "unit",
       current_health: 10,
+      model_health: 1,
+      files: 2,
       is_routing: false,
       initiative: 4,
       ranged: 5,

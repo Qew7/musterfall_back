@@ -232,18 +232,54 @@ class SimBattleSpellRuntimeTest < ActiveSupport::TestCase
       side: right, kind: "spectral_hounds", pose: { x: 28.0, y: 8.0, facing: 180.0 }, all_combatants: occupied.call
     )
 
-    assert_equal "summon-1", first[:entity_id]
-    assert_equal "summon-2", second[:entity_id]
-    assert_equal "summon-3", other[:entity_id]
+    assert_equal "summon-left-1", first[:entity_id]
+    assert_equal "summon-left-2", second[:entity_id]
+    assert_equal "summon-right-1", other[:entity_id]
 
     left[:combatants].reject! { |entry| entry[:entity_id] == first[:entity_id] }
     third = Sim::Battle::SpellWorld.summon!(
       side: left, kind: "zombies", pose: { x: 20.0, y: 8.0, facing: 0.0 }, all_combatants: occupied.call
     )
 
-    assert_equal "summon-4", third[:entity_id]
-    assert_equal [ "summon-2", "summon-4" ], left[:combatants].map { |entry| entry[:entity_id] }
-    assert_equal [ "summon-3" ], right[:combatants].map { |entry| entry[:entity_id] }
+    assert_equal "summon-left-3", third[:entity_id]
+    assert_equal [ "summon-left-2", "summon-left-3" ], left[:combatants].map { |entry| entry[:entity_id] }
+    assert_equal [ "summon-right-1" ], right[:combatants].map { |entry| entry[:entity_id] }
+  end
+
+  test "summon ids survive expiry and are reproducible in a fresh battle" do
+    spawn = lambda do |side|
+      Sim::Battle::SpellWorld.summon!(side: side, kind: :zombies, pose: { x: 8, y: 8, facing: 0 })
+    end
+    side = { side_key: "left", combatants: [] }
+    first = spawn.call(side)
+    first[:summon_remaining_turns] = 1
+    Sim::Battle::State.tick_summons!([ side ])
+    assert_empty side[:combatants]
+    second = spawn.call(side)
+    refute_equal first[:entity_id], second[:entity_id]
+    assert_equal first[:entity_id], spawn.call({ side_key: "left", combatants: [] })[:entity_id]
+  end
+
+  test "free pose searches refresh units and terrain between calls" do
+    world = Sim::Battle::SpellWorld
+    stub = world.summon_prototype(:zombies, pose: { x: 20, y: 12 })
+    units = []
+    terrain = []
+    search = lambda do
+      world.random_free_pose(Sim::Rng::Seeded.new(7), unit: stub, all_combatants: units,
+        terrain: terrain, center: stub, radius: 6, expand: true)
+    end
+    first = search.call
+    assert first
+    units << first.merge(entity_id: "blocker")
+    second = search.call
+    assert second
+    refute Sim::Geometry::Obb.overlap_units?(first, second)
+    units.clear
+    terrain << { id: "wall", type: "wall", x: 20, y: 12, width: 80, depth: 80, impassable: true }
+    assert_nil search.call
+    terrain.clear
+    assert_equal first, search.call
   end
 
   test "summons and teleports face the nearest enemy at destination" do
@@ -609,7 +645,8 @@ class SimBattleSpellRuntimeTest < ActiveSupport::TestCase
     assert_includes 2..4, clone[:summon_remaining_turns]
     assert_includes context.result[:summon_ids], clone[:entity_id]
     refute_includes spell.legal_targets(context), clone
-    refute Sim::Geometry::Battlefield.rectangles_overlap?(ally, clone)
+    refute Sim::Geometry::Obb.overlap_units?(ally, clone)
+    refute Sim::Geometry::Obb.overlap_units?(host, clone)
   end
 
   test "doppelganger of a large caster sits beside the original and cannot recast" do
@@ -658,9 +695,146 @@ class SimBattleSpellRuntimeTest < ActiveSupport::TestCase
     clone = acting_side[:combatants].find { |entry| entry[:summoned] }
 
     assert clone
-    refute Sim::Geometry::Battlefield.rectangles_overlap?(host, clone)
+    refute Sim::Geometry::Obb.overlap_units?(host, clone)
     assert_operator Sim::Geometry::Battlefield.distance_between_units(host, clone), :>, 0.3
     refute_includes Sim::Battle::SpellCasting.casters(acting_side).map { |entry| entry[:host][:entity_id] }, clone[:entity_id]
+  end
+
+  test "nudge_to_clear_pose moves a summon off another living tray" do
+    blocker = BattleScenarios.combatant(entity_id: "a", x: 12.0, y: 12.0, base_width: 5.0, base_depth: 2.0)
+    stuck = BattleScenarios.combatant(entity_id: "summon-1", x: 13.0, y: 12.0, base_width: 5.0, base_depth: 2.0)
+    assert Sim::Geometry::Obb.overlap_units?(blocker, stuck)
+
+    assert Sim::Battle::SpellWorld.nudge_to_clear_pose!(
+      stuck,
+      rng: Sim::Rng::Seeded.new(1),
+      all_combatants: [ blocker, stuck ],
+      terrain: []
+    )
+    refute Sim::Geometry::Obb.overlap_units?(blocker, stuck)
+    world = Sim::Battle::Pathing::Obstacles.around(stuck, units: [ blocker, stuck ], terrain: [])
+    assert world.clear?(stuck)
+  end
+
+  test "a summon searches the whole field when the local radius is packed" do
+    host = BattleScenarios.combatant(entity_id: "mage", x: 8.0, y: 12.0, spell: 10)
+    wall = BattleScenarios.combatant(
+      entity_id: "wall", x: 10.0, y: 12.0, base_width: 18.0, base_depth: 22.0, current_health: 10
+    )
+    enemy = BattleScenarios.enemy(entity_id: "enemy", x: 36.0, y: 12.0)
+    stub = { facing: 0.0, base_width: 3.0, base_depth: 2.0, current_health: 1 }
+    center = { x: 8.0, y: 12.0 }
+    refute Sim::Battle::SpellWorld.random_free_pose(
+      Sim::Rng::Seeded.new(1),
+      unit: stub,
+      all_combatants: [ wall ],
+      terrain: [],
+      center: center,
+      radius: 6.0
+    )
+
+    acting_side = { side_key: "left", combatants: [ host, wall ] }
+    target_side = { side_key: "right", combatants: [ enemy ] }
+    context = Sim::Battle::SpellContext.new(
+      caster: host.merge(actor_id: "mage", spell_range: 24),
+      host: host,
+      acting_side: acting_side,
+      target_side: target_side,
+      terrain: [],
+      rng: Sim::Rng::Seeded.new(1),
+      round_number: 1,
+      spell: Sim::Battle::Spells::Necromancy::RaiseDead
+    )
+    context.summon!(:zombies, near: center, count: 5)
+    summoned = acting_side[:combatants].find { |entry| entry[:summoned] }
+
+    assert summoned
+    refute Sim::Geometry::Obb.overlap_units?(wall, summoned)
+    obstacles = Sim::Battle::Pathing::Obstacles.around(summoned, units: acting_side[:combatants] + target_side[:combatants])
+    assert obstacles.clear?(summoned)
+    desired = Sim::Geometry::Battlefield.heading_to(summoned, enemy)
+    gap = Sim::Geometry::Battlefield.shortest_facing_delta(desired, summoned[:facing]).abs
+    (0...gap.ceil).step(10) do |offset|
+      [ offset, -offset ].uniq.each do |delta|
+        refute obstacles.clear?(summoned.merge(facing: desired + delta)), "a closer enemy-facing pose is available"
+      end
+    end
+  end
+
+  test "doppelganger of a turned tray does not overlap after footprint sync" do
+    spell = Sim::Battle::Spells::Shadow::Doppelganger
+    host = BattleScenarios.combatant(entity_id: "mage", name: "Маг", x: 8.0, y: 12.0, melee: 1)
+    ally = BattleScenarios.combatant(
+      entity_id: "blades",
+      name: "Мечники",
+      x: 14.0,
+      y: 12.0,
+      facing: 0.0,
+      melee: 5,
+      base_width: 5.0,
+      base_depth: 2.0,
+      files: 5,
+      ranks: 2,
+      frontage: 5,
+      max_files: 5,
+      current_health: 10,
+      max_health: 10,
+      models_remaining: 10
+    )
+    turned = Sim::Geometry::Battlefield.apply_turn(ally, 90.0, 8.0)
+    ally.merge!(turned.slice(:x, :y, :facing, :base_width, :base_depth, :files, :ranks))
+    acting_side = { side_key: "left", combatants: [ host, ally ] }
+    context = Sim::Battle::SpellContext.new(
+      caster: host.merge(actor_id: "mage", spell_range: 24),
+      host: host,
+      acting_side: acting_side,
+      target_side: { side_key: "right", combatants: [ BattleScenarios.enemy(x: 36.0, y: 12.0) ] },
+      terrain: [],
+      rng: Sim::Rng::Seeded.new(7),
+      round_number: 1,
+      spell: spell
+    )
+
+    spell.resolve!(context, ally)
+    living = acting_side[:combatants] + context.target_side[:combatants]
+    living.combination(2).each do |left, right|
+      refute Sim::Geometry::Obb.overlap_units?(left, right), "#{left[:entity_id]} ∩ #{right[:entity_id]}"
+    end
+  end
+
+  test "a second doppelganger does not overlap the first" do
+    spell = Sim::Battle::Spells::Shadow::Doppelganger
+    host = BattleScenarios.combatant(entity_id: "mage", name: "Маг", x: 8.0, y: 12.0, melee: 1)
+    ally = BattleScenarios.combatant(
+      entity_id: "blades",
+      name: "Мечники",
+      x: 12.0,
+      y: 12.0,
+      melee: 5,
+      current_health: 7,
+      max_health: 10,
+      models_remaining: 7
+    )
+    acting_side = { side_key: "left", combatants: [ host, ally ] }
+    context = Sim::Battle::SpellContext.new(
+      caster: host.merge(actor_id: "mage", spell_range: 24),
+      host: host,
+      acting_side: acting_side,
+      target_side: { side_key: "right", combatants: [ BattleScenarios.enemy(x: 36.0, y: 12.0) ] },
+      terrain: [],
+      rng: Sim::Rng::Seeded.new(7),
+      round_number: 1,
+      spell: spell
+    )
+
+    2.times { assert context.clone_unit!(ally) }
+    clones = acting_side[:combatants].select { |entry| entry[:summoned] }
+    assert_equal 2, clones.size
+    refute Sim::Geometry::Obb.overlap_units?(clones[0], clones[1])
+    clones.each do |clone|
+      refute Sim::Geometry::Obb.overlap_units?(ally, clone)
+      refute Sim::Geometry::Obb.overlap_units?(host, clone)
+    end
   end
 
   test "timed summons vanish after remaining player turns" do

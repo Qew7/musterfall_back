@@ -20,8 +20,6 @@ module Sim
         "demolish" => "осадным",
         "fire" => "огненным",
         "lightning" => "молниевым",
-        "nature" => "природным",
-        "shadow" => "теневым",
         "death" => "мертвенным",
         "chaos" => "хаотическим"
       }.freeze
@@ -155,7 +153,7 @@ module Sim
         facing = facing ? " (#{facing})" : ""
         roll = attack_roll_text
         roll = roll ? "#{roll}, " : ""
-        line = "#{format_actor} наносит #{later[:name]}#{vs}#{facing}: #{roll}#{damage} урона, #{remaining_models_text(later)}"
+        line = "#{format_actor} наносит #{later[:name]}#{vs}#{facing}: #{roll}#{format_stat(damage)} урона, #{remaining_models_text(later)}"
         extras = extras_text
         extras.present? ? "#{line}; #{extras}." : "#{line}."
       end
@@ -175,7 +173,7 @@ module Sim
         facing = VECTOR_LABELS[@meta[:vector].to_s] || "фронт"
         prior = @before.first
         later = @after[prior&.[](:entity_id)]
-        bits = [ attack_roll_text, "#{dealt_damage(prior, later)} урона" ].compact
+        bits = [ attack_roll_text, "#{format_stat(dealt_damage(prior, later))} урона" ].compact
         bits << remaining_models_text(later) if later
         "#{format_actor} направляет силу школы «#{school}» на #{target} (#{facing}): #{bits.join(', ')}."
       end
@@ -203,8 +201,8 @@ module Sim
       def damage_clause
         prior = @before.first
         later = prior && @after[prior[:entity_id]]
-        damage = later ? dealt_damage(prior, later) : @meta[:damage].to_i
-        "#{damage} урона" if damage.positive?
+        damage = later ? dealt_damage(prior, later) : @meta[:damage].to_f
+        "#{format_stat(damage)} урона" if damage.positive?
       end
 
       def changes_text
@@ -223,7 +221,7 @@ module Sim
           "#{label} #{verb} с #{format_stat(from)} до #{format_stat(to)}"
         end
         if prior[:models_remaining].to_i != later[:models_remaining].to_i ||
-            (later[:model_health].to_i > 1 && prior[:current_health].to_i != later[:current_health].to_i)
+            (later[:model_health].to_i > 1 && prior[:current_health].to_f != later[:current_health].to_f)
           bits << remaining_models_text(later)
         end
         return if bits.empty?
@@ -253,7 +251,7 @@ module Sim
           key = effect.dig(:effect, :key)
           "эффект «#{Spells.fetch(key)&.name || key.to_s.tr('_', ' ')}»"
         when "heal"
-          "восстановлено #{effect[:amount]} здоровья"
+          "восстановлено #{format_stat(effect[:amount])} здоровья"
         when "teleport", "move"
           pose = effect[:to]
           pose.is_a?(Hash) ? "цель перемещена в #{pose[:x].to_f.round(1)}, #{pose[:y].to_f.round(1)}" : "цель перемещена"
@@ -289,26 +287,26 @@ module Sim
 
       def format_stat(value)
         number = value.to_f
-        number == number.to_i ? number.to_i : number.round(1)
+        number == number.to_i ? number.to_i : format("%.4g", number)
       end
 
       def dealt_damage(prior, later)
-        return @meta[:damage].to_i unless prior && later
+        return @meta[:damage].to_f unless prior && later
 
-        delta = prior[:current_health].to_i - later[:current_health].to_i
-        delta.positive? ? delta : @meta[:damage].to_i
+        delta = prior[:current_health].to_f - later[:current_health].to_f
+        delta.positive? ? delta : @meta[:damage].to_f
       end
 
       def remaining_models_text(state)
         models = state[:models_remaining].to_i
         line = "осталось #{models} моделей"
         model_health = state[:model_health].to_i
-        return line if model_health <= 1
+        return line if model_health <= 1 && state[:current_health].to_f == models
 
-        current = state[:current_health].to_i
+        current = state[:current_health].to_f
         cap = state[:max_health].to_i
         cap = model_health if models <= 1 && state[:kind].to_s != "hero"
-        "#{line}, здоровье #{current}/#{cap}"
+        "#{line}, здоровье #{format_stat(current)}/#{cap}"
       end
     end
   end

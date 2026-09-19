@@ -70,7 +70,7 @@ module Sim
 
         def nearest_enemy_within_tray_clearance(unit, enemies, clearance:)
           Array(enemies).each_with_object([]) do |enemy, matches|
-            next if enemy[:current_health].to_i <= 0
+            next if enemy[:current_health].to_f <= 0
 
             distance = distance_between_units(unit, enemy)
             matches << [ distance, enemy ] if distance <= clearance.to_f

@@ -13,7 +13,7 @@ module Sim
             round_number: round_number,
             terrain: terrain
           )
-          routed = acting_side[:combatants].select { |combatant| combatant[:current_health].to_i > 0 && combatant[:is_routing] }
+          routed = acting_side[:combatants].select { |combatant| combatant[:current_health].to_f > 0 && combatant[:is_routing] }
           if routed.empty?
             AttackResolution.add_event(phase, "Бегущих отрядов нет.")
             phase[:snapshot] = State.snapshot_battlefield([ acting_side, target_side ])
@@ -79,7 +79,7 @@ module Sim
           turn_key = "#{round_number}:#{acting_side[:player_id]}"
           collect_casualty_triggers(phase[:actions], attack_type, target_side[:combatants]).each_with_index do |entry, index|
             combatant = entry[:combatant]
-            next if combatant[:current_health].to_i <= 0 || combatant[:is_routing]
+            next if combatant[:current_health].to_f <= 0 || combatant[:is_routing]
             next if combatant[:last_missile_morale_turn_key] == turn_key
 
             action = resolve_action(
@@ -106,7 +106,7 @@ module Sim
         def resolve_losing_side!(phase:, loser_side:, loser_combatants:, winner_combatants:, battle_sides:, round_number:, engagement_index:, combat_score_delta:, terrain: [])
           return if combat_score_delta <= 0
 
-          loser_combatants.select { |combatant| combatant[:current_health].to_i > 0 }.each_with_index do |combatant, combatant_index|
+          loser_combatants.select { |combatant| combatant[:current_health].to_f > 0 }.each_with_index do |combatant, combatant_index|
             action = resolve_action(
               combatant: combatant,
               allies: loser_side[:combatants],
@@ -154,7 +154,7 @@ module Sim
             round_number: round_number,
             phase_type: phase_type
           }))
-            damage = failure[:damage].to_i
+            damage = failure[:damage].to_f
             summary = failure[:summary]
             to = position_of(combatant)
           else
@@ -268,7 +268,7 @@ module Sim
 
         def morale_trace_result(check, before, after, damage, escaped)
           return "escaped" if escaped
-          return "rule_failure" if damage.to_i.positive?
+          return "rule_failure" if damage.to_f.positive?
           return "rallied" if check[:passed] && before[:is_routing] && !after[:is_routing]
           return "passed" if check[:passed]
 
@@ -329,7 +329,7 @@ module Sim
         end
 
         def melee_engagements(acting_side, target_side)
-          living = (acting_side[:combatants] + target_side[:combatants]).select { |combatant| combatant[:current_health].to_i > 0 }
+          living = (acting_side[:combatants] + target_side[:combatants]).select { |combatant| combatant[:current_health].to_f > 0 }
           visited = {}
           engagements = []
           living.each do |combatant|
@@ -361,8 +361,8 @@ module Sim
           left_ids = engagement[:left].map { |combatant| combatant[:entity_id] }
           right_ids = engagement[:right].map { |combatant| combatant[:entity_id] }
           actions.select { |action| action[:type] == "melee" }.each_with_object(left: 0, right: 0) do |action, score|
-            score[:left] += action[:damage].to_i if left_ids.include?(action[:actor_unit_id]) && right_ids.include?(action[:target_id])
-            score[:right] += action[:damage].to_i if right_ids.include?(action[:actor_unit_id]) && left_ids.include?(action[:target_id])
+            score[:left] += action[:damage].to_f if left_ids.include?(action[:actor_unit_id]) && right_ids.include?(action[:target_id])
+            score[:right] += action[:damage].to_f if right_ids.include?(action[:actor_unit_id]) && left_ids.include?(action[:target_id])
           end
         end
 
@@ -406,7 +406,7 @@ module Sim
             next unless action[:target_id] && action[:target_state_before] && action[:target_state_after]
 
             current = casualties[action[:target_id]] || { first_before: action[:target_state_before], last_after: action[:target_state_after], phase_damage: 0 }
-            current[:phase_damage] += action[:damage].to_i
+            current[:phase_damage] += action[:damage].to_f
             current[:last_after] = action[:target_state_after]
             casualties[action[:target_id]] = current
           end

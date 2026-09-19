@@ -6,6 +6,10 @@ module Sim
           # rule: momentum_charge | melee | Charge bonus scales with charged_distance (up to +50% damage); resets after attack.
           module_function
 
+          def army_role(profile)
+            :flanker if Array(profile[:abilities]).include?("momentumCharge")
+          end
+
           def damage_factor(attacker, _defender, attack_type, _vector, _round_number)
             return 1.0 unless attack_type.to_s == "melee"
             return 1.0 unless Array(attacker[:abilities]).include?("momentumCharge")

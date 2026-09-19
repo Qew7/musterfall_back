@@ -122,7 +122,7 @@ module Sim
           return nil unless target_row
 
           occupied = allies.any? do |entry|
-            entry[:current_health].to_i > 0 &&
+            entry[:current_health].to_f > 0 &&
               entry[:entity_id] != combatant[:entity_id] &&
               entry[:lane] == combatant[:lane] &&
               entry[:row] == target_row

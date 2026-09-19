@@ -59,7 +59,7 @@ module Sim
           reach = idle_ally_proximity_limit(attacker)
           Array(obstacles).select do |obs|
             next false if obs[:entity_id] == attacker[:entity_id] || obs[:entity_id] == defender[:entity_id]
-            next false if obs[:current_health].to_i <= 0
+            next false if obs[:current_health].to_f <= 0
             next false if !attacker[:side_index].nil? && !obs[:side_index].nil? && obs[:side_index] != attacker[:side_index]
             # Friend not locked in contact with this defender — still a physical block for align.
             next false if melee_contact?(obs, defender)
@@ -160,7 +160,7 @@ module Sim
             next if distance_between_units(candidate, defender) > engage
             next if obstacles.any? { |obs|
               next false if obs[:entity_id] == candidate[:entity_id] || obs[:entity_id] == defender[:entity_id]
-              next false if obs[:current_health].to_i <= 0
+              next false if obs[:current_health].to_f <= 0
 
               rectangles_overlap?(candidate, obs) || distance_between_units(candidate, obs) < CONFIG[:melee_contact_tolerance]
             }
@@ -187,7 +187,7 @@ module Sim
             next if distance_between_units(candidate, defender) > engage
             next if obstacles.any? { |obs|
               next false if obs[:entity_id] == candidate[:entity_id] || obs[:entity_id] == defender[:entity_id]
-              next false if obs[:current_health].to_i <= 0
+              next false if obs[:current_health].to_f <= 0
 
               rectangles_overlap?(candidate, obs) || distance_between_units(candidate, obs) < CONFIG[:melee_contact_tolerance]
             }

@@ -38,8 +38,12 @@ module Balance
 
     def normalize_config(raw)
       config = raw.deep_symbolize_keys
+      stage = config[:army_stage].presence || "mixed"
+      raise ArgumentError, "unknown army stage" unless Synthetic::ArmyStage::OPTIONS.include?(stage)
+
       if config[:preset].to_s == "balanced_random"
         return {
+          army_stage: stage,
           battle_limit: config[:battle_limit].presence&.to_i,
           preset: "balanced_random",
           round: config[:round].to_i.clamp(1, Sim::Constants::MAX_CAMPAIGN_ROUNDS),
@@ -52,6 +56,7 @@ module Balance
       end
 
       {
+        army_stage: stage,
         battle_limit: config[:battle_limit].presence&.to_i,
         round: config[:round].to_i.clamp(1, Sim::Constants::MAX_CAMPAIGN_ROUNDS),
         budget_mode: config[:budget_mode].presence || "fixed",

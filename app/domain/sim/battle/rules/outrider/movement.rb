@@ -6,6 +6,10 @@ module Sim
           # rule: outrider | movement | Never melee-moves; kites to ideal shooting range.
           module_function
 
+          def army_role(profile)
+            :ranged if Array(profile[:abilities]).include?("outrider")
+          end
+
           def melee_mover?(combatant)
             return nil unless Array(combatant[:abilities]).include?("outrider")
 

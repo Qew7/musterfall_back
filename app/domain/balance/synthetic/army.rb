@@ -3,7 +3,8 @@ module Balance
     module Army
       module_function
 
-      def build!(catalog:, faction_id:, budget:, hero_level:, rng:, player_id:, recruit_strategy: "balanced")
+      def build!(catalog:, faction_id:, budget:, hero_level:, rng:, player_id:, recruit_strategy: "balanced",
+        recruit_access: 3, recruit_tiers: nil, battle_only: false)
         campaign = mini_campaign(player_id)
         school_key = wizard_school(catalog, faction_id, rng)
         assigned = Sim::Campaign::AssignFaction.call(
@@ -19,14 +20,17 @@ module Balance
         campaign = assigned.value
         player = campaign.find_player(player_id)
         player[:treasury] = budget.to_i
-        player[:recruit_access] = 3
+        player[:recruit_access] = recruit_access
         player[:recruit_strategy] = recruit_strategy
 
         shopped = Sim::Campaign::BotRecruit.call(
           campaign: campaign,
           catalog: catalog,
           player_id: player_id,
-          rng: rng
+          rng: rng,
+          allow_access_upgrades: !battle_only,
+          allowed_tiers: recruit_tiers,
+          max_roster_size: battle_only ? ArmyStage::MAX_ROSTER_SIZE : nil
         )
         raise shopped.error unless shopped.ok?
 
@@ -38,6 +42,12 @@ module Balance
           name: player[:name],
           is_bot: true,
           faction_id: player[:faction_id],
+          recruitment: {
+            spent: player[:roster].sum { |entity| entity.dig(:components, :economy, :cost).to_i },
+            unspent: player[:treasury], access: player[:recruit_access],
+            roster_size: player[:roster].size,
+            reserve_size: player[:roster].count { |entity| entity.dig(:components, :formation, :row) == "reserve" }
+          },
           roster: Marshal.load(Marshal.dump(player[:roster]))
         }
       end

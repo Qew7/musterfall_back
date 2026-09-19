@@ -12,6 +12,11 @@ module Sim
         }
       }.freeze
 
+      BOARD_SPAN = Math.hypot(
+        Geometry::Battlefield::CONFIG[:width].to_f,
+        Geometry::Battlefield::CONFIG[:height].to_f
+      ).freeze
+
       SUMMONS = {
         "phoenix" => { name: "Феникс", health: 7, models: 1, melee: 6, movement: 8, armor_type: "light", weapon_type: "fire", abilities: %w[flying fear] },
         "fey" => { name: "Феи", health: 4, models: 4, melee: 4, movement: 6, armor_type: "light", weapon_type: "puncture", abilities: %w[skirmisher] },
@@ -61,40 +66,74 @@ module Sim
         removed
       end
 
-      def random_free_pose(rng, unit:, all_combatants:, terrain:, center:, radius: 8.0)
-        cx = center[:x].to_f
-        cy = center[:y].to_f
-        try = lambda do |x, y, facing|
-          candidate = unit.merge(x: x, y: y, facing: facing)
-          return nil unless inside_battlefield?(candidate)
+      def random_free_pose(rng, unit:, all_combatants:, terrain:, center:, radius: 8.0, expand: false)
+        obstacles = Pathing::Obstacles.around(unit, units: all_combatants, terrain: terrain)
+        found = search_free_pose(rng, unit, obstacles, center, radius.to_f)
+        return found if found || !expand
 
-          obstacles = Pathing::Obstacles.around(candidate, units: all_combatants, terrain: terrain)
-          candidate if obstacles.clear?(candidate)
-        end
-        30.times do
-          angle = rng.rand * Math::PI * 2
-          distance = rng.rand * radius.to_f
-          found = try.call(cx + (Math.cos(angle) * distance), cy + (Math.sin(angle) * distance), rng.rand(4) * 90.0)
-          return found if found
-        end
-        [ 2.5, 4.0, 5.5, 7.0, radius.to_f ].uniq.each do |ring|
-          8.times do |index|
-            angle = index * Math::PI / 4.0
-            found = try.call(cx + (Math.cos(angle) * ring), cy + (Math.sin(angle) * ring), unit[:facing].to_f)
-            return found if found
+        search_free_pose(rng, unit, obstacles, center, BOARD_SPAN, start_radius: radius.to_f)
+      end
+
+      def pose_clear?(unit, all_combatants, terrain)
+        inside_battlefield?(unit) &&
+          Pathing::Obstacles.around(unit, units: all_combatants, terrain: terrain).clear?(unit)
+      end
+
+      def nearest_clear_facing(unit, desired, obstacles, contact_id = nil)
+        return desired if obstacles.clear?(unit.merge(facing: desired), contact_id: contact_id)
+
+        best = nil
+        best_gap = Float::INFINITY
+        (1..18).each do |step|
+          offset = step * 10.0
+          [ offset, -offset ].each do |delta|
+            gap = delta.abs
+            next if gap >= best_gap
+
+            facing = Geometry::Battlefield.normalize_facing(desired + delta)
+            next unless obstacles.clear?(unit.merge(facing: facing), contact_id: contact_id)
+
+            best = facing
+            best_gap = gap
           end
         end
-        nil
+        best
+      end
+
+      def face_nearest_enemy!(unit, enemies:, all_combatants:, terrain:)
+        living = Array(enemies).select { |entry| entry[:current_health].to_f > 0 && !entry[:x].nil? }
+        enemy = living.min_by { |entry| Geometry::Battlefield.distance_between_units(unit, entry) }
+        return unit unless enemy
+
+        desired = Geometry::Battlefield.heading_to(unit, enemy)
+        obstacles = Pathing::Obstacles.around(unit, units: all_combatants, terrain: terrain)
+        facing = nearest_clear_facing(unit, desired, obstacles, unit[:entity_id])
+        unit[:facing] = facing if facing
+        unit
+      end
+
+      # After facing / footprint sync a spawn can sit inside another tray. Relocate
+      # or report failure so the caller can drop the summon instead of leaving a clip.
+      def nudge_to_clear_pose!(unit, rng:, all_combatants:, terrain:, radius: 12.0)
+        return true if pose_clear?(unit, all_combatants, terrain)
+
+        pose = random_free_pose(
+          rng, unit: unit, all_combatants: all_combatants, terrain: terrain, center: unit, radius: radius, expand: true
+        )
+        return false unless pose
+
+        unit[:x] = pose[:x]
+        unit[:y] = pose[:y]
+        unit[:facing] = pose[:facing]
+        true
       end
 
       def summon!(side:, kind:, pose:, expires: :battle, all_combatants: nil)
         profile = SUMMONS.fetch(kind.to_s)
-        id = next_summon_id(all_combatants || side[:combatants])
+        id = next_summon_id(side)
         health = profile.fetch(:health)
         models = profile.fetch(:models)
         model_health = (health.to_f / models).ceil
-        files = [ models, 3 ].min
-        ranks = (models.to_f / files).ceil
         combatant = {
           entity_id: id,
           name: profile[:name],
@@ -106,15 +145,6 @@ module Sim
           x: pose[:x],
           y: pose[:y],
           facing: pose[:facing],
-          frontage: files,
-          max_files: 3,
-          files: files,
-          ranks: ranks,
-          base_width: files.to_f,
-          base_depth: ranks.to_f,
-          model_class: "infantry",
-          model_width: 1.0,
-          model_depth: 1.0,
           movement: profile[:movement],
           morale: 10,
           skill: 4,
@@ -141,14 +171,14 @@ module Sim
           summoned: true,
           summon_kind: kind.to_s,
           summon_expires: expires
-        }
+        }.merge(summon_footprint(kind))
         side[:combatants] << combatant
         combatant
       end
 
       def clone_combatant!(side:, source:, pose:, remaining_turns:, all_combatants: nil)
         copy = Marshal.load(Marshal.dump(source))
-        id = next_summon_id(all_combatants || side[:combatants])
+        id = next_summon_id(side)
         copy[:entity_id] = id
         copy[:name] = "Двойник (#{source[:name]})"
         copy[:x] = pose[:x]
@@ -197,7 +227,65 @@ module Sim
         footprint = Geometry::Battlefield.feature_footprint(feature)
         inside_battlefield?(footprint) &&
           Array(terrain).none? { |other| Geometry::Battlefield.rectangles_overlap?(footprint, Geometry::Battlefield.feature_footprint(other)) } &&
-          Array(combatants).none? { |unit| unit[:current_health].to_i > 0 && Geometry::Battlefield.rectangles_overlap?(footprint, unit) }
+          Array(combatants).none? { |unit| unit[:current_health].to_f > 0 && Geometry::Battlefield.rectangles_overlap?(footprint, unit) }
+      end
+
+      # One immutable obstacle snapshot per search; subsequent summons rebuild it.
+      def search_free_pose(rng, unit, obstacles, center, radius, start_radius: nil)
+        cx = center[:x].to_f
+        cy = center[:y].to_f
+        try = lambda do |x, y, facing|
+          candidate = unit.merge(x: x, y: y, facing: facing)
+          candidate if obstacles.clear?(candidate)
+        end
+        unless start_radius
+          30.times do
+            angle = rng.rand * Math::PI * 2
+            distance = rng.rand * radius
+            found = try.call(cx + (Math.cos(angle) * distance), cy + (Math.sin(angle) * distance), rng.rand(4) * 90.0)
+            return found if found
+          end
+        end
+        # Constant arc spacing avoids widening blind spots on distant rings.
+        first_ring = start_radius ? start_radius + 1.0 : 0.0
+        rings = first_ring.step(radius, 1.0).to_a
+        rings << radius if rings.last != radius && first_ring <= radius
+        facings = [ unit[:facing].to_f, 0.0, 90.0, 45.0, 135.0 ].uniq
+        rings.each do |ring|
+          samples = [ 8, (2 * Math::PI * ring).ceil ].max
+          samples.times do |index|
+            angle = index * Math::PI * 2 / samples
+            x = cx + Math.cos(angle) * ring
+            y = cy + Math.sin(angle) * ring
+            next unless x.between?(0, Geometry::Battlefield::CONFIG[:width]) &&
+              y.between?(0, Geometry::Battlefield::CONFIG[:height])
+
+            facings.each do |facing|
+              found = try.call(x, y, facing)
+              return found if found
+            end
+          end
+        end
+        nil
+      end
+      private_class_method :search_free_pose
+
+      def summon_footprint(kind)
+        models = SUMMONS.fetch(kind.to_s).fetch(:models)
+        files = [ models, 3 ].min
+        ranks = (models.to_f / files).ceil
+        {
+          frontage: files, max_files: 3, files: files, ranks: ranks,
+          base_width: files.to_f, base_depth: ranks.to_f,
+          model_class: "infantry", model_width: 1.0, model_depth: 1.0
+        }
+      end
+
+      def summon_prototype(kind, pose:)
+        summon_footprint(kind).merge(
+          x: pose[:x], y: pose[:y], facing: pose[:facing].to_f,
+          current_health: SUMMONS.fetch(kind.to_s).fetch(:health)
+        )
       end
 
       def next_terrain_id(terrain)
@@ -206,11 +294,10 @@ module Sim
       end
       private_class_method :next_terrain_id
 
-      def next_summon_id(combatants)
-        sequence = Array(combatants).filter_map { |entry|
-          entry[:entity_id].to_s[/\Asummon-(\d+)\z/, 1]&.to_i
-        }.max.to_i + 1
-        "summon-#{sequence}"
+      def next_summon_id(side)
+        # Battle-local state, independent of wall clock and surviving combatants.
+        side[:summon_sequence] = side.fetch(:summon_sequence, 0) + 1
+        "summon-#{side.fetch(:side_key)}-#{side[:summon_sequence]}"
       end
       private_class_method :next_summon_id
     end

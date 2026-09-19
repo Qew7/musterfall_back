@@ -20,7 +20,8 @@ module Balance
         deploy_filter: deploy,
         battles: {
           summary: Dashboard.summary_payload(counters, battles.count),
-          faction_wins: Dashboard.faction_wins(counters)
+          faction_wins: Dashboard.faction_wins(counters),
+          army_stages: ArmyStageReport.build(battles)
         },
         duels: duel_summary(duel_runs, units)
       }

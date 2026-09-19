@@ -93,7 +93,7 @@ module Api
         params.permit(
           :battle_limit, :round, :budget_mode, :target_points, :points_jitter,
           :hero_level, :randomize_hero_level, :faction_left, :faction_right, :recruit_strategy,
-          :preset
+          :preset, :army_stage
         ).to_h
       end
 

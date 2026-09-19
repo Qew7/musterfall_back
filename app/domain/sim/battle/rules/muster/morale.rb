@@ -6,6 +6,18 @@ module Sim
           # rule: muster | morale | Hero muster raises ally effective morale to hero morale within range.
           module_function
 
+          SYNERGY = ArmySynergy.new(
+            consumer: ->(profile) { profile[:kind] == "unit" },
+            provider: ->(profile) { profile[:kind] == "hero" && Array(profile[:abilities]).include?("muster") },
+            capacity: ->(_profile) { Float::INFINITY },
+            range: ->(profile) { profile[:morale].to_f }, center_distance: true,
+            benefit: ->(user, source) { source[:morale].to_f > user[:morale].to_f }
+          ).freeze
+
+          def army_synergies
+            [ SYNERGY ]
+          end
+
           def effective_morale(combatant, allies)
             return nil if combatant[:kind] == "hero"
 

@@ -12,7 +12,7 @@ module Sim
           end
 
           def attack_victims(attacker, primary_target, enemies)
-            living = enemies.select { |entry| entry[:current_health].to_i > 0 }
+            living = enemies.select { |entry| entry[:current_health].to_f > 0 }
             living
               .select { |entry| Geometry::Battlefield.distance_between(entry, primary_target) <= Geometry::Battlefield::CONFIG[:volley_radius] }
               .sort_by { |entry| Geometry::Battlefield.distance_between(entry, primary_target) }
@@ -32,6 +32,15 @@ module Sim
 
           def resolve_missile_strike!(**ctx)
             Common::Shooting.resolve_missile_strike!(**ctx)
+          end
+
+          def fractional_damage?(...)
+            Common::Shooting.fractional_damage?(...)
+          end
+
+          def expected_damage(actor, target, vector, round_number, attack_type, enemies)
+            Common::Shooting.expected_damage(actor, target, vector, round_number, attack_type, enemies,
+              victims: attack_victims(actor, target, enemies))
           end
         end
       end

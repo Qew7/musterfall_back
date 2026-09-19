@@ -1,3 +1,5 @@
+require "digest"
+
 module Sim
   module Battle
     module Rules
@@ -6,7 +8,7 @@ module Sim
           SUMMON_KIND = "zombies"
           SEARCH_RADIUS = 6.0
 
-          # rule: corpse_trail | shooting | On hit, summons zombies within 6" of the victim.
+          # rule: corpse_trail | shooting | On hit, summons zombies on a clear pose near the victim (whole field if needed), facing the nearest enemy.
           module_function
 
           def after_hit!(ctx)
@@ -22,60 +24,44 @@ module Sim
             center = { x: defender[:x].to_f, y: defender[:y].to_f }
             all_combatants = acting_side[:combatants] + target_side[:combatants]
             terrain = Array(ctx[:terrain])
-            seed = [ host[:entity_id], defender[:entity_id], center[:x], center[:y] ].join("-").hash.abs
+            seed = Digest::SHA256.hexdigest([ host[:entity_id], defender[:entity_id], center[:x], center[:y] ].join("-")).to_i(16)
+            rng = Rng::Seeded.new(seed)
             pose = SpellWorld.random_free_pose(
-              Rng::Seeded.new(seed),
-              unit: summon_stub(center),
+              rng,
+              unit: SpellWorld.summon_prototype(SUMMON_KIND, pose: center),
               all_combatants: all_combatants,
               terrain: terrain,
               center: center,
-              radius: SEARCH_RADIUS
+              radius: SEARCH_RADIUS,
+              expand: true
             )
             return unless pose
 
-            pose[:facing] = facing_toward_nearest_enemy(pose, target_side[:combatants])
             summoned = SpellWorld.summon!(
               side: acting_side,
               kind: SUMMON_KIND,
               pose: pose,
               all_combatants: all_combatants
             )
+            living = acting_side[:combatants] + target_side[:combatants]
+            unless SpellWorld.nudge_to_clear_pose!(
+              summoned,
+              rng: rng,
+              all_combatants: living,
+              terrain: terrain
+            )
+              acting_side[:combatants].delete(summoned)
+              return
+            end
+            SpellWorld.face_nearest_enemy!(
+              summoned, enemies: target_side[:combatants], all_combatants: living, terrain: terrain
+            )
             action[:summon_ids] = Array(action[:summon_ids]) + [ summoned[:entity_id] ]
             ActionResult.append_clause!(action, "призван отряд «#{summoned[:name]}»")
             action[:details] = Array(action[:details]) + [
-              "corpse_trail summon=#{summoned[:entity_id]} pose=#{pose[:x].round(1)},#{pose[:y].round(1)} facing=#{pose[:facing].round(1)}"
+              "corpse_trail summon=#{summoned[:entity_id]} pose=#{summoned[:x].round(1)},#{summoned[:y].round(1)} facing=#{summoned[:facing].round(1)}"
             ]
           end
-
-          def summon_stub(center)
-            profile = SpellWorld::SUMMONS.fetch(SUMMON_KIND)
-            models = profile.fetch(:models)
-            files = [ models, 3 ].min
-            ranks = (models.to_f / files).ceil
-            {
-              x: center[:x],
-              y: center[:y],
-              facing: 0,
-              frontage: files,
-              files: files,
-              ranks: ranks,
-              model_width: 1.0,
-              model_depth: 1.0,
-              base_width: files.to_f,
-              base_depth: ranks.to_f
-            }
-          end
-          private_class_method :summon_stub
-
-          def facing_toward_nearest_enemy(pose, enemies)
-            nearest = Pathing.active_units(enemies).min_by do |enemy|
-              Geometry::Battlefield.distance_between(pose, enemy)
-            end
-            return pose[:facing].to_f unless nearest
-
-            Geometry::Battlefield.heading_to(pose, nearest)
-          end
-          private_class_method :facing_toward_nearest_enemy
         end
       end
     end

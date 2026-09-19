@@ -102,4 +102,19 @@ class BalanceRollupTest < ActiveSupport::TestCase
     assert BalanceCounter.exists?(bucket: "faction_win", key: "wildwood", matchup_type: "all")
     assert_equal 1, BalanceCounter.find_by!(bucket: "battle", key: "total", matchup_type: "all").n
   end
+
+  test "fractional damage survives rollup database accumulation and dashboard" do
+    action = @result[:rounds][0][:turns][0][:phases][0][:actions][0]
+    action.merge!(type: "shooting", damage: 0.375)
+    2.times do
+      Balance::Persist.call!(result: @result, attacker: @attacker, defender: @defender,
+        catalog_version: @catalog_version)
+    end
+    counter = BalanceCounter.find_by!(bucket: "damage", key: "war_dancers->grove_hawk:shooting", matchup_type: "all")
+    assert_in_delta 0.75, counter.sum, 1e-12
+    rows = Balance::Dashboard.damage_matrix_rows(BalanceCounter.where(id: counter.id))
+    assert_in_delta 0.75, rows.first[:total_damage], 1e-12
+    metrics = BalanceBattleRollup.last.metrics
+    assert_in_delta 0.375, metrics["damage_matrix"]["war_dancers->grove_hawk"]["shooting"], 1e-12
+  end
 end

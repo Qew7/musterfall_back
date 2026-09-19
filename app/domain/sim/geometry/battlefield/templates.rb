@@ -76,7 +76,7 @@ module Sim
 
         # One OBB per remaining model in files×ranks (front rank toward unit facing).
         def model_cells(unit)
-          models = [ unit[:models_remaining].to_i, unit[:current_health].to_i > 0 ? 1 : 0 ].max
+          models = [ unit[:models_remaining].to_i, unit[:current_health].to_f > 0 ? 1 : 0 ].max
           return [] if models <= 0
 
           mw = [ unit[:model_width].to_f, 0.5 ].max

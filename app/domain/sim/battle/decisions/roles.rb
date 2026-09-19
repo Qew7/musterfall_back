@@ -7,7 +7,7 @@ module Sim
 
         # Still on the field (HP > 0). Name avoids "living" — undead armies count too.
         def standing(combatants)
-          Array(combatants).select { |entry| entry[:current_health].to_i > 0 }
+          Array(combatants).select { |entry| entry[:current_health].to_f > 0 }
         end
 
         def active(combatants)

@@ -38,15 +38,18 @@ module Sim
         }
       }.freeze
 
-      def self.call(campaign:, catalog:, player_id:, rng:)
-        new(campaign, catalog, player_id, rng).call
+      def self.call(campaign:, catalog:, player_id:, rng:, **options)
+        new(campaign, catalog, player_id, rng, **options).call
       end
 
-      def initialize(campaign, catalog, player_id, rng)
+      def initialize(campaign, catalog, player_id, rng, allow_access_upgrades: true, allowed_tiers: nil, max_roster_size: nil)
         @campaign = campaign
         @catalog = catalog
         @player_id = player_id
         @rng = rng
+        @allow_access_upgrades = allow_access_upgrades
+        @allowed_tiers = allowed_tiers
+        @max_roster_size = max_roster_size
       end
 
       def call
@@ -118,6 +121,7 @@ module Sim
         24.times do
           player = @campaign.find_player(@player_id)
           break unless player && player[:treasury].positive?
+          break if @max_roster_size && player[:roster].size >= @max_roster_size
 
           if should_upgrade?(player) && upgrade_access!(player)
             recruitable_options = nil
@@ -132,6 +136,8 @@ module Sim
       end
 
       def should_upgrade?(player)
+        return false unless @allow_access_upgrades
+
         cost = RecruitAccess.upgrade_cost(player[:recruit_access].to_i)
         return false unless cost
 
@@ -144,7 +150,7 @@ module Sim
       def try_recruit!(player, options)
         return false if options.empty?
 
-        template = weighted_pick(options, strategy(player))
+        template = weighted_pick(options, strategy(player), player)
         return false unless template
 
         recruit_template!(player, template, school_key: wizard_school(template, player))
@@ -223,13 +229,18 @@ module Sim
         units = @catalog.unit_templates(player[:faction_id])
         heroes = @catalog.hero_templates(player[:faction_id])
         (units + heroes).select do |template|
+          next false if @allowed_tiers && template[:kind] != "hero" && !@allowed_tiers.include?(template[:recruit_tier])
+
           cost = RecruitRules::ChaosSpawn.cost(player, template)
           cost.positive? && cost <= player[:treasury] && RecruitAccess.allowed?(player, @catalog, template)
         end
       end
 
-      def weighted_pick(templates, cfg)
-        weights = templates.map { |template| [ template, weight_for(template, cfg) ] }
+      def weighted_pick(templates, cfg, player)
+        weights = templates.map do |template|
+          composition = ArmyComposition.recruit_weight(template, roster: player[:roster], options: templates, treasury: player[:treasury])
+          [ template, weight_for(template, cfg) * composition ]
+        end
         total = weights.sum { |_, weight| weight }
         return @rng.pick(templates) if total <= 0
 

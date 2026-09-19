@@ -17,7 +17,7 @@ module Sim
         def resolve!(phase:, acting_side:, target_side:, round_number:, attack_type:, rng:, terrain: [])
           all_combatants = acting_side[:combatants] + target_side[:combatants]
           attackers = acting_side[:combatants]
-            .select { |entry| entry[:current_health].to_i > 0 }
+            .select { |entry| entry[:current_health].to_f > 0 }
             .select { |entry| can_attack?(entry, attack_type, allow_routing_melee: phase[:allow_routing_melee]) }
             .sort_by { |entry| -entry[:initiative].to_i }
 
@@ -99,17 +99,17 @@ module Sim
 
           victims.each do |victim_entry|
             victim = victim_entry[:target]
-            next if victim[:current_health].to_i <= 0
+            next if victim[:current_health].to_f <= 0
 
             batch_actions = []
             attempts = 0
             hits = 0
 
             strikes.times do
-              break if victim[:current_health].to_i <= 0
+              break if victim[:current_health].to_f <= 0
 
               strike_damage = damage(profile, victim, attack_type, vector, round_number)
-              strike_damage = [ 1, (strike_damage * victim_entry[:multiplier].to_f).round ].max if victim_entry[:multiplier]
+              strike_damage = (strike_damage * victim_entry[:multiplier].to_f).round if victim_entry[:multiplier]
               next if strike_damage <= 0
 
               attempts += 1
@@ -166,9 +166,10 @@ module Sim
           phase
         end
 
-        def record_missile_hit!(phase:, actor:, host:, profile:, victim:, vector:, strike_damage:, attack_type:, acting_side:, target_side:, blockers:, victims:, models_hit: nil, terrain: [], defer_log: false)
+        def record_missile_hit!(phase:, actor:, host:, profile:, victim:, vector:, strike_damage:, attack_type:, acting_side:, target_side:, blockers:, victims:, models_hit: nil, terrain: [], defer_log: false, hits_landed: nil, attacks_attempted: nil)
           actor_state = State.snapshot_combatant(host)
           before = State.snapshot_combatant(victim)
+          strike_damage = [ strike_damage, victim[:current_health].to_f ].min
           victim[:current_health] = [ 0, victim[:current_health] - strike_damage ].max
           State.sync_combatant_footprint!(victim)
           actor_for_text = actor.merge(weapon_type: profile[:weapon_type] || actor[:weapon_type])
@@ -182,6 +183,8 @@ module Sim
             target_name: victim[:name],
             vector: vector,
             damage: strike_damage,
+            hits_landed: hits_landed,
+            attacks_attempted: attacks_attempted,
             models_hit: models_hit,
             blockers: blockers.map { |blocker| blocker[:entity_id] },
             requires_line_of_sight: profile[:requires_line_of_sight],
@@ -247,7 +250,7 @@ module Sim
           kill_budget = defender_engaged_model_count(attacker, target)
 
           entries.each do |entry|
-            next if attacker[:current_health].to_i <= 0 || target[:current_health].to_i <= 0 || entry[:damage].to_i <= 0
+            next if attacker[:current_health].to_f <= 0 || target[:current_health].to_f <= 0 || entry[:damage].to_f <= 0
 
             engaged = [ entry[:engaged].to_i, 1 ].max
             attacks_per_model = entry.dig(:profile, :attacks) || attacker[:attacks] || 1
@@ -256,7 +259,7 @@ module Sim
             hits = 0
 
             attempts.times do
-              break if attacker[:current_health].to_i <= 0 || target[:current_health].to_i <= 0
+              break if attacker[:current_health].to_f <= 0 || target[:current_health].to_f <= 0
 
               hits += 1 if hit?(entry[:profile], target, "melee", rng)
             end
@@ -377,7 +380,10 @@ module Sim
           phase_factor = attack_type == "shooting" ? 0.9 : 1
           ability_factor = rules.damage_factor(attacker, defender, attack_type, vector, round_number)
           raw = base * armor_factor * facing_factor * phase_factor * ability_factor
-          [ 1, (raw / 2.2).round ].max
+          value = raw / 2.2
+          # Ordinary volleys preserve fractions. Geometric templates and melee
+          # keep their existing per-model damage and rounding rules.
+          rules.fractional_damage?(attacker, attack_type) ? value : value.round
         end
 
         def default_facing_damage_factor(vector)
@@ -525,7 +531,7 @@ module Sim
         def melee_kill_damage_cap(defender, max_models_killed)
           return 0 if max_models_killed.to_i <= 0
 
-          health = defender[:current_health].to_i
+          health = defender[:current_health].to_f
           return 0 if health <= 0
 
           model_health = [ defender[:model_health].to_i, 1 ].max
@@ -537,7 +543,7 @@ module Sim
         end
 
         def side_model_capacity(unit, contact_side)
-          return unit[:current_health].to_i > 0 ? 1 : 0 if unit[:kind] == "hero"
+          return unit[:current_health].to_f > 0 ? 1 : 0 if unit[:kind] == "hero"
           return [ unit[:ranks].to_i, 0 ].max if %w[left right].include?(contact_side)
 
           [ unit[:files].to_i, 0 ].max
@@ -634,7 +640,7 @@ module Sim
 
           first = actions.first
           last = actions.last
-          last[:damage] = actions.sum { |entry| entry[:damage].to_i }
+          last[:damage] = actions.sum { |entry| entry[:damage].to_f }
           last[:clauses] = actions.flat_map { |entry| Array(entry[:clauses]) }.uniq
           actions[0...-1].each do |entry|
             entry[:summary] = nil

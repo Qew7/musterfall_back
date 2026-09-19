@@ -14,7 +14,7 @@ module Sim
             all_combatants = side[:combatants] + enemies
             side[:combatants].flat_map do |combatant|
               next [] unless Array(combatant[:abilities]).include?("lavaSpit")
-              next [] unless combatant[:current_health].to_i.positive?
+              next [] unless combatant[:current_health].to_f.positive?
 
               models = combatant[:models_remaining].to_i
               next [] unless models.positive?
@@ -31,7 +31,7 @@ module Sim
 
             target = selection[:target]
             vector = selection[:vector]
-            return nil if target[:current_health].to_i <= 0
+            return nil if target[:current_health].to_f <= 0
 
             attack = Phases::AttackResolution
             return nil unless attack.hit?(attacker, target, "melee", rng)
@@ -40,7 +40,7 @@ module Sim
             damage = defenseless_damage(attacker)
             return nil if damage <= 0
 
-            target[:current_health] = [ 0, target[:current_health].to_i - damage ].max
+            target[:current_health] = [ 0, target[:current_health].to_f - damage ].max
             State.sync_combatant_footprint!(target)
             ActionResult.text_for(
               actor: { actor_name: attacker[:name], actor_role: "unit" },
@@ -57,7 +57,7 @@ module Sim
             base = Phases::AttackResolution.base_power(attacker, "melee")
             return 0 if base <= 0
 
-            [ 1, (base / 2.2).round ].max
+            (base / 2.2).round
           end
           private_class_method :defenseless_damage
         end

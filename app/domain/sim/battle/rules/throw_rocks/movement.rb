@@ -6,6 +6,10 @@ module Sim
           # rule: throw_rocks | movement | Non-melee mover advances when no line of sight for ranged throw.
           module_function
 
+          def army_role(profile)
+            :ranged if Array(profile[:abilities]).include?("throwRocks")
+          end
+
           def melee_mover?(combatant)
             return nil unless Array(combatant[:abilities]).include?("throwRocks")
 

@@ -643,18 +643,19 @@
     "winner_id": "player-8",
     "rounds": 6,
     "side_health": {
-      "left": 26.0,
-      "right": 40.0
+      "left": 24.0,
+      "right": 30.0
     },
     "action_counts": {
-      "movement": 27,
+      "morale": 2,
+      "movement": 28,
       "shooting": 6
     },
     "contacts": [],
     "rule_effects": {
       "blast": 3,
       "machine": 3,
-      "march": 20,
+      "march": 21,
       "volley": 3
     },
     "actions": [
@@ -1010,7 +1011,7 @@
         "actor_id": "unit-26",
         "target_id": "hero-8",
         "maneuver": {},
-        "damage": 2,
+        "damage": 2.0,
         "morale": {},
         "trace": {
           "version": 1,
@@ -1112,23 +1113,7 @@
         "actor_id": "unit-28",
         "target_id": "unit-26",
         "maneuver": {},
-        "damage": 3,
-        "morale": {},
-        "trace": {
-          "version": 1,
-          "rule_keys": [
-            "volley"
-          ],
-          "result": "hit"
-        }
-      },
-      {
-        "path": "R2/T2/shooting/A2",
-        "type": "shooting",
-        "actor_id": "unit-28",
-        "target_id": "unit-26",
-        "maneuver": {},
-        "damage": 6,
+        "damage": 6.0,
         "morale": {},
         "trace": {
           "version": 1,
@@ -1444,7 +1429,7 @@
         "actor_id": "unit-25",
         "target_id": "unit-29",
         "maneuver": {},
-        "damage": 0,
+        "damage": 5.0,
         "morale": {},
         "trace": {
           "version": 1,
@@ -1452,7 +1437,24 @@
             "blast",
             "machine"
           ],
-          "result": "miss"
+          "result": "hit"
+        }
+      },
+      {
+        "path": "R5/T1/shooting/A2",
+        "type": "morale",
+        "actor_id": "unit-29",
+        "from": {
+          "x": 21.587,
+          "y": 3.3,
+          "facing": 177.02
+        },
+        "maneuver": {},
+        "damage": 0,
+        "morale": {},
+        "trace": {
+          "version": 1,
+          "result": "passed"
         }
       },
       {
@@ -1485,10 +1487,25 @@
         }
       },
       {
+        "path": "R5/T2/shooting/A1",
+        "type": "shooting",
+        "actor_id": "unit-29",
+        "target_id": "hero-7",
+        "maneuver": {},
+        "damage": 2.0,
+        "morale": {},
+        "trace": {
+          "version": 1,
+          "rule_keys": [
+            "volley"
+          ],
+          "result": "hit"
+        }
+      },
+      {
         "path": "R6/T1/movement/A1",
         "type": "movement",
         "actor_id": "unit-27",
-        "target_id": "unit-29",
         "from": {
           "x": 6.939,
           "y": 5.286,
@@ -1500,14 +1517,44 @@
           "facing": 358.3
         },
         "maneuver": {
-          "kind": "blocked_by_ally",
-          "truncated": true,
-          "blocked_by_ally": true
+          "kind": "row_advance",
+          "truncated": false
         },
         "morale": {},
         "trace": {
           "version": 1,
-          "result": "blocked_by_ally"
+          "result": "row_advance"
+        }
+      },
+      {
+        "path": "R6/T1/movement/A2",
+        "type": "movement",
+        "actor_id": "unit-27",
+        "target_id": "unit-29",
+        "from": {
+          "x": 6.939,
+          "y": 5.286,
+          "facing": 358.3
+        },
+        "to": {
+          "x": 8.95,
+          "y": 4.521,
+          "facing": 22.54
+        },
+        "maneuver": {
+          "kind": "wheel",
+          "contact_slot": "front",
+          "approach_mode": "direct",
+          "truncated": true,
+          "blocked_by_ally": false
+        },
+        "morale": {},
+        "trace": {
+          "version": 1,
+          "rule_keys": [
+            "march"
+          ],
+          "result": "wheel"
         }
       },
       {
@@ -1516,7 +1563,7 @@
         "actor_id": "unit-25",
         "target_id": "unit-30",
         "maneuver": {},
-        "damage": 0,
+        "damage": 5.0,
         "morale": {},
         "trace": {
           "version": 1,
@@ -1524,7 +1571,24 @@
             "blast",
             "machine"
           ],
-          "result": "miss"
+          "result": "hit"
+        }
+      },
+      {
+        "path": "R6/T1/shooting/A2",
+        "type": "morale",
+        "actor_id": "unit-30",
+        "from": {
+          "x": 24.359,
+          "y": 17.946,
+          "facing": 200.35
+        },
+        "maneuver": {},
+        "damage": 0,
+        "morale": {},
+        "trace": {
+          "version": 1,
+          "result": "passed"
         }
       }
     ]

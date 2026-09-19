@@ -6,7 +6,7 @@ module Sim
         module_function
 
         def trigger_damage!(phase:, target:, effect:, payload:, sides:)
-          damage = [ payload[:damage].to_i, target[:current_health].to_i ].min
+          damage = [ payload[:damage].to_f, target[:current_health].to_f ].min
           return if damage <= 0
 
           before = State.snapshot_combatant(target)

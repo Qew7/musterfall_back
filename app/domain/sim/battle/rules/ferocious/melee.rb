@@ -42,7 +42,7 @@ module Sim
             return unless Array(combatant[:abilities]).include?("ferocious")
 
             target = Array(enemies).find do |enemy|
-              enemy[:current_health].to_i > 0 &&
+              enemy[:current_health].to_f > 0 &&
                 Geometry::Battlefield.distance_between_units(combatant, enemy) <=
                   Geometry::Battlefield::CONFIG[:melee_contact_tolerance] + Geometry::Battlefield::CONFIG[:contact_snap]
             end

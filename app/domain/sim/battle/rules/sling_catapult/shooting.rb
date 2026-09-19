@@ -6,15 +6,34 @@ module Sim
           # rule: sling_catapult | shooting | Consumes nearest slingFodder goblin within 6" to fire a blast shot.
           module_function
 
+          FODDER_RANGE = 6.0
+          CONSUMER = ->(profile) { Array(profile[:abilities]).include?("slingCatapult") }
+          PROVIDER = ->(profile) { Array(profile[:abilities]).include?("slingFodder") }
+          SYNERGY = ArmySynergy.new(
+            consumer: CONSUMER, provider: PROVIDER,
+            demand: ->(_profile) { Constants::MAX_BATTLE_ROUNDS.to_f },
+            capacity: ->(profile) { profile[:models].to_f },
+            range: ->(_profile) { FODDER_RANGE }, required: true
+          ).freeze
+
+          def army_synergies
+            [ SYNERGY ]
+          end
+
+          def army_role(profile)
+            return :artillery if CONSUMER.call(profile)
+            :supply if PROVIDER.call(profile)
+          end
+
           def before_play!(ctx)
             allies = ctx[:acting_side][:combatants]
             allies.each do |diver|
               diver.delete(:sling_catapult_fodder_id)
-              next unless Array(diver[:abilities]).include?("slingCatapult")
+              next unless CONSUMER.call(diver)
 
               goblin = allies
-                .select { |ally| Array(ally[:abilities]).include?("slingFodder") && ally[:current_health].to_i.positive? }
-                .select { |ally| Geometry::Battlefield.distance_between_units(diver, ally) <= 6.0 }
+                .select { |ally| PROVIDER.call(ally) && ally[:current_health].to_f.positive? }
+                .select { |ally| Geometry::Battlefield.distance_between_units(diver, ally) <= FODDER_RANGE }
                 .min_by { |ally| Geometry::Battlefield.distance_between_units(diver, ally) }
               diver[:sling_catapult_fodder_id] = goblin[:entity_id] if goblin
             end
@@ -35,19 +54,20 @@ module Sim
           end
 
           def resolve_missile_strike!(phase:, actor:, host:, profile:, primary:, vector:, victims:, attack_type:, acting_side:, target_side:, round_number:, blockers:, rng:, terrain: [], **_extra)
-            living = victims.select { |entry| entry[:target][:current_health].to_i.positive? }
+            living = victims.select { |entry| entry[:target][:current_health].to_f.positive? }
             return if living.empty?
 
             goblin = acting_side[:combatants].find { |ally| ally[:entity_id] == host[:sling_catapult_fodder_id] }
-            return unless goblin && goblin[:current_health].to_i.positive?
+            return unless goblin && goblin[:current_health].to_f.positive?
 
             consume_goblin!(phase, goblin, acting_side, target_side)
             living.each do |entry|
               victim = entry[:target]
-              next unless victim[:current_health].to_i.positive?
+              next unless victim[:current_health].to_f.positive?
 
               damage = Phases::AttackResolution.damage(profile, victim, attack_type, vector, round_number)
-              damage = [ 1, (damage * entry[:multiplier].to_f).round ].max
+              damage = (damage * entry[:multiplier].to_f).round
+              next if damage <= 0
               Phases::AttackResolution.record_missile_hit!(
                 phase: phase, actor: actor, host: host, profile: profile, victim: victim,
                 vector: vector, strike_damage: damage, attack_type: attack_type,
@@ -60,12 +80,12 @@ module Sim
           def expected_damage(actor, target, vector, round_number, attack_type, enemies)
             Blast::Shooting.attack_victims(actor, target, enemies).sum do |entry|
               damage = Phases::AttackResolution.damage(actor, entry[:target], attack_type, vector, round_number)
-              [ damage * entry[:multiplier].to_f, entry[:target][:current_health].to_i ].min
+              [ damage * entry[:multiplier].to_f, entry[:target][:current_health].to_f ].min
             end
           end
 
           def consume_goblin!(phase, goblin, acting_side, target_side)
-            damage = [ goblin[:model_health].to_i, goblin[:current_health].to_i ].min
+            damage = [ goblin[:model_health].to_i, goblin[:current_health].to_f ].min
             before = State.snapshot_combatant(goblin)
             goblin[:current_health] -= damage
             State.sync_combatant_footprint!(goblin)

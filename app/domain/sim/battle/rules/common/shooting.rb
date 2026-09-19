@@ -11,6 +11,10 @@ module Sim
             kind.to_s == "common"
           end
 
+          def fractional_damage?(_profile, attack_type)
+            attack_type.to_s == "shooting"
+          end
+
           def attack_victims(_attacker, primary_target, _enemies)
             [ { target: primary_target, multiplier: 1 } ]
           end
@@ -41,38 +45,60 @@ module Sim
             front_rank_models(host) * missile_attacks_per_model(profile, host)
           end
 
-          def expected_damage(actor, target, vector, round_number, attack_type, enemies)
+          def expected_damage(actor, target, vector, round_number, attack_type, enemies, victims: nil)
             attack = Phases::AttackResolution
-            attack_victims(actor, target, enemies).sum do |entry|
+            (victims || attack_victims(actor, target, enemies)).sum do |entry|
               victim = entry[:target]
               attempts = shooting_attempts(actor, actor)
               chance = attack.hit_chance(actor, victim, "shooting")
               per_hit = attack.damage(actor, victim, attack_type, vector, round_number)
-              attempts * chance * per_hit * entry[:multiplier].to_f
+              expected_volley_damage(attempts, chance, per_hit * entry[:multiplier].to_f, victim[:current_health])
             end
+          end
+
+          # E[floor(hits * damage)], not floor(E[hits] * damage).
+          def expected_volley_damage(attempts, chance, per_hit, health)
+            probabilities = [ 1.0 ]
+            attempts.times do
+              next_probabilities = Array.new(probabilities.size + 1, 0.0)
+              probabilities.each_with_index do |probability, hits|
+                next_probabilities[hits] += probability * (1 - chance)
+                next_probabilities[hits + 1] += probability * chance
+              end
+              probabilities = next_probabilities
+            end
+            probabilities.each_with_index.sum { |probability, hits| probability * [ (hits * per_hit).floor, health ].min }
           end
 
           def resolve_missile_strike!(phase:, actor:, host:, profile:, vector:, victims:, attack_type:, acting_side:, target_side:, round_number:, blockers:, rng:, terrain: [], **_extra)
             attack = Phases::AttackResolution
             victims.each do |victim_entry|
               victim = victim_entry[:target]
-              next if victim[:current_health].to_i <= 0
+              next if victim[:current_health].to_f <= 0
 
               batch_actions = []
               attempts = 0
               hits = 0
+              total_damage = 0.0
+              strike_damage = attack.damage(profile, victim, attack_type, vector, round_number)
+              if victim_entry[:multiplier]
+                strike_damage *= victim_entry[:multiplier].to_f
+                strike_damage = [ 1, strike_damage.round ].max unless fractional_damage?(profile, attack_type)
+              end
+              next unless strike_damage.positive?
 
               shooting_attempts(host, profile).times do
-                break if victim[:current_health].to_i <= 0
-
-                strike_damage = attack.damage(profile, victim, attack_type, vector, round_number)
-                strike_damage = [ 1, (strike_damage * victim_entry[:multiplier].to_f).round ].max if victim_entry[:multiplier]
-                next if strike_damage <= 0
-
                 attempts += 1
                 next unless attack.hit?(profile, victim, attack_type, rng, terrain: terrain)
 
                 hits += 1
+                total_damage += strike_damage
+              end
+
+              # Resolve one simultaneous volley per victim, with one damage
+              # action. Discard the remainder per target; never carry wounds
+              # smaller than one HP into another attack or another round.
+              if hits.positive?
                 batch_actions << attack.record_missile_hit!(
                   phase: phase,
                   actor: actor,
@@ -80,7 +106,9 @@ module Sim
                   profile: profile,
                   victim: victim,
                   vector: vector,
-                  strike_damage: strike_damage,
+                  strike_damage: total_damage.floor,
+                  hits_landed: hits,
+                  attacks_attempted: attempts,
                   attack_type: attack_type,
                   acting_side: acting_side,
                   target_side: target_side,

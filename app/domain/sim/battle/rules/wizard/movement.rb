@@ -100,7 +100,7 @@ module Sim
 
             if types.include?(:damaged_ally_unit)
               damaged = Decisions::Roles.standing(acting_side[:combatants]).select do |entry|
-                entry[:current_health].to_i < entry[:max_health].to_i
+                entry[:current_health].to_f < entry[:max_health].to_i
               end
               pool = damaged.presence || Decisions::Roles.standing(acting_side[:combatants])
               return pool.reject { |entry| entry[:entity_id] == host[:entity_id] }

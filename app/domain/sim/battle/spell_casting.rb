@@ -46,7 +46,7 @@ module Sim
 
       def casters(acting_side)
         acting_side[:combatants].filter_map do |host|
-          next if host[:current_health].to_i <= 0 || host[:is_routing] || host[:summoned]
+          next if host[:current_health].to_f <= 0 || host[:is_routing] || host[:summoned]
 
           Array(host.dig(:contributors, :ranged)).filter_map do |contributor|
             next if contributor[:spell].to_i <= 0 || Array(contributor[:spell_keys]).empty?
@@ -106,7 +106,7 @@ module Sim
         target_label = describe_target(target)
         power = caster[:spell].to_i
         if miscast
-          damage = [ 1, host[:current_health].to_i ].min
+          damage = [ 1, host[:current_health].to_f ].min
           host[:current_health] -= damage
           State.sync_combatant_footprint!(host)
           outcome = "miscast"
@@ -197,13 +197,13 @@ module Sim
 
           point = event[:target]
           victims = target_side[:combatants].select do |target|
-            target[:current_health].to_i > 0 && Geometry::Battlefield.distance_between(point, target) <= 2.5
+            target[:current_health].to_f > 0 && Geometry::Battlefield.distance_between(point, target) <= 2.5
           end
           unit_before = victims.map { |victim| State.snapshot_combatant(victim) }
           damage = 0
           victims.each do |victim|
             amount = [ 1, (6 * (Constants::WEAPON_VS_ARMOR.dig(victim[:armor_type], "demolish") || 1) / 2.2).round ].max
-            amount = [ amount, victim[:current_health].to_i ].min
+            amount = [ amount, victim[:current_health].to_f ].min
             victim[:current_health] -= amount
             State.sync_combatant_footprint!(victim)
             damage += amount

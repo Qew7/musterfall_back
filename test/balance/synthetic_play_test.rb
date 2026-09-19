@@ -28,4 +28,20 @@ class BalanceSyntheticPlayTest < ActiveSupport::TestCase
     assert rollup.metrics["winner_faction"].present?
     assert BalanceCounter.exists?(bucket: "battle", key: "total")
   end
+
+  test "staged battle persists the actual stage and troop budgets" do
+    @run.update!(config: @run.config.merge("army_stage" => "mixed"))
+    Balance::Synthetic::Play.call!(run: @run, catalog: @catalog, rng: @rng, battle_no: 3)
+    metrics = BalanceBattleRollup.order(:id).last.metrics
+    assert_equal "early", metrics["army_stage"]
+    assert_equal 625, metrics["left_budget"]
+    assert_equal 625, metrics["right_budget"]
+    assert_equal 1, metrics["hero_level"]
+    %w[left right].each do |side|
+      recruitment = metrics.fetch("#{side}_recruitment")
+      assert_equal 625, recruitment["spent"] + recruitment["unspent"]
+      assert_equal 0, recruitment["access"]
+      assert_operator recruitment["roster_size"], :<=, 12
+    end
+  end
 end

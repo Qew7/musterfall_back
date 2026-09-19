@@ -591,6 +591,40 @@ class SimBattleCombatRulesTest < ActiveSupport::TestCase
     assert_in_delta nearest_heading, summoned[:facing], 1.0
   end
 
+  test "corpse trail still summons on the field when the victim is boxed in" do
+    cart = combatant(entity_id: "cart", abilities: [ "corpseTrail" ])
+    target = combatant(entity_id: "target", x: 8, y: 12, side_index: 1)
+    wall = combatant(entity_id: "wall", x: 10, y: 12, base_width: 18, base_depth: 22)
+    far_enemy = combatant(entity_id: "far", x: 36, y: 12, side_index: 1)
+    acting_side = { side_key: "left", combatants: [ cart, wall ] }
+    target_side = { side_key: "right", combatants: [ target, far_enemy ] }
+    action = { details: [] }
+
+    Sim::Battle::Rules::CorpseTrail::Shooting.after_hit!(
+      phase: Attack.create_phase("shooting", "Фаза стрельбы"),
+      host: cart,
+      defender: target,
+      action: action,
+      terrain: [],
+      acting_side: acting_side,
+      target_side: target_side
+    )
+
+    summoned = acting_side[:combatants].find { |entry| entry[:summoned] }
+    assert summoned
+    refute Sim::Geometry::Obb.overlap_units?(wall, summoned)
+    nearest = [ target, far_enemy ].min_by { |entry| BF.distance_between_units(summoned, entry) }
+    obstacles = Sim::Battle::Pathing::Obstacles.around(summoned, units: acting_side[:combatants] + target_side[:combatants])
+    assert obstacles.clear?(summoned)
+    desired = BF.heading_to(summoned, nearest)
+    gap = BF.shortest_facing_delta(desired, summoned[:facing]).abs
+    (0...gap.ceil).step(10) do |offset|
+      [ offset, -offset ].uniq.each do |delta|
+        refute obstacles.clear?(summoned.merge(facing: desired + delta)), "a closer enemy-facing pose is available"
+      end
+    end
+  end
+
   test "wildborn charges forest-hidden enemies from outside the woods" do
     woods = { id: "forest-a", type: "forest", x: 20, y: 12, width: 5, depth: 5, impassable: false, blocks_los: false }
     attacker = charge_combatant(entity_id: "wild", x: 12, y: 12, abilities: [ "wildborn" ])
@@ -747,6 +781,16 @@ class SimBattleCombatRulesTest < ActiveSupport::TestCase
     assert_equal 3, flat
     assert_equal 5, Attack.damage(troll, plain, "melee", "rear", 1)
     assert_operator flat, :<, Attack.damage(troll, plain, "melee", "rear", 1)
+  end
+
+  test "weak melee rounds to zero instead of flooring at 1" do
+    attacker = combatant(melee: 1, weapon_type: "slash")
+    heavy = combatant(side_index: 1, armor_type: "heavy")
+    light = combatant(side_index: 1, armor_type: "light")
+
+    assert_equal 0, Attack.damage(attacker, heavy, "melee", "front", 1)
+    assert_equal 1, Attack.damage(attacker, light, "melee", "front", 1)
+    assert_equal 0, Sim::Battle::Rules::LavaSpit::Round.send(:defenseless_damage, attacker)
   end
 
   test "ghoul pack keeps undead faction tier without undead ability" do

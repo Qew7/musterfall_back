@@ -164,6 +164,16 @@ class SimGeometryObbTest < SimTestCase
     assert_equal ruby_route_points(world, actor, "unit-2"), world.route_points(actor, contact_id: "unit-2")
   end
 
+  test "native kernel is restored if Zeitwerk unloaded Native" do
+    skip "OBB C kernel not compiled (bin/rails sim:compile_obb)" unless Obb.native?
+
+    Obb.send(:remove_const, :Native)
+    silence_warnings { load File.expand_path("../../../app/domain/sim/geometry/obb.rb", __dir__) }
+
+    assert Obb.native?
+    assert Obb::Native.respond_to?(:segments_clear)
+  end
+
   test "tray_on_battlefield matches corner containment" do
     rng = Random.new(1)
     width = BF::CONFIG[:width].to_f

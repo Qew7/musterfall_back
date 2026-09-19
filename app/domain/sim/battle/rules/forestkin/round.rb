@@ -11,10 +11,10 @@ module Sim
             side[:combatants].filter_map do |combatant|
               next unless Array(combatant[:abilities]).include?("forestkin")
               next unless Geometry::Battlefield.in_forest?(combatant, terrain)
-              next unless combatant[:current_health].to_i.between?(1, combatant[:max_health].to_i - 1)
+              next unless combatant[:current_health].to_f.positive? && combatant[:current_health].to_f < combatant[:max_health].to_f
 
               before = State.snapshot_combatant(combatant)
-              combatant[:current_health] += 1
+              combatant[:current_health] = [ combatant[:current_health] + 1, combatant[:max_health] ].min
               State.sync_combatant_footprint!(combatant)
               ActionResult.text_for(
                 actor: {
