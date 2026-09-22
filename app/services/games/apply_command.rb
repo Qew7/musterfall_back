@@ -72,6 +72,14 @@ module Games
           player_id: params.fetch(:player_id)
         )
       },
+      refresh_market: ->(campaign, catalog, rng, params) {
+        Sim::Campaign::RefreshMarket.call(
+          campaign: campaign,
+          catalog: catalog,
+          player_id: params.fetch(:player_id),
+          rng: rng
+        )
+      },
       restore_unit: ->(campaign, catalog, _rng, params) {
         Sim::Campaign::RestoreUnit.call(
           campaign: campaign,

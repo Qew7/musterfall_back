@@ -15,8 +15,8 @@ class SimBattleNeutralCountersTest < ActiveSupport::TestCase
     assert_includes Rules.for(:round).rules, Banish
     assert_equal Battery, Rules.for(:shooting).find_applicable({ abilities: [ "counterBattery" ], shooting_template: "common" }, "shooting")
     assert_includes Rules.army_synergies, Sky::SYNERGY
-    assert_equal :artillery, Sim::ArmyComposition.role(abilities: [ "counterBattery" ])
-    assert_equal :frontline, Sim::ArmyComposition.role(abilities: [ "chargeBarricade" ])
+    assert_equal :artillery, Sim::ArmyComposition.bot_pack_as(abilities: [ "counterBattery" ])
+    assert_equal :frontline, Sim::ArmyComposition.bot_pack_as(abilities: [ "chargeBarricade" ])
     assert Sky::SYNERGY.benefits?({ ranged: 4 }, { abilities: [ "skySnare" ] })
     assert_equal [ 6.0, true ], Sky::SYNERGY.placement({ ranged: 4 }, { abilities: [ "skySnare" ] })
     assert_equal 0, Sky::SYNERGY.capacity_for(abilities: [ "skySnare" ], models: 0)

@@ -5,7 +5,9 @@ class SimCampaignDismissTest < ActiveSupport::TestCase
     @game = create_active_game
     assign_first_faction!(@game)
     @campaign = Sim::Persistence::CampaignRepository.new.load(@game.reload)
-    template = catalog.unit_templates(@campaign.find_player("player-1")[:faction_id]).first
+    player = @campaign.find_player("player-1")
+    template = catalog.unit_templates(player[:faction_id]).first
+    on_market!(player, template[:id])
     @campaign = Sim::Campaign::Recruit.call(
       campaign: @campaign,
       catalog: catalog,
@@ -31,5 +33,19 @@ class SimCampaignDismissTest < ActiveSupport::TestCase
     result = Sim::Campaign::Dismiss.call(campaign: @campaign, player_id: "player-1", entity_id: hero[:id])
 
     assert result.failure?
+  end
+
+  test "dismissing holdMarket unit holds the current shop" do
+    player = @campaign.find_player("player-1")
+    ogre = player[:roster].find { |entity| entity[:kind] == "unit" }
+    ogre[:components][:abilities] = [ "holdMarket" ]
+    player[:market_offer] = %w[frozen_offer]
+    player[:hold_market] = false
+
+    result = Sim::Campaign::Dismiss.call(campaign: @campaign, player_id: "player-1", entity_id: ogre[:id])
+    assert result.ok?
+    held = result.value.find_player("player-1")
+    assert held[:hold_market]
+    assert_equal %w[frozen_offer], held[:market_offer]
   end
 end

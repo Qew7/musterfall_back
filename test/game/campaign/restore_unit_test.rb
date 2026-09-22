@@ -9,6 +9,7 @@ class SimCampaignRestoreUnitTest < ActiveSupport::TestCase
     @template = catalog.unit_templates(@player[:faction_id])
       .select { |template| template[:recruit_tier] == "line" && template[:models] > 1 }
       .min_by { |template| template[:cost] }
+    on_market!(@player, @template[:id])
 
     result = Sim::Campaign::Recruit.call(
       campaign: @campaign,

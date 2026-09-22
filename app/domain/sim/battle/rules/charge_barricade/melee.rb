@@ -9,7 +9,7 @@ module Sim
           # rule: charge_barricade | melee | A braced frontal defender cancels a charge of at least four inches and deals one reactive damage per two inches, capped at six.
           module_function
 
-          def army_role(profile)
+          def bot_pack_as(profile)
             :frontline if Array(profile[:abilities]).include?("chargeBarricade")
           end
 

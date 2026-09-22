@@ -9,7 +9,7 @@ module Sim
           # rule: banish_summons | round | At round end, each living unrouted provider deals four damage to enemy summoned units within four inches.
           module_function
 
-          def army_role(profile)
+          def bot_pack_as(profile)
             :frontline if Array(profile[:abilities]).include?("banishSummons")
           end
 

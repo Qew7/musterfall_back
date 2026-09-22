@@ -26,7 +26,9 @@ class BalanceArmyStageTest < ActiveSupport::TestCase
           recruit_strategy: "push_elite", battle_only: true, recruit_access: preset[:access], recruit_tiers: preset[:tiers]
         )
         assert_equal preset[:access], army[:recruitment][:access], stage
-        assert_equal preset[:budgets].last, army[:recruitment][:spent] + army[:recruitment][:unspent]
+        leaked = preset[:budgets].last - army[:recruitment][:spent] - army[:recruitment][:unspent]
+        assert_operator leaked, :>=, 0
+        assert_equal 0, leaked % Sim::Campaign::RecruitAccess::REFRESH_COST
         assert_operator army[:roster].size, :<=, 12
         assert_operator army[:recruitment][:unspent], :>=, 0
         army[:roster].select { |e| e[:kind] == "unit" }.each do |entity|

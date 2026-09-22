@@ -9,7 +9,7 @@ module Sim
           # rule: flying | movement | Flyer movement AI: leap, rear/flank charge priority, ignores ground obstacles.
           module_function
 
-          def army_role(profile)
+          def bot_pack_as(profile)
             :flanker if Array(profile[:abilities]).include?("flying")
           end
 

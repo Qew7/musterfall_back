@@ -51,6 +51,9 @@ module Sim
         player[:roster] = []
         player[:treasury] = Constants::STARTING_TREASURY
         player[:recruit_access] = 0
+        player[:hold_market] = false
+        player[:free_market_refresh] = false
+        RecruitAccess.roll_offer!(player, @catalog, @rng)
         return unless default_hero
 
         factory = Entities::Factory.new(@catalog, id_sequence: { value: @campaign.id_sequence })

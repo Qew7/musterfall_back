@@ -6,7 +6,7 @@ module Sim
           # rule: machine | shooting | Machine ranged damage ×1.25.
           module_function
 
-          def army_role(profile)
+          def bot_pack_as(profile)
             :artillery if Array(profile[:abilities]).include?("machine")
           end
 

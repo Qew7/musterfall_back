@@ -20,7 +20,7 @@ module Sim
             [ SYNERGY ]
           end
 
-          def army_role(profile)
+          def bot_pack_as(profile)
             :frontline if PROVIDER.call(profile)
           end
 

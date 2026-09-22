@@ -13,8 +13,8 @@ class SimNeutralContractsTest < ActiveSupport::TestCase
     assert @catalog.faction("mercenaries")[:neutral]
     units = @catalog.unit_templates("mercenaries")
     assert_equal({ "line" => 3, "elite" => 5, "rare" => 5 }, units.group_by { |entry| entry[:recruit_tier] }.transform_values(&:size))
-    assert_empty @catalog.template("unpaid_company")[:abilities]
-    assert_empty @catalog.template("mercenary_ogres")[:abilities]
+    assert_equal [ "unpaidTab" ], @catalog.template("unpaid_company")[:abilities]
+    assert_equal [ "holdMarket" ], @catalog.template("mercenary_ogres")[:abilities]
     assert_equal 14, @catalog.template("free_fencers")[:models] * @catalog.template("free_fencers")[:model_health]
     assert_equal [ "forfeitBounty" ], @catalog.template("free_fencers")[:abilities]
     assert_empty @catalog.hero_templates("mercenaries")

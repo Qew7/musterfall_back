@@ -36,6 +36,9 @@ module Sim
               treasury: player[:treasury],
               recruit_access: player[:recruit_access].to_i,
               recruit_strategy: player[:recruit_strategy],
+              market_offer: player[:market_offer] || [],
+              free_market_refresh: player[:free_market_refresh] == true,
+              hold_market: player[:hold_market] == true,
               victories: player[:victories],
               position: index,
               round_notes: player[:round_notes] || []
@@ -68,6 +71,9 @@ module Sim
           treasury: player.treasury,
           recruit_access: player.recruit_access.to_i,
           recruit_strategy: player.recruit_strategy,
+          market_offer: Array(player.market_offer),
+          free_market_refresh: player.free_market_refresh == true,
+          hold_market: player.hold_market == true,
           victories: player.victories,
           round_notes: player.round_notes,
           roster: player.game_entities.map do |entity|

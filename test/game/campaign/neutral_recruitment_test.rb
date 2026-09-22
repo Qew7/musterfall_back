@@ -99,7 +99,8 @@ class SimCampaignNeutralRecruitmentTest < ActiveSupport::TestCase
       rng: rng, player_id: "test-army", recruit_access: 0, recruit_tiers: [ "line" ], battle_only: true
     )
     assert_equal "test_realm", army[:faction_id]
-    assert_equal [ "contract_line", "contract_line" ], army[:roster].map { |entity| entity[:template_id] }
+    assert army[:roster].any?
+    assert_equal [ "contract_line" ], army[:roster].map { |entity| entity[:template_id] }.uniq
   end
 
   private
@@ -129,6 +130,7 @@ class SimCampaignNeutralRecruitmentTest < ActiveSupport::TestCase
   end
 
   def recruit(campaign, template_id)
+    on_market!(campaign.find_player("player-1"), template_id)
     Sim::Campaign::Recruit.call(campaign: campaign, catalog: @neutral_catalog, player_id: "player-1", template_id: template_id)
   end
 end

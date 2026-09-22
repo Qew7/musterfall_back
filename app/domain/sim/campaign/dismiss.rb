@@ -19,6 +19,7 @@ module Sim
 
         refund = [ 1, (entity.dig(:components, :economy, :cost).to_i / 2) ].max
         player[:treasury] += refund
+        RecruitAccess.hold_on_dismiss!(player, entity)
         player[:roster] = player[:roster].reject { |entry| entry[:id] == @entity_id }
         player[:roster].each do |entry|
           if entry[:kind] == "unit"

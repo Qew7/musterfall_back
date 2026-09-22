@@ -39,7 +39,9 @@ class BalanceSyntheticPlayTest < ActiveSupport::TestCase
     assert_equal 1, metrics["hero_level"]
     %w[left right].each do |side|
       recruitment = metrics.fetch("#{side}_recruitment")
-      assert_equal 625, recruitment["spent"] + recruitment["unspent"]
+      leaked = 625 - recruitment["spent"] - recruitment["unspent"]
+      assert_operator leaked, :>=, 0
+      assert_equal 0, leaked % Sim::Campaign::RecruitAccess::REFRESH_COST
       assert_equal 0, recruitment["access"]
       assert_operator recruitment["roster_size"], :<=, 12
     end

@@ -10,12 +10,15 @@ class SimCampaignDeployTest < ActiveSupport::TestCase
     @template = catalog.unit_templates(player[:faction_id])
       .select { |template| template[:recruit_tier] == "line" }
       .min_by { |template| template[:cost] }
+    on_market!(player, @template[:id])
   end
 
   def recruit_commons!(count)
     player = @campaign.find_player("player-1")
     player[:treasury] = [ player[:treasury], @template[:cost] * count ].max
     count.times do
+      player = @campaign.find_player("player-1")
+      on_market!(player, @template[:id])
       result = Sim::Campaign::Recruit.call(
         campaign: @campaign,
         catalog: catalog,

@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_09_19_000100) do
+ActiveRecord::Schema[8.1].define(version: 2026_09_22_180700) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -279,8 +279,11 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_19_000100) do
     t.datetime "created_at", null: false
     t.string "external_key", null: false
     t.string "faction_key"
+    t.boolean "free_market_refresh", default: false, null: false
     t.bigint "game_id", null: false
+    t.boolean "hold_market", default: false, null: false
     t.boolean "is_bot", default: false, null: false
+    t.jsonb "market_offer", default: [], null: false
     t.string "name", null: false
     t.integer "position", default: 0, null: false
     t.integer "recruit_access", default: 0, null: false

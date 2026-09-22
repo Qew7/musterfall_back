@@ -5,13 +5,15 @@ class SimBattleSimulatorTest < ActiveSupport::TestCase
     game = create_active_game(player_count: 2)
     assign_first_faction!(game, player_id: "player-1")
     assign_first_faction!(game.reload, player_id: "player-2")
+    template_id = catalog.unit_templates(catalog.factions.first[:id]).first[:id]
+    game.reload.game_players.find_by!(external_key: "player-1").update!(market_offer: [ template_id ])
     Games::ApplyCommand.call(
       game: game.reload,
       command: :recruit,
       base_version: game.campaign_version,
       params: {
         player_id: "player-1",
-        template_id: catalog.unit_templates(catalog.factions.first[:id]).first[:id]
+        template_id: template_id
       }
     )
     Games::ApplyCommand.call(

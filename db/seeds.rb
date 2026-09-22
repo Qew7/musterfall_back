@@ -10,6 +10,8 @@ abilities = [
   { key: "banishSummons", name: "Обратно в землю", category: "combat", description: "В конце каждого раунда наносит 4 урона каждому вражескому призванному существу в 4″. Обычные нанятые отряды, включая нежить, не затрагивает." },
   { key: "chargeBarricade", name: "Обратный удар", category: "defense", description: "Неподвижный отряд встречает фронтальный заряд с дистанции от 4″: снимает бонус заряда и наносит 1 урон за каждые полные 2″ разбега, максимум 6. Фланг, тыл и короткий заряд обходят заграждение." },
   { key: "treasuryGuard", name: "Вес золота", category: "economy", description: "На начало боя: за каждые 200 непотраченных припасов ML и MO +1, максимум +2. Припасы не расходуются; бонус действует только в этом бою." },
+  { key: "unpaidTab", name: "Счёт маркитанту", category: "economy", description: "Наём даёт одно следующее обновление витрины бесплатно." },
+  { key: "holdMarket", name: "Занять прилавок", category: "economy", description: "Роспуск удерживает текущую витрину через следующий бой. Платное обновление снимает удержание." },
   { key: "antiLarge", name: "Anti-Large", category: "combat", description: "В ближнем бою наносит ×1.35 урона целям класса monster и cavalry." },
   { key: "armorPiercing", name: "Armor Piercing", category: "combat", description: "Вдвое уменьшает штраф (и бонус) брони цели к урону." },
   { key: "bannerAura", name: "Banner Aura", category: "aura", description: "Если герой встроен в отряд, ML отряда +1." },
@@ -296,8 +298,8 @@ mercenary_defaults = {
   abilities: []
 }
 mercenaries = [
-  { template_key: "unpaid_company", recruit_tier: "line", name: "Рота невыплаченного жалованья", cost: 100, models: 18, width: 5, skill: 2, morale: 4 },
-  { template_key: "mercenary_ogres", recruit_tier: "line", name: "Наёмные огры", cost: 175, models: 4, model_health: 3, width: 2, model_class: "monster", weapon_type: "blunt", melee: 2, skill: 2, initiative: 2 },
+  { template_key: "unpaid_company", recruit_tier: "line", name: "Рота невыплаченного жалованья", cost: 100, models: 18, width: 5, skill: 2, morale: 4, abilities: [ "unpaidTab" ] },
+  { template_key: "mercenary_ogres", recruit_tier: "line", name: "Наёмные огры", cost: 175, models: 4, model_health: 3, width: 2, model_class: "monster", weapon_type: "blunt", melee: 2, skill: 2, initiative: 2, abilities: [ "holdMarket" ] },
   { template_key: "free_fencers", recruit_tier: "line", name: "Вольные фехтовальщики", cost: 175, models: 14, width: 5, armor_type: "medium", melee: 2, skill: 4, initiative: 5, abilities: [ "forfeitBounty" ] },
   { template_key: "copper_guarantors", recruit_tier: "elite", name: "Поручители Медной кассы", cost: 175, models: 10, armor_type: "heavy", abilities: [ "bodyguardContract" ] },
   { template_key: "rooftop_archers", recruit_tier: "elite", name: "Лучники Черепичных крыш", cost: 150, models: 10, width: 5, ranged: 1, weapon_type: "ranged", initiative: 4, shooting_template: "common", abilities: [ "ranged", "overheadVolley" ] },

@@ -75,16 +75,16 @@ module Sim
         units.each do |entity|
           next if ArmyComposition.reserve_for_deployment?(entity, roster)
 
-          role = ArmyComposition.role(ArmyComposition.profile(entity))
-          index = role_counts[role]
-          role_counts[role] += 1
-          row = role == :frontline || role == :flanker ? "front" : "support"
-          row = "rear" if role == :artillery
-          lanes = role == :flanker ? %w[left right center] : %w[center left right]
+          pack_as = ArmyComposition.bot_pack_as(ArmyComposition.profile(entity))
+          index = role_counts[pack_as]
+          role_counts[pack_as] += 1
+          row = pack_as == :frontline || pack_as == :flanker ? "front" : "support"
+          row = "rear" if pack_as == :artillery
+          lanes = pack_as == :flanker ? %w[left right center] : %w[center left right]
           lane = lanes[index % lanes.size]
           partners = ArmyComposition.partners(entity, placed)
           position = find_partner_position(entity, partners, roster)
-          unless position || role == :flanker
+          unless position || pack_as == :flanker
             width = entity.dig(:components, :formation, :width).to_f
             y = row_offsets[row] + width / 2.0
             Battlefield.default_deployment(row, lane)[:x].to_i.downto(1) do |x|
@@ -112,7 +112,7 @@ module Sim
         targets = partners.map { |ally, range, center| [ footprint_from_entity(ally), range, center ] }
         best = nil
         best_coverage = 0
-        flanker = ArmyComposition.role(ArmyComposition.profile(entity)) == :flanker
+        flanker = ArmyComposition.bot_pack_as(ArmyComposition.profile(entity)) == :flanker
         angles = flanker ? [ 3, 9, 2, 10, 4, 8, 1, 11, 5, 7, 0, 6 ] : [ 6, 5, 7, 4, 8, 3, 9, 2, 10, 1, 11, 0 ]
         # Bounded local search; no pathfinding or battle simulations during packing.
         targets.each do |anchor, _range, _center|
@@ -192,8 +192,8 @@ module Sim
         Entities::Footprint.sync_entity!(entity)
         formation = entity[:components][:formation]
         area = -(formation[:width].to_f * formation[:depth].to_f)
-        role = ArmyComposition.role(ArmyComposition.profile(entity))
-        priority = { frontline: 0, artillery: 1, supply: 2, flanker: 3, ranged: 4, hero: 5 }.fetch(role)
+        pack_as = ArmyComposition.bot_pack_as(ArmyComposition.profile(entity))
+        priority = { frontline: 0, artillery: 1, supply: 2, flanker: 3, ranged: 4, hero: 5 }.fetch(pack_as)
         [ priority, area ]
       end
 

@@ -58,6 +58,9 @@ module Sim
           treasury: player[:treasury],
           recruitAccess: player[:recruit_access].to_i,
           recruitStrategy: player[:recruit_strategy],
+          marketOffer: Array(player[:market_offer]),
+          freeMarketRefresh: player[:free_market_refresh] == true,
+          holdMarket: player[:hold_market] == true,
           roster: player[:roster].map { |entity| serialize_entity(entity) },
           victories: player[:victories],
           roundNotes: player[:round_notes]

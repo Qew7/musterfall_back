@@ -20,4 +20,43 @@ class SimCampaignRecruitAccessTest < ActiveSupport::TestCase
     assert_equal 0, Sim::Campaign::RecruitAccess.affordable_restore_models(template, 5, 5)
     assert_equal 5, Sim::Campaign::RecruitAccess.affordable_restore_models(template, 100, 5)
   end
+
+  test "shop offer grows from 3 to 6 with access" do
+    assert_equal 3, Sim::Campaign::RecruitAccess.offer_size(0)
+    assert_equal 4, Sim::Campaign::RecruitAccess.offer_size(1)
+    assert_equal 5, Sim::Campaign::RecruitAccess.offer_size(2)
+    assert_equal 6, Sim::Campaign::RecruitAccess.offer_size(3)
+    assert_equal 6, Sim::Campaign::RecruitAccess.offer_size(5)
+  end
+
+  test "locked tiers stay off the shop" do
+    assert_equal %w[line], Sim::Campaign::RecruitAccess.unlocked_tiers(0)
+    assert_equal %w[line elite], Sim::Campaign::RecruitAccess.unlocked_tiers(1)
+    assert_equal %w[line elite rare], Sim::Campaign::RecruitAccess.unlocked_tiers(2)
+  end
+
+  test "held shop skips one automatic roll" do
+    player = {
+      faction_id: "empire", recruit_access: 0, treasury: 200,
+      market_offer: %w[frozen_offer], hold_market: true
+    }
+    rng = Sim::Rng::Seeded.new(1)
+    Sim::Campaign::RecruitAccess.roll_offer!(player, catalog, rng)
+    assert_equal %w[frozen_offer], player[:market_offer]
+    assert_equal false, player[:hold_market]
+
+    Sim::Campaign::RecruitAccess.roll_offer!(player, catalog, rng)
+    refute_includes player[:market_offer], "frozen_offer"
+  end
+
+  test "paid refresh clears a held shop" do
+    player = {
+      faction_id: "empire", recruit_access: 0, treasury: 200,
+      market_offer: %w[frozen_offer], hold_market: true
+    }
+    assert Sim::Campaign::RecruitAccess.refresh_offer!(player, catalog, Sim::Rng::Seeded.new(2))
+    assert_equal false, player[:hold_market]
+    refute_includes player[:market_offer], "frozen_offer"
+    assert_equal 150, player[:treasury]
+  end
 end

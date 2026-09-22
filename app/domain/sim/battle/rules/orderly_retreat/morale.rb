@@ -8,7 +8,7 @@ module Sim
           # rule: orderly_retreat | morale | The first failed melee morale check becomes a legal 1-inch backward withdrawal without routing or changing facing; a blocked retreat fails normally.
           module_function
 
-          def army_role(profile)
+          def bot_pack_as(profile)
             :frontline if Array(profile[:abilities]).include?("orderlyRetreat")
           end
 

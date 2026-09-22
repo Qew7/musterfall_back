@@ -99,8 +99,8 @@ module Sim
         army_rules.flat_map { |rule| rule.respond_to?(:army_synergies) ? rule.army_synergies : [] }
       end
 
-      def army_roles(profile)
-        army_rules.filter_map { |rule| rule.army_role(profile) if rule.respond_to?(:army_role) }
+      def bot_pack_hints(profile)
+        army_rules.filter_map { |rule| rule.bot_pack_as(profile) if rule.respond_to?(:bot_pack_as) }
       end
 
       def reserve_for_deployment?(profile, roster)

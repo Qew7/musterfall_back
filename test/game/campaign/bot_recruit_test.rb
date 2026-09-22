@@ -73,6 +73,7 @@ class SimCampaignBotRecruitTest < ActiveSupport::TestCase
     template = catalog.unit_templates(bot[:faction_id])
       .select { |entry| entry[:recruit_tier] == "line" && entry[:models] > 4 }
       .min_by { |entry| entry[:cost] }
+    on_market!(bot, template[:id])
     recruit = Sim::Campaign::Recruit.call(
       campaign: campaign,
       catalog: catalog,
@@ -104,6 +105,49 @@ class SimCampaignBotRecruitTest < ActiveSupport::TestCase
     assert_operator player[:treasury], :>=, 0
   end
 
+  test "push_elite pays for a new shop when the vitrine has no preferred tiers" do
+    campaign = Sim::Campaign::Create.call(player_count: 2).value
+    bot = campaign.find_player("player-2")
+    campaign = Sim::Campaign::AssignFaction.call(
+      campaign: campaign, catalog: catalog, player_id: bot[:id],
+      faction_id: "empire", rng: Sim::Rng::Seeded.new(1)
+    ).value
+    bot = campaign.find_player(bot[:id])
+    lines = catalog.unit_templates("empire").select { |entry| entry[:recruit_tier] == "line" }.first(3)
+    bot.merge!(recruit_strategy: "push_elite", recruit_access: 2, treasury: 800, market_offer: lines.map { |entry| entry[:id] })
+
+    result = Sim::Campaign::BotRecruit.call(
+      campaign: campaign, catalog: catalog, player_id: bot[:id], rng: Sim::Rng::Seeded.new(11),
+      allow_access_upgrades: false
+    )
+    assert result.ok?
+    player = result.value.find_player(bot[:id])
+    spent = player[:roster].sum { |entity| entity.dig(:components, :economy, :cost).to_i }
+    assert_operator 800 - spent - player[:treasury], :>=, Sim::Campaign::RecruitAccess::REFRESH_COST
+  end
+
+  test "horde buys from a line shop instead of refreshing it away" do
+    campaign = Sim::Campaign::Create.call(player_count: 2).value
+    bot = campaign.find_player("player-2")
+    campaign = Sim::Campaign::AssignFaction.call(
+      campaign: campaign, catalog: catalog, player_id: bot[:id],
+      faction_id: "empire", rng: Sim::Rng::Seeded.new(1)
+    ).value
+    bot = campaign.find_player(bot[:id])
+    lines = catalog.unit_templates("empire").select { |entry| entry[:recruit_tier] == "line" }.first(3)
+    offer_ids = lines.map { |entry| entry[:id] }
+    bot.merge!(recruit_strategy: "horde", recruit_access: 0, treasury: 800, market_offer: offer_ids.dup)
+
+    result = Sim::Campaign::BotRecruit.call(
+      campaign: campaign, catalog: catalog, player_id: bot[:id], rng: Sim::Rng::Seeded.new(3),
+      allow_access_upgrades: false
+    )
+    assert result.ok?
+    player = result.value.find_player(bot[:id])
+    hired = player[:roster].map { |entity| entity[:template_id] }
+    assert (offer_ids & hired).any?
+  end
+
   test "chaos spawn remains recruitable when catalog cost exceeds leftover treasury" do
     campaign = Sim::Campaign::Create.call(player_count: 2).value
     bot = campaign.find_player("player-2")
@@ -112,11 +156,13 @@ class SimCampaignBotRecruitTest < ActiveSupport::TestCase
       catalog: catalog,
       player_id: bot[:id],
       faction_id: "chaos",
-      rng: Sim::Rng::Seeded.new(1)
+      rng: Sim::Rng::Seeded.new(1),
+      school_key: starter_school_key("chaos")
     ).value
     bot = campaign.find_player(bot[:id])
     bot[:recruit_access] = 2
     bot[:treasury] = 80
+    on_market!(bot, "rift_mutant")
     spawn = catalog.template("rift_mutant")
     shop = Sim::Campaign::BotRecruit.new(campaign, catalog, bot[:id], Sim::Rng::Seeded.new(1))
 

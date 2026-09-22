@@ -6,7 +6,7 @@ module Sim
           # rule: momentum_charge | melee | Charge bonus scales with charged_distance (up to +50% damage); resets after attack.
           module_function
 
-          def army_role(profile)
+          def bot_pack_as(profile)
             :flanker if Array(profile[:abilities]).include?("momentumCharge")
           end
 

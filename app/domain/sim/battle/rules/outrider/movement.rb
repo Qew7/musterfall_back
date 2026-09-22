@@ -6,7 +6,7 @@ module Sim
           # rule: outrider | movement | Never melee-moves; kites to ideal shooting range.
           module_function
 
-          def army_role(profile)
+          def bot_pack_as(profile)
             :ranged if Array(profile[:abilities]).include?("outrider")
           end
 

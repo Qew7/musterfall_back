@@ -9,6 +9,7 @@ class SimCampaignRecruitTest < ActiveSupport::TestCase
     @template = catalog.unit_templates(player[:faction_id])
       .select { |template| template[:recruit_tier] == "line" && template[:cost] <= player[:treasury] }
       .min_by { |template| template[:cost] }
+    player[:market_offer] = [ @template[:id] ]
   end
 
   test "recruit spends treasury and adds entity" do
@@ -95,6 +96,7 @@ class SimCampaignRecruitTest < ActiveSupport::TestCase
     skip "no elite unit" unless elite
 
     @campaign.find_player("player-1")[:treasury] = elite[:cost]
+    @campaign.find_player("player-1")[:market_offer] = [ elite[:id] ]
     result = Sim::Campaign::Recruit.call(
       campaign: @campaign,
       catalog: catalog,
@@ -113,9 +115,11 @@ class SimCampaignRecruitTest < ActiveSupport::TestCase
       catalog: catalog,
       player_id: "player-1",
       faction_id: "chaos",
-      rng: Sim::Rng::Seeded.new(2)
+      rng: Sim::Rng::Seeded.new(2),
+      school_key: starter_school_key("chaos")
     ).value
     player = campaign.find_player("player-1")
+    on_market!(player, "rift_mutant")
     player[:recruit_access] = 0
     blocked = Sim::Campaign::Recruit.call(
       campaign: campaign,
@@ -156,10 +160,12 @@ class SimCampaignRecruitTest < ActiveSupport::TestCase
       catalog: catalog,
       player_id: "player-1",
       faction_id: "chaos",
-      rng: Sim::Rng::Seeded.new(2)
+      rng: Sim::Rng::Seeded.new(2),
+      school_key: starter_school_key("chaos")
     ).value
     replay.find_player("player-1")[:recruit_access] = 2
     replay.find_player("player-1")[:treasury] = 1000
+    on_market!(replay.find_player("player-1"), "rift_mutant")
     again = Sim::Campaign::Recruit.call(
       campaign: replay,
       catalog: catalog,

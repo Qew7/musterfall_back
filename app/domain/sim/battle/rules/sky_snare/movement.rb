@@ -18,7 +18,7 @@ module Sim
           # rule: sky_snare | movement | Twice per battle, intercept an enemy flight crossing a six-inch zone before contact and force a legal landing without a charge.
           module_function
 
-          def army_role(profile)
+          def bot_pack_as(profile)
             :ranged if PROVIDER.call(profile)
           end
 

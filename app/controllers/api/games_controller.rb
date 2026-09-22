@@ -49,6 +49,10 @@ module Api
       apply_command(:upgrade_access, %i[player_id])
     end
 
+    def refresh_market
+      apply_command(:refresh_market, %i[player_id])
+    end
+
     def restore_unit
       apply_command(:restore_unit, %i[player_id entity_id models])
     end

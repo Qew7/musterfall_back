@@ -22,6 +22,7 @@ module Sim
         return Result.failure("unknown template") unless template
         return Result.failure("faction required") if player[:faction_id].blank?
         return Result.failure("template faction mismatch") unless @catalog.recruitable_template?(template, player[:faction_id])
+        return Result.failure("not on market") unless RecruitAccess.on_market?(player, template)
         cost = RecruitRules::ChaosSpawn.cost(player, template)
         return Result.failure("insufficient treasury") if cost <= 0 || player[:treasury] < cost
         return Result.failure("recruit slot unavailable") unless RecruitAccess.allowed?(player, @catalog, template)
@@ -46,6 +47,7 @@ module Sim
         @campaign.id_sequence = factory.sequence_value
         player[:treasury] -= cost
         player[:roster] << entity
+        RecruitAccess.take_offer!(player, template)
         Result.ok(@campaign)
       end
 

@@ -20,6 +20,10 @@ module SimHelpers
     ).tap { |result| raise result.error unless result.ok? }
   end
 
+  def on_market!(player, *template_ids)
+    player[:market_offer] = (Array(player[:market_offer]) + template_ids.map(&:to_s)).uniq
+  end
+
   def starter_school_key(faction_id)
     hero = catalog.hero_templates(faction_id).first
     Sim::Battle::Spells.schools_for(faction_id).first if hero&.dig(:abilities)&.include?("wizard")

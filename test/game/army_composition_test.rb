@@ -36,7 +36,7 @@ class SimArmyCompositionTest < ActiveSupport::TestCase
     assert_operator insufficient, :>, sufficient
   end
 
-  test "a newly registered rule drives recruitment roles and placement without bot edits" do
+  test "a newly registered rule drives bot packing and placement without bot edits" do
     link = Sim::ArmySynergy.new(
       consumer: ->(profile) { Array(profile[:abilities]).include?("newConsumer") },
       provider: ->(profile) { Array(profile[:abilities]).include?("newProvider") },
@@ -44,7 +44,7 @@ class SimArmyCompositionTest < ActiveSupport::TestCase
     )
     rule = Module.new
     rule.define_singleton_method(:army_synergies) { [ link ] }
-    rule.define_singleton_method(:army_role) { |profile| :supply if link.provider?(profile) }
+    rule.define_singleton_method(:bot_pack_as) { |profile| :supply if link.provider?(profile) }
     rules = Sim::Battle::Rules.army_rules + [ rule ]
     with_army_rules(rules) do
       consumer = @factory.create_unit("orc_brutes", "p")
@@ -52,7 +52,7 @@ class SimArmyCompositionTest < ActiveSupport::TestCase
       supplier = @factory.create_unit("goblin_archers", "p")
       supplier[:components][:abilities] = [ "newProvider" ]
       template = @catalog.template("goblin_archers").merge(abilities: [ "newProvider" ])
-      assert_equal :supply, Sim::ArmyComposition.role(template)
+      assert_equal :supply, Sim::ArmyComposition.bot_pack_as(template)
       assert_operator weight(template, [ consumer ]), :>, weight(template, [ consumer, supplier ])
       roster = [ consumer, supplier ]
       Sim::Geometry::Deployment.pack_roster!(roster)

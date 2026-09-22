@@ -9,7 +9,7 @@ module Sim
           # rule: counter_battery | shooting | Two single structural shots against machines that have fired; a hit jams the next enemy shooting phase.
           module_function
 
-          def army_role(profile)
+          def bot_pack_as(profile)
             :artillery if Array(profile[:abilities]).include?("counterBattery")
           end
 

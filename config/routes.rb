@@ -26,6 +26,7 @@ Rails.application.routes.draw do
       post :prepare_hero_draft
       post :pick_hero_draft
       post :upgrade_access
+      post :refresh_market
       post :restore_unit
       post :prepare_round
       post :advance_round

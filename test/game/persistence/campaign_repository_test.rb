@@ -5,6 +5,9 @@ class SimCampaignRepositoryTest < ActiveSupport::TestCase
     game = create_active_game
     assign_first_faction!(game)
     template = catalog.unit_templates(catalog.factions.first[:id]).first
+    game.game_players.find_by!(external_key: "player-1").update!(
+      market_offer: [ template[:id] ]
+    )
     Games::ApplyCommand.call(
       game: game.reload,
       command: :recruit,
@@ -27,5 +30,17 @@ class SimCampaignRepositoryTest < ActiveSupport::TestCase
     attached = reloaded.find_entity("player-1", hero[:id])
     assert_equal unit[:id], attached[:state][:attached_to]
     assert_includes reloaded.find_entity("player-1", unit[:id])[:state][:attached_hero_ids], hero[:id]
+  end
+
+  test "replace and load round-trips hold_market" do
+    game = create_active_game
+    assign_first_faction!(game)
+    campaign = Sim::Persistence::CampaignRepository.new.load(game.reload)
+    campaign.find_player("player-1")[:hold_market] = true
+    campaign.version = game.campaign_version + 1
+    Sim::Persistence::CampaignRepository.new.replace!(game, campaign)
+
+    reloaded = Sim::Persistence::CampaignRepository.new.load(game.reload)
+    assert reloaded.find_player("player-1")[:hold_market]
   end
 end

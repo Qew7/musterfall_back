@@ -20,11 +20,11 @@ module Sim
       Battle::Rules.treasury_reserve(roster.map { |entry| profile(entry) }, treasury)
     end
 
-    def role(attributes)
+    def bot_pack_as(attributes)
       return :hero if attributes[:kind] == "hero"
 
-      preferences = Battle::Rules.army_roles(attributes)
-      preferred = %i[artillery supply ranged flanker frontline].find { |entry| preferences.include?(entry) }
+      hints = Battle::Rules.bot_pack_hints(attributes)
+      preferred = %i[artillery supply ranged flanker frontline].find { |entry| hints.include?(entry) }
       return preferred if preferred
       return :ranged if attributes[:ranged].to_i.positive?
       return :flanker if attributes[:movement].to_f >= 6
@@ -37,12 +37,12 @@ module Sim
       copies = roster.count { |entity| entity[:template_id] == template[:id] }
       weight = 1.0 / (1 + copies * 0.75)
       unit_profiles = profiles.reject { |entry| entry[:kind] == "hero" }
-      frontline = unit_profiles.count { |entry| role(entry) == :frontline }
-      if role(template) == :frontline
+      frontline = unit_profiles.count { |entry| bot_pack_as(entry) == :frontline }
+      if bot_pack_as(template) == :frontline
         weight *= 2.5 if frontline < [ (unit_profiles.size * 0.4).ceil, 1 ].max
-      elsif role(template) == :hero
+      elsif bot_pack_as(template) == :hero
         weight *= 0.5 if profiles.count { |entry| entry[:kind] == "hero" } > unit_profiles.size / 2
-      elsif frontline.zero? && options.any? { |entry| role(entry) == :frontline }
+      elsif frontline.zero? && options.any? { |entry| bot_pack_as(entry) == :frontline }
         weight *= 0.4
       end
 

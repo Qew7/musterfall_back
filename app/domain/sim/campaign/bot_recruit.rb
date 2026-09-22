@@ -117,7 +117,9 @@ module Sim
       end
 
       def shop!(player)
+        open_shop!(player)
         recruitable_options = nil
+        paid_refresh = 0
         24.times do
           player = @campaign.find_player(@player_id)
           break unless player && player[:treasury].positive?
@@ -129,14 +131,51 @@ module Sim
           end
 
           recruitable_options = recruitable(player) if recruitable_options.nil?
+          if paid_refresh < 3 && stale_shop?(player, recruitable_options) && refresh_shop!(player)
+            paid_refresh += 1
+            recruitable_options = nil
+            next
+          end
           break unless try_recruit!(player, recruitable_options)
 
           recruitable_options = nil
         end
       end
 
+      def open_shop!(player)
+        return unless player[:market_offer].nil? || Array(player[:market_offer]).empty?
+
+        RecruitAccess.roll_offer!(player, @catalog, @rng)
+      end
+
+      # Shop lacks the strategy's unlocked preferred tiers (or has nothing left to buy).
+      def stale_shop?(player, options)
+        return false if player[:market_offer].nil?
+
+        cfg = strategy(player)
+        return true if options.empty?
+        return false if cfg[:hero_weight] >= 2 && options.any? { |template| template[:kind] == "hero" }
+
+        wanted = cfg[:prefer] & RecruitAccess.unlocked_tiers(player[:recruit_access])
+        return false if wanted.empty?
+
+        options.none? { |template| template[:kind] != "hero" && wanted.include?(template[:recruit_tier].to_s) }
+      end
+
+      def refresh_shop!(player)
+        cost = RecruitAccess.refresh_cost(player)
+        if cost.positive?
+          cfg = strategy(player)
+          reserve = [ cfg[:upgrade_reserve], ArmyComposition.treasury_reserve(player[:roster], player[:treasury]) ].max
+          return false if player[:treasury] < cost + reserve
+        end
+
+        RecruitAccess.refresh_offer!(player, @catalog, @rng)
+      end
+
       def should_upgrade?(player)
         return false unless @allow_access_upgrades
+        return false unless player[:roster].any? { |entity| entity[:kind] == "unit" }
 
         cost = RecruitAccess.upgrade_cost(player[:recruit_access].to_i)
         return false unless cost
@@ -196,6 +235,7 @@ module Sim
 
       def recruit_template!(player, template, school_key: nil)
         return false unless @catalog.recruitable_template?(template, player[:faction_id])
+        return false unless RecruitAccess.on_market?(player, template)
 
         cost = RecruitRules::ChaosSpawn.cost(player, template)
         return false if cost <= 0 || player[:treasury] < cost
@@ -221,6 +261,7 @@ module Sim
         @campaign.id_sequence = factory.sequence_value
         player[:treasury] -= cost
         player[:roster] << entity
+        RecruitAccess.take_offer!(player, template)
         true
       end
 
@@ -233,6 +274,7 @@ module Sim
         heroes = @catalog.hero_templates(player[:faction_id])
         (units + heroes).select do |template|
           next false if @allowed_tiers && template[:kind] != "hero" && !@allowed_tiers.include?(template[:recruit_tier])
+          next false unless RecruitAccess.on_market?(player, template)
 
           cost = RecruitRules::ChaosSpawn.cost(player, template)
           reserve = ArmyComposition.treasury_reserve(player[:roster], player[:treasury])

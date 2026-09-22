@@ -13,6 +13,7 @@ module Sim
 
       def call
         assign_random_factions!
+        roll_markets!
         prepare_bots!
         Result.ok(@campaign)
       end
@@ -40,6 +41,14 @@ module Sim
             school_key: school_key
           )
           @campaign = result.value if result.ok?
+        end
+      end
+
+      def roll_markets!
+        @campaign.players.each do |player|
+          next unless player[:status] == "active" && player[:faction_id].present?
+
+          RecruitAccess.roll_offer!(player, @catalog, @rng)
         end
       end
 
