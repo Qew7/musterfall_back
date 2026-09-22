@@ -431,6 +431,7 @@ module Sim
           row: entry[:row],
           current_health: entry[:current_health],
           max_health: entry[:max_health],
+          model_health: entry[:model_health],
           models_remaining: entry[:models_remaining],
           starting_models: entry[:starting_models],
           cost: entry[:cost],
