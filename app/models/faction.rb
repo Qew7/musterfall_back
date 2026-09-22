@@ -1,4 +1,6 @@
 class Faction < ApplicationRecord
+  scope :playable, -> { where(neutral: false) }
+
   has_many :army_templates, -> { order(:kind, :created_at) }, dependent: :destroy
   has_many :units, -> { where(kind: "unit").order(:name) }, class_name: "ArmyTemplate", dependent: :destroy
   has_many :heroes, -> { where(kind: "hero").order(:id) }, class_name: "ArmyTemplate", dependent: :destroy

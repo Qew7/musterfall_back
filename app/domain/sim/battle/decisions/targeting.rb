@@ -23,6 +23,7 @@ module Sim
           available = living.select { |target| can_target_missile?(attacker, target, attack_type, all_combatants, terrain: terrain) }
           return nil if available.empty?
 
+          available = Rules.for(:shooting).prioritize_targets(attacker, available, attack_type)
           prioritized = prioritize_routing(available)
           same_lane = Constants::BATTLE_ROWS.flat_map { |row| prioritized.select { |entry| entry[:lane] == attacker[:lane] && entry[:row] == row } }
           if same_lane.any?
@@ -62,7 +63,12 @@ module Sim
           end
           return false if in_melee_combat?(target, all_combatants)
 
-          Geometry::Battlefield.line_of_sight_blockers(attacker, target, all_combatants, terrain: terrain).empty?
+          line_of_sight_blockers(attacker, target, all_combatants, terrain: terrain).empty?
+        end
+
+        def line_of_sight_blockers(attacker, target, all_combatants, terrain: [])
+          blockers = Geometry::Battlefield.line_of_sight_blockers(attacker, target, all_combatants, terrain: terrain)
+          Rules.for(:shooting).filter_line_of_sight_blockers(attacker, target, blockers)
         end
 
         # Locked in combat = footprint contact with a living enemy (allies do not count).

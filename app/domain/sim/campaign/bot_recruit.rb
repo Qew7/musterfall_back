@@ -94,7 +94,7 @@ module Sim
           player = @campaign.find_player(@player_id)
           break unless player
 
-          budget = player[:treasury] - cfg[:upgrade_reserve]
+          budget = player[:treasury] - [ cfg[:upgrade_reserve], ArmyComposition.treasury_reserve(player[:roster], player[:treasury]) ].max
           break if budget <= 0
 
           missing = missing_models(entity)
@@ -142,7 +142,8 @@ module Sim
         return false unless cost
 
         cfg = strategy(player)
-        return false if player[:treasury] < cost + cfg[:upgrade_reserve]
+        reserve = [ cfg[:upgrade_reserve], ArmyComposition.treasury_reserve(player[:roster], player[:treasury]) ].max
+        return false if player[:treasury] < cost + reserve
 
         @rng.rand < cfg[:upgrade_chance]
       end
@@ -194,6 +195,8 @@ module Sim
       end
 
       def recruit_template!(player, template, school_key: nil)
+        return false unless @catalog.recruitable_template?(template, player[:faction_id])
+
         cost = RecruitRules::ChaosSpawn.cost(player, template)
         return false if cost <= 0 || player[:treasury] < cost
         return false unless RecruitAccess.allowed?(player, @catalog, template)
@@ -226,13 +229,14 @@ module Sim
       end
 
       def recruitable(player)
-        units = @catalog.unit_templates(player[:faction_id])
+        units = @catalog.recruitable_unit_templates(player[:faction_id])
         heroes = @catalog.hero_templates(player[:faction_id])
         (units + heroes).select do |template|
           next false if @allowed_tiers && template[:kind] != "hero" && !@allowed_tiers.include?(template[:recruit_tier])
 
           cost = RecruitRules::ChaosSpawn.cost(player, template)
-          cost.positive? && cost <= player[:treasury] && RecruitAccess.allowed?(player, @catalog, template)
+          reserve = ArmyComposition.treasury_reserve(player[:roster], player[:treasury])
+          cost.positive? && cost <= player[:treasury] - reserve && RecruitAccess.allowed?(player, @catalog, template)
         end
       end
 

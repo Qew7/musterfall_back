@@ -28,6 +28,26 @@ module Sim
       @abilities_by_id[ability_id]
     end
 
+    def selectable_factions
+      factions.reject { |entry| entry[:neutral] }
+    end
+
+    def recruitable_template?(template, faction_id)
+      owner = faction(faction_id)
+      return false unless owner && !owner[:neutral] && template
+
+      template[:faction_id] == faction_id ||
+        (template[:kind] == "unit" && faction(template[:faction_id])&.dig(:neutral) == true)
+    end
+
+    def recruitable_unit_templates(faction_id)
+      owner = faction(faction_id)
+      return [] unless owner && !owner[:neutral]
+
+      unit_templates(faction_id) + factions.select { |entry| entry[:neutral] }
+        .flat_map { |entry| unit_templates(entry[:id]) }
+    end
+
     def unit_templates(faction_id)
       faction = faction(faction_id)
       return [] unless faction

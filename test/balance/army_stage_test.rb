@@ -19,7 +19,7 @@ class BalanceArmyStageTest < ActiveSupport::TestCase
   test "all factions respect stages and spend only on troops within the roster cap" do
     catalog = Sim::Catalog::Loader.load
     Balance::Synthetic::ArmyStage::PRESETS.each do |stage, preset|
-      catalog.factions.each do |faction|
+      catalog.selectable_factions.each do |faction|
         army = Balance::Synthetic::Army.build!(
           catalog: catalog, faction_id: faction[:id], budget: preset[:budgets].last,
           hero_level: preset[:hero_level], rng: Sim::Rng::Seeded.new(89), player_id: "test",

@@ -43,6 +43,9 @@ module Sim
       end
 
       def unit_bounty(unit)
+        special = Rules.for(:scoring).unit_bounty(unit)
+        return special unless special.nil?
+
         cost = unit[:cost].to_i
         return 0 if cost <= 0
 
@@ -99,7 +102,8 @@ module Sim
           player_id: player[:id],
           player_name: player[:name],
           faction: catalog.faction(player[:faction_id]),
-          combatants: side[:combatants].map { |entry| combatant_public(entry) }
+          combatants: side[:combatants].map { |entry| combatant_public(entry) },
+          campaign_rewards: Array(side[:campaign_rewards])
         }
       end
 
@@ -126,6 +130,7 @@ module Sim
           models_remaining: combatant[:models_remaining],
           starting_models: combatant[:starting_models],
           cost: combatant[:cost],
+          victory_points: unit_bounty(combatant),
           frontage: combatant[:frontage],
           max_files: combatant[:max_files],
           files: combatant[:files],
@@ -198,7 +203,7 @@ module Sim
           .select { |entry| Entities::Footprint.deployable?(entry) }
           .map { |entity| build_combatant(entity, heroes_by_host[entity[:id]] || [], side_key, side_index, general_id: general_id) }
 
-        {
+        side = {
           player_id: player[:id],
           player_name: player[:name],
           faction_id: player[:faction_id],
@@ -206,6 +211,8 @@ module Sim
           side_key: side_key,
           combatants: combatants
         }
+        Rules.for(:setup).prepare_side!(side, player)
+        side
       end
 
       def general_entity_id(roster)
@@ -266,6 +273,7 @@ module Sim
             kind: entity[:kind],
             is_general: is_general,
             cost: entity.dig(:components, :economy, :cost).to_i + attached_heroes.sum { |hero| hero.dig(:components, :economy, :cost).to_i },
+            unit_cost: entity.dig(:components, :economy, :cost).to_i,
             side_key: side_key,
             side_index: side_index,
             lane: entity.dig(:components, :formation, :lane),
@@ -426,6 +434,7 @@ module Sim
           models_remaining: entry[:models_remaining],
           starting_models: entry[:starting_models],
           cost: entry[:cost],
+          victory_points: unit_bounty(entry),
           x: entry[:x],
           y: entry[:y],
           facing: entry[:facing],

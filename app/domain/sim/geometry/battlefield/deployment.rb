@@ -30,8 +30,8 @@ module Sim
 
         def clamp_deployment_position(position)
           {
-            x: position[:x].to_f.round.clamp(0, CONFIG[:deployment_depth] - 1),
-            y: position[:y].to_f.round.clamp(0, CONFIG[:height] - 1),
+            x: position[:x].to_f.clamp(0, CONFIG[:deployment_depth] - 1),
+            y: position[:y].to_f.clamp(0, CONFIG[:height] - 1),
             facing: normalize_facing(position[:facing].to_f)
           }
         end

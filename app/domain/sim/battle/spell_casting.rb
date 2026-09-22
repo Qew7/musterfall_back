@@ -93,7 +93,8 @@ module Sim
           terrain: terrain,
           rng: rng,
           round_number: round_number,
-          spell: spell
+          spell: spell,
+          phase: phase
         )
         units = acting_side[:combatants] + target_side[:combatants]
         unit_before = units.map { |unit| State.snapshot_combatant(unit) }
@@ -204,6 +205,14 @@ module Sim
           victims.each do |victim|
             amount = [ 1, (6 * (Constants::WEAPON_VS_ARMOR.dig(victim[:armor_type], "demolish") || 1) / 2.2).round ].max
             amount = [ amount, victim[:current_health].to_f ].min
+            source = acting_side[:combatants].find { |unit| unit[:entity_id] == event[:caster_id] } ||
+              { entity_id: event[:caster_id], name: event[:actor_name] }
+            damage_context = {
+              phase: phase, attacker: source, host: source, defender: victim, damage: amount,
+              acting_side: acting_side, target_side: target_side, attack_type: "magic", terrain: terrain
+            }
+            Rules.for(:shooting).before_damage!(damage_context)
+            amount = damage_context[:damage]
             victim[:current_health] -= amount
             State.sync_combatant_footprint!(victim)
             damage += amount

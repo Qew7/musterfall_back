@@ -72,9 +72,11 @@ module Balance
       end
 
       def pick_factions(catalog, config, rng)
-        pool = catalog.factions.map { |entry| entry[:id] }
+        pool = catalog.selectable_factions.map { |entry| entry[:id] }
         left = config[:faction_left].presence || rng.pick(pool)
         right = config[:faction_right].presence || rng.pick(pool.reject { |entry| entry == left }.presence || pool)
+        raise ArgumentError, "faction must be playable" unless pool.include?(left) && pool.include?(right)
+
         [ left, right ]
       end
 

@@ -20,8 +20,8 @@ module Sim
       private
 
       def assign_random_factions!
-        recruitable = @catalog.factions.select { |faction| @catalog.unit_templates(faction[:id]).any? }
-        pool = recruitable.any? ? recruitable : @catalog.factions
+        recruitable = @catalog.selectable_factions.select { |faction| @catalog.unit_templates(faction[:id]).any? }
+        pool = recruitable.any? ? recruitable : @catalog.selectable_factions
 
         @campaign.players.each do |player|
           next if player[:faction_id].present?

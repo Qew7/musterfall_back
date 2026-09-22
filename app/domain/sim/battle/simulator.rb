@@ -26,6 +26,13 @@ module Sim
           battle[:rounds] << Round.play(battle: battle, round_number: round_number, rng: @rng)
         end
 
+        setup_actions = battle[:sides].values.flat_map { |side| Array(side[:setup_actions]) }
+        if setup_actions.any? && battle[:rounds].first&.dig(:turns)&.first
+          battle[:rounds].first[:turns].first[:phases].unshift(
+            { type: "start", label: "Условия найма", events: setup_actions.map { |action| action[:summary] }, actions: setup_actions }
+          )
+        end
+
         score_a = State.victory_score(battle[:sides][:left], battle[:sides][:right])
         score_b = State.victory_score(battle[:sides][:right], battle[:sides][:left])
         winner_id = (score_a <=> score_b) >= 0 ? @player_a[:id] : @player_b[:id]
@@ -43,7 +50,7 @@ module Sim
           winner_id: winner_id,
           winner_name: winner_id == @player_a[:id] ? @player_a[:name] : @player_b[:name],
           summary: "#{@player_a[:name]} #{total_a} vs #{total_b} #{@player_b[:name]}",
-          events: flatten_events(battle[:rounds]).first(24)
+          events: (setup_actions.map { |action| action[:summary] } + flatten_events(battle[:rounds])).uniq.first(24)
         }
       end
 

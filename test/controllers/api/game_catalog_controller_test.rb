@@ -1,6 +1,22 @@
 require "test_helper"
 
 class Api::GameCatalogControllerTest < ActionDispatch::IntegrationTest
+  test "catalog exposes neutral factions while balance only offers playable factions" do
+    neutral = Faction.create!(slug: "neutral_test", name: "Neutral", vibe: "Mercenaries", passive: "Shared", color: "#777777", neutral: true)
+    get "/api/game_catalog"
+
+    assert_response :success
+    payload = response.parsed_body
+    assert_equal true, payload.fetch("factions").find { |faction| faction["id"] == neutral.slug }.fetch("neutral")
+    assert_equal false, payload.fetch("factions").find { |faction| faction["id"] == "empire" }.fetch("neutral")
+    refute_includes Balance::Dashboard.faction_slugs, neutral.slug
+    assert_includes Balance::Dashboard.faction_slugs, "empire"
+    assert_raises(ArgumentError) { Balance::Simulation.normalize_config(faction_left: neutral.slug) }
+    loaded = Sim::Catalog::Loader.new.load
+    assert_equal true, loaded.faction(neutral.slug)[:neutral]
+    refute_includes loaded.selectable_factions.map { |faction| faction[:id] }, neutral.slug
+  end
+
   test "returns seeded game catalog" do
     with_spell_api(
       schools: %i[pyromancy],

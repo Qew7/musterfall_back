@@ -7,8 +7,17 @@ module Sim
     def profile(entity)
       entity.fetch(:components).fetch(:combat, {}).merge(
         kind: entity[:kind], abilities: Array(entity.dig(:components, :abilities)),
+        model_class: entity.dig(:components, :formation, :model_class),
         models: Entities::Footprint.health_to_models(entity)
       )
+    end
+
+    def reserve_for_deployment?(entity, roster)
+      Battle::Rules.reserve_for_deployment?(profile(entity), roster.map { |entry| profile(entry) })
+    end
+
+    def treasury_reserve(roster, treasury)
+      Battle::Rules.treasury_reserve(roster.map { |entry| profile(entry) }, treasury)
     end
 
     def role(attributes)

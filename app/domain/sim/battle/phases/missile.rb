@@ -40,6 +40,7 @@ module Sim
             next unless contributor
 
             actor = Decisions::MissileChoice.build_actor(host, contributor)
+            next unless Rules.for(:shooting).allow_attack?(actor, attack_type: attack_type, round_number: round_number)
             target = target_side[:combatants].find { |enemy| enemy[:entity_id] == entry[:target_id] }
             next unless target && target[:current_health].to_f > 0
 

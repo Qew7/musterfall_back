@@ -39,6 +39,7 @@ module Sim
 
         def best_option(actor, enemies, all_combatants, round_number, attack_type, terrain: [])
           return nil unless Phases::AttackResolution.can_attack?(actor, attack_type)
+          return nil unless Rules.for(:shooting).allow_attack?(actor, attack_type: attack_type, round_number: round_number)
 
           selection = Targeting.choose_target(actor, enemies, attack_type, all_combatants, terrain: terrain)
           return nil unless selection

@@ -19,6 +19,7 @@ module Sim
         player = @campaign.find_player(@player_id)
         return Result.failure("player not found", code: :not_found) unless player
         return Result.failure("unknown faction") unless @catalog.faction(@faction_id)
+        return Result.failure("neutral faction cannot be selected") if @catalog.faction(@faction_id)[:neutral]
         return Result.ok(@campaign) if player[:faction_id] == @faction_id && @template_id.blank?
 
         default_hero = starter_hero

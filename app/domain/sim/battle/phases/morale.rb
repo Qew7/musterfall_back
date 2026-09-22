@@ -116,6 +116,7 @@ module Sim
               combat_score_delta: combat_score_delta,
               sequence: (engagement_index * 10) + combatant_index,
               engaged_enemies: winner_combatants,
+              all_combatants: battle_sides.flat_map { |side| side[:combatants] },
               terrain: terrain
             )
             action[:snapshot] = State.snapshot_battlefield(battle_sides)
@@ -124,7 +125,7 @@ module Sim
           end
         end
 
-        def resolve_action(combatant:, allies:, enemies:, round_number:, phase_type:, combat_score_delta:, sequence:, engaged_enemies: [], trigger: nil, terrain: [])
+        def resolve_action(combatant:, allies:, enemies:, round_number:, phase_type:, combat_score_delta:, sequence:, engaged_enemies: [], trigger: nil, terrain: [], all_combatants: nil)
           before = State.snapshot_combatant(combatant)
           from = position_of(combatant)
           check = resolve_check(
@@ -152,7 +153,10 @@ module Sim
             allies: allies,
             enemies: enemies,
             round_number: round_number,
-            phase_type: phase_type
+            phase_type: phase_type,
+            engaged_enemies: engaged_enemies,
+            all_combatants: all_combatants || Array(allies) + Array(enemies),
+            terrain: terrain
           }))
             damage = failure[:damage].to_f
             summary = failure[:summary]
@@ -234,7 +238,7 @@ module Sim
               from: from,
               to: to,
               trigger: trigger
-            ),
+            ) + Array(failure && failure[:details]),
             morale_check: {
               source_phase: phase_type,
               trigger: trigger&.dig(:reason) || (phase_type == "melee" ? "combat_score" : phase_type == "start" ? "rally" : "phase_casualties"),
@@ -259,7 +263,7 @@ module Sim
             trace: Trace.build(
               rule_keys: Trace.rule_keys_for(combatant, :morale),
               trigger: trigger&.dig(:reason) || phase_type,
-              result: morale_trace_result(check, before, after, damage, escaped),
+              result: failure&.dig(:result) || morale_trace_result(check, before, after, damage, escaped),
               target_ids: Array(enemies).map { |enemy| enemy[:entity_id] }
             ),
             snapshot: nil

@@ -83,9 +83,23 @@ class SimArmyCompositionTest < ActiveSupport::TestCase
     roster = ([ "orc_brutes" ] * 4 + [ "goblin_archers" ] * 4).map { |key| @factory.create_unit(key, "p") }
     roster << @factory.create_hero("shaman", "p", free: true)
     Sim::Geometry::Deployment.pack_roster!(roster)
+    fielded = roster.reject { |entity| entity.dig(:components, :formation, :row) == "reserve" }
+    trays = fielded.map { |entity| Sim::Geometry::Deployment.footprint_from_entity(entity) }
     roster.each do |entity|
       refute_equal "reserve", entity.dig(:components, :formation, :row), entity[:name]
       assert_nil Sim::Geometry::Deployment.clash_reason(entity, entity[:components][:formation], roster, ignore_id: entity[:id])
+    end
+    trays.combination(2).each do |left, right|
+      assert_operator Sim::Geometry::Battlefield.distance_between_units(left, right),
+        :>=, Sim::Geometry::Deployment::MIN_SEPARATION
+    end
+    fielded.each do |entity|
+      start = Sim::Geometry::Deployment.footprint_from_entity(entity)
+      others = fielded.reject { |entry| entry[:id] == entity[:id] }.map { |entry| Sim::Geometry::Deployment.footprint_from_entity(entry) }
+      world = Sim::Battle::Pathing::Obstacles.around(start, units: others)
+      fwd = start.merge(x: start[:x] + 0.5)
+      assert world.translation_clear?(start, start, fwd),
+        "#{entity[:name]} cannot take a 0.5\" step from #{start[:x]},#{start[:y]}"
     end
   end
 

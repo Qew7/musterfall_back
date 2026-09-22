@@ -25,6 +25,7 @@ module Api
         vibe: faction.vibe,
         passive: faction.passive,
         color: faction.color,
+        neutral: faction.neutral?,
         unitPool: faction.units.map(&:template_key),
         heroPool: faction.heroes.map(&:template_key),
         magicSchoolIds: Sim::Battle::Spells.schools_for(faction.slug).map(&:to_s)

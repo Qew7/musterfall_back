@@ -1,7 +1,8 @@
 module Sim
   module Geometry
     module Deployment
-      MIN_SEPARATION = Battlefield::CONFIG[:melee_contact_tolerance]
+      # CONTACT (0.4) is melee range — packing that tight leaves no first step.
+      MIN_SEPARATION = 1.0
 
       module_function
 
@@ -70,8 +71,10 @@ module Sim
         units.each { |entity| park_in_reserve!(entity) }
         placed = []
         role_counts = Hash.new(0)
-        row_offsets = Hash.new(1.0)
+        row_offsets = Hash.new(0.0)
         units.each do |entity|
+          next if ArmyComposition.reserve_for_deployment?(entity, roster)
+
           role = ArmyComposition.role(ArmyComposition.profile(entity))
           index = role_counts[role]
           role_counts[role] += 1
@@ -83,10 +86,14 @@ module Sim
           position = find_partner_position(entity, partners, roster)
           unless position || role == :flanker
             width = entity.dig(:components, :formation, :width).to_f
-            candidate = Battlefield.default_deployment(row, lane).merge(y: row_offsets[row] + width / 2.0, facing: 0)
-            if mirrored_position?(entity, candidate) && clear_position?(entity, candidate, roster, ignore_id: entity[:id])
+            y = row_offsets[row] + width / 2.0
+            Battlefield.default_deployment(row, lane)[:x].to_i.downto(1) do |x|
+              candidate = { x: x, y: y, facing: 0 }
+              next unless mirrored_position?(entity, candidate) && clear_position?(entity, candidate, roster, ignore_id: entity[:id])
+
               position = candidate.merge(Battlefield.sync_formation_slots_from_deployment(candidate))
-              row_offsets[row] += width + MIN_SEPARATION + 0.1
+              row_offsets[row] += width + MIN_SEPARATION
+              break
             end
           end
           position ||= find_clear_position(entity, row, lane, roster, ignore_id: entity[:id], mirrored: true)

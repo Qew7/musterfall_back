@@ -60,10 +60,12 @@ module Sim
         end
 
         def resolve_missile_strike!(phase:, actor:, target:, vector:, attack_type:, acting_side:, target_side:, round_number:, rng:, terrain: [])
+          return phase unless Rules.for(:shooting).allow_attack?(actor, attack_type: attack_type, round_number: round_number)
+
           all_combatants = acting_side[:combatants] + target_side[:combatants]
           profile = attack_type == "magic" ? SpellCasting.profile(actor) : actor
           blockers = if profile[:requires_line_of_sight]
-            Geometry::Battlefield.line_of_sight_blockers(profile, target, all_combatants, terrain: terrain)
+            Decisions::Targeting.line_of_sight_blockers(profile, target, all_combatants, terrain: terrain)
           else
             []
           end
@@ -71,6 +73,12 @@ module Sim
           return phase if victims.empty?
 
           host = acting_side[:combatants].find { |entry| entry[:entity_id] == actor[:host_id] } || actor
+          first_action_index = phase[:actions].length
+          attack_ctx = {
+            phase: phase, actor: actor, attacker: profile, host: host, target: target,
+            acting_side: acting_side, target_side: target_side, round_number: round_number,
+            attack_type: attack_type, terrain: terrain
+          }
           shooting_rule = Rules.for(:shooting).find_applicable(profile, attack_type)
           custom_resolve = shooting_rule&.respond_to?(:resolve_missile_strike!)
           strikes = custom_resolve ? 1 : [ profile[:missile_attacks].to_i, 1 ].max
@@ -94,6 +102,7 @@ module Sim
                 terrain: terrain
               )
             end
+            Rules.for(:shooting).after_attack!(attack_ctx.merge(actions: phase[:actions].drop(first_action_index)))
             return phase
           end
 
@@ -104,6 +113,8 @@ module Sim
             batch_actions = []
             attempts = 0
             hits = 0
+            hit_context = attack_ctx.merge(defender: victim)
+            Rules.for(:shooting).before_attack!(hit_context)
 
             strikes.times do
               break if victim[:current_health].to_f <= 0
@@ -113,7 +124,7 @@ module Sim
               next if strike_damage <= 0
 
               attempts += 1
-              unless hit?(profile, victim, attack_type, rng, terrain: terrain)
+              unless hit?(profile, victim, attack_type, rng, terrain: terrain, context: hit_context)
                 next
               end
 
@@ -163,6 +174,7 @@ module Sim
               miss_action: miss_action
             )
           end
+          Rules.for(:shooting).after_attack!(attack_ctx.merge(actions: phase[:actions].drop(first_action_index)))
           phase
         end
 
@@ -170,6 +182,12 @@ module Sim
           actor_state = State.snapshot_combatant(host)
           before = State.snapshot_combatant(victim)
           strike_damage = [ strike_damage, victim[:current_health].to_f ].min
+          damage_context = {
+            phase: phase, attacker: profile, host: host, defender: victim, damage: strike_damage,
+            acting_side: acting_side, target_side: target_side, attack_type: attack_type, terrain: terrain
+          }
+          Rules.for(Rules.damage_phase_for(attack_type)).before_damage!(damage_context)
+          strike_damage = damage_context[:damage]
           victim[:current_health] = [ 0, victim[:current_health] - strike_damage ].max
           State.sync_combatant_footprint!(victim)
           actor_for_text = actor.merge(weapon_type: profile[:weapon_type] || actor[:weapon_type])
@@ -257,11 +275,16 @@ module Sim
             damage_per_hit = entry[:damage]
             attempts = engaged * attacks_per_model
             hits = 0
+            hit_context = {
+              phase: phase, attacker: entry[:profile], host: attacker, defender: target,
+              acting_side: acting_side, target_side: target_side, attack_type: "melee", terrain: terrain
+            }
+            Rules.for(:melee).before_attack!(hit_context)
 
             attempts.times do
               break if attacker[:current_health].to_f <= 0 || target[:current_health].to_f <= 0
 
-              hits += 1 if hit?(entry[:profile], target, "melee", rng)
+              hits += 1 if hit?(entry[:profile], target, "melee", rng, context: hit_context)
             end
 
             actor_for_log = {
@@ -298,6 +321,9 @@ module Sim
             actor_state = State.snapshot_combatant(attacker)
             before = State.snapshot_combatant(target)
             total_damage = [ hits * damage_per_hit, melee_kill_damage_cap(target, kill_budget) ].min
+            damage_context = hit_context.merge(damage: total_damage)
+            Rules.for(:melee).before_damage!(damage_context)
+            total_damage = damage_context[:damage]
             target[:current_health] = [ 0, target[:current_health] - total_damage ].max
             State.sync_combatant_footprint!(target)
             kill_budget -= before[:models_remaining].to_i - State.combatant_models_remaining(target)
@@ -420,8 +446,12 @@ module Sim
           (base * factor).clamp(0.0, 1.0)
         end
 
-        def hit?(attacker, defender, attack_type, rng, terrain: [])
-          rng.rand < hit_chance(attacker, defender, attack_type, terrain: terrain)
+        def hit?(attacker, defender, attack_type, rng, terrain: [], context: nil)
+          chance = hit_chance(attacker, defender, attack_type, terrain: terrain)
+          return true if rng.rand < chance
+          return false unless context && Rules.for(Rules.damage_phase_for(attack_type)).reroll_miss?(context)
+
+          rng.rand < chance
         end
 
         def can_attack?(attacker, attack_type, allow_routing_melee: false)

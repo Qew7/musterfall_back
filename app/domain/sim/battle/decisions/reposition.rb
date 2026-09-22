@@ -421,7 +421,7 @@ module Sim
               next false if posed[:shooting_range].to_f.positive? &&
                 Geometry::Battlefield.distance_between(posed, enemy) > posed[:shooting_range].to_f
 
-              Geometry::Battlefield.line_of_sight_blockers(posed, enemy, board).empty?
+              Targeting.line_of_sight_blockers(posed, enemy, board, terrain: terrain).empty?
             end
           end
         end

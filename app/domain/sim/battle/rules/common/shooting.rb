@@ -52,12 +52,13 @@ module Sim
               attempts = shooting_attempts(actor, actor)
               chance = attack.hit_chance(actor, victim, "shooting")
               per_hit = attack.damage(actor, victim, attack_type, vector, round_number)
-              expected_volley_damage(attempts, chance, per_hit * entry[:multiplier].to_f, victim[:current_health])
+              rerolls = Rules.for(:shooting).missed_hit_rerolls(actor, victim, attack_type)
+              expected_volley_damage(attempts, chance, per_hit * entry[:multiplier].to_f, victim[:current_health], rerolls: rerolls)
             end
           end
 
           # E[floor(hits * damage)], not floor(E[hits] * damage).
-          def expected_volley_damage(attempts, chance, per_hit, health)
+          def expected_volley_damage(attempts, chance, per_hit, health, rerolls: 0)
             probabilities = [ 1.0 ]
             attempts.times do
               next_probabilities = Array.new(probabilities.size + 1, 0.0)
@@ -67,7 +68,16 @@ module Sim
               end
               probabilities = next_probabilities
             end
-            probabilities.each_with_index.sum { |probability, hits| probability * [ (hits * per_hit).floor, health ].min }
+            probabilities.each_with_index.sum do |probability, hits|
+              base = [ (hits * per_hit).floor, health ].min
+              # One marked miss may reroll; a perfect volley has no failed die.
+              if rerolls.positive? && hits < attempts
+                improved = [ ((hits + 1) * per_hit).floor, health ].min
+                probability * (base * (1 - chance) + improved * chance)
+              else
+                probability * base
+              end
+            end
           end
 
           def resolve_missile_strike!(phase:, actor:, host:, profile:, vector:, victims:, attack_type:, acting_side:, target_side:, round_number:, blockers:, rng:, terrain: [], **_extra)
@@ -87,9 +97,14 @@ module Sim
               end
               next unless strike_damage.positive?
 
+              hit_context = {
+                phase: phase, attacker: profile, host: host, defender: victim,
+                acting_side: acting_side, target_side: target_side, attack_type: attack_type, terrain: terrain
+              }
+              Rules.for(Rules.damage_phase_for(attack_type)).before_attack!(hit_context)
               shooting_attempts(host, profile).times do
                 attempts += 1
-                next unless attack.hit?(profile, victim, attack_type, rng, terrain: terrain)
+                next unless attack.hit?(profile, victim, attack_type, rng, terrain: terrain, context: hit_context)
 
                 hits += 1
                 total_damage += strike_damage

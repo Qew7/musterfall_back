@@ -37,7 +37,7 @@ module Balance
     end
 
     def faction_slugs
-      Faction.order(:position).pluck(:slug)
+      Faction.playable.order(:position).pluck(:slug)
     end
 
     def unit_template_keys

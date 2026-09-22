@@ -21,7 +21,7 @@ module Sim
         return Result.failure("player is not active") unless player[:status] == "active"
         return Result.failure("unknown template") unless template
         return Result.failure("faction required") if player[:faction_id].blank?
-        return Result.failure("template faction mismatch") unless template[:faction_id] == player[:faction_id]
+        return Result.failure("template faction mismatch") unless @catalog.recruitable_template?(template, player[:faction_id])
         cost = RecruitRules::ChaosSpawn.cost(player, template)
         return Result.failure("insufficient treasury") if cost <= 0 || player[:treasury] < cost
         return Result.failure("recruit slot unavailable") unless RecruitAccess.allowed?(player, @catalog, template)

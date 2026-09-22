@@ -1,4 +1,15 @@
 abilities = [
+  { key: "forfeitBounty", name: "Заранее списанные", category: "trait", description: "Выставленный отряд сразу приносит противнику свою полную стоимость в очках победы. Гибель не даёт эти очки повторно. Очки за присоединённых героев считаются обычно." },
+  { key: "bodyguardContract", name: "Принять на себя", category: "defense", description: "Один раз за бой принимает на себя до 3 урона от атаки по другому союзнику в 2″. Перенесённый урон повторно бронёй не уменьшается." },
+  { key: "overheadVolley", name: "Поверх строя", category: "combat", description: "При стрельбе может игнорировать один союзный пехотный отряд, закрывающий обзор. Дополнительные отряды и местность продолжают мешать." },
+  { key: "orderlyRetreat", name: "Уходим по порядку", category: "defense", description: "Первая проваленная проверка морали после рукопашной заменяется отходом назад на 1″ с сохранением строя. Если путь закрыт — обычное бегство. Попытка расходуется в обоих случаях." },
+  { key: "quarryMark", name: "Метка добычи", category: "combat", description: "Первые два успешных удара или залпа отмечают цель. Следующий другой союзный отряд тратит метку и перебрасывает один промах в этой атаке. Метки не складываются." },
+  { key: "reserveIncome", name: "Работа в резерве", category: "economy", description: "Каждый бой, начатый живым отрядом в резерве, даёт 200 дополнительных припасов для следующего найма. Свободный проход дохода не даёт. Каждый такой отряд приносит доход отдельно." },
+  { key: "skySnare", name: "Стянуть с неба", category: "defense", description: "Дважды за бой прерывает вражеский полёт через зону 6″ вокруг расчёта: вынуждает законно приземлиться до контакта и срывает заряд." },
+  { key: "counterBattery", name: "Ответ по вспышке", category: "siege", description: "Два специальных выстрела по машине, уже стрелявшей в бою. Попадание наносит 6 урона без учёта брони и срывает следующую фазу стрельбы цели. Промах тоже расходует выстрел. В остальных случаях стреляет обычным оружием." },
+  { key: "banishSummons", name: "Обратно в землю", category: "combat", description: "В конце каждого раунда наносит 4 урона каждому вражескому призванному существу в 4″. Обычные нанятые отряды, включая нежить, не затрагивает." },
+  { key: "chargeBarricade", name: "Обратный удар", category: "defense", description: "Неподвижный отряд встречает фронтальный заряд с дистанции от 4″: снимает бонус заряда и наносит 1 урон за каждые полные 2″ разбега, максимум 6. Фланг, тыл и короткий заряд обходят заграждение." },
+  { key: "treasuryGuard", name: "Вес золота", category: "economy", description: "На начало боя: за каждые 200 непотраченных припасов ML и MO +1, максимум +2. Припасы не расходуются; бонус действует только в этом бою." },
   { key: "antiLarge", name: "Anti-Large", category: "combat", description: "В ближнем бою наносит ×1.35 урона целям класса monster и cavalry." },
   { key: "armorPiercing", name: "Armor Piercing", category: "combat", description: "Вдвое уменьшает штраф (и бонус) брони цели к урону." },
   { key: "bannerAura", name: "Banner Aura", category: "aura", description: "Если герой встроен в отряд, ML отряда +1." },
@@ -184,6 +195,12 @@ factions = [
     vibe: "Элитные удары, тяжелая броня и демоническая мощь.",
     passive: "Руническая элита выдерживает обычное оружие, а мутации непредсказуемы.",
     color: "#5d1724"
+  },
+  {
+    slug: "mercenaries", name: "Вольные роты", neutral: true,
+    vibe: "Наёмные роты, караванные артели и гильдии военных специалистов.",
+    passive: "Доступны для найма любой фракции. Используют обычные места найма своего тира.",
+    color: "#997640"
   }
 ]
 
@@ -201,7 +218,7 @@ templates = [
   # heroes
   { template_key: "captain_general", kind: "hero", recruit_tier: "line", faction_slug: "empire", name: "Генерал Империи", cost: nil, models: 1, model_health: 3, width: 1, armor_type: "heavy", weapon_type: "slash", melee: 1, ranged: 0, spell: 0, initiative: 5, abilities: [ "leader" ], skill: 5, mounted: false, attacks: 2 },
   { template_key: "battle_wizard", kind: "hero", recruit_tier: "line", faction_slug: "empire", name: "Боевой маг", cost: nil, models: 1, model_health: 2, width: 1, armor_type: "magic", weapon_type: "magic", melee: 1, ranged: 1, spell: 5, initiative: 5, abilities: [ "wizard", "leader" ], skill: 5, mounted: false, attacks: 2 },
-  { template_key: "engineer_captain", kind: "hero", recruit_tier: "line", faction_slug: "empire", name: "Инженер-капитан", cost: nil, models: 1, model_health: 2, width: 1, armor_type: "light", weapon_type: "ranged", melee: 1, ranged: 1, spell: 0, initiative: 5, abilities: [ "ranged", "armorPiercing" ], skill: 4, mounted: false, attacks: 2, shooting_range: 10 },
+  { template_key: "engineer_captain", kind: "hero", recruit_tier: "line", faction_slug: "empire", name: "Инженер-капитан", cost: 75, models: 1, model_health: 2, width: 1, armor_type: "light", weapon_type: "ranged", melee: 1, ranged: 1, spell: 0, initiative: 5, abilities: [ "ranged", "armorPiercing" ], skill: 4, mounted: false, attacks: 2, shooting_range: 10 },
 
   # ── Зеленокожие (greenskins) ───────────────────────────────
   # line
@@ -251,7 +268,7 @@ templates = [
   # line
   { template_key: "reaver_band", kind: "unit", recruit_tier: "line", faction_slug: "chaos", name: "Отряд грабителей", cost: nil, models: 10, model_health: 1, width: 5, armor_type: "medium", weapon_type: "slash", melee: 1, ranged: 0, spell: 0, initiative: 3, abilities: [], skill: 3, mounted: false, attacks: 1 },
   # elite
-  { template_key: "rift_heavies", kind: "unit", recruit_tier: "elite", faction_slug: "chaos", name: "Тяжёлая гвардия", cost: nil, models: 10, model_health: 1, width: 5, armor_type: "heavy", weapon_type: "slash", melee: 1, ranged: 0, spell: 0, initiative: 3, abilities: [ "disciplined", "fearless", "runeArmor" ], skill: 5, mounted: false, attacks: 1 },
+  { template_key: "rift_heavies", kind: "unit", recruit_tier: "elite", faction_slug: "chaos", name: "Тяжёлая гвардия", cost: 175, models: 10, model_health: 1, width: 5, armor_type: "heavy", weapon_type: "slash", melee: 1, ranged: 0, spell: 0, initiative: 3, abilities: [ "disciplined", "fearless", "runeArmor" ], skill: 5, mounted: false, attacks: 1 },
   { template_key: "rift_knights", kind: "unit", recruit_tier: "elite", faction_slug: "chaos", name: "Рыцари разлома", cost: nil, models: 6, model_health: 1, width: 3, armor_type: "heavy", weapon_type: "puncture", melee: 1, ranged: 0, spell: 0, initiative: 3, abilities: [ "fast", "momentumCharge" ], skill: 5, mounted: false, attacks: 1 },
   # rare
   { template_key: "rift_mutant", kind: "unit", recruit_tier: "rare", faction_slug: "chaos", name: "Мутант разлома", cost: nil, models: 1, model_health: 6, width: 1, armor_type: "magic", weapon_type: "blunt", melee: 1, ranged: 0, spell: 0, initiative: 3, abilities: [ "fear" ], skill: 4, mounted: false, attacks: 2 },
@@ -262,7 +279,8 @@ templates = [
   { template_key: "blood_champion", kind: "hero", recruit_tier: "line", faction_slug: "chaos", name: "Чемпион крови", cost: nil, models: 1, model_health: 3, width: 1, armor_type: "heavy", weapon_type: "slash", melee: 1, ranged: 0, spell: 0, initiative: 5, abilities: [ "fearless", "runeArmor" ], skill: 5, mounted: false, attacks: 2 }
 ]
 
-# Normalize the complete population before calculating any prices.
+# Keep the established pricing reference unchanged when adding a neutral market.
+# Neutral contract prices below are explicit initial estimates, not calibrated rule fees.
 reference_profiles = templates.map { |attributes| template_cost_profile(apply_monster_trait!(attributes)) }
 
 templates = reference_profiles.map do |attributes|
@@ -270,6 +288,29 @@ templates = reference_profiles.map do |attributes|
   cost = computed_template_cost(attributes, reference_profiles: reference_profiles) if cost.nil? || cost == 0
   attributes.merge(cost: cost)
 end
+
+mercenary_defaults = {
+  kind: "unit", faction_slug: "mercenaries", model_health: 1, width: 4,
+  armor_type: "light", weapon_type: "slash", melee: 1, ranged: 0, spell: 0,
+  initiative: 3, skill: 3, movement: 3, morale: 5, mounted: false, attacks: 1,
+  abilities: []
+}
+mercenaries = [
+  { template_key: "unpaid_company", recruit_tier: "line", name: "Рота невыплаченного жалованья", cost: 100, models: 18, width: 5, skill: 2, morale: 4 },
+  { template_key: "mercenary_ogres", recruit_tier: "line", name: "Наёмные огры", cost: 175, models: 4, model_health: 3, width: 2, model_class: "monster", weapon_type: "blunt", melee: 2, skill: 2, initiative: 2 },
+  { template_key: "free_fencers", recruit_tier: "line", name: "Вольные фехтовальщики", cost: 175, models: 14, width: 5, armor_type: "medium", melee: 2, skill: 4, initiative: 5, abilities: [ "forfeitBounty" ] },
+  { template_key: "copper_guarantors", recruit_tier: "elite", name: "Поручители Медной кассы", cost: 175, models: 10, armor_type: "heavy", abilities: [ "bodyguardContract" ] },
+  { template_key: "rooftop_archers", recruit_tier: "elite", name: "Лучники Черепичных крыш", cost: 150, models: 10, width: 5, ranged: 1, weapon_type: "ranged", initiative: 4, shooting_template: "common", abilities: [ "ranged", "overheadVolley" ] },
+  { template_key: "ninth_rearguard", recruit_tier: "elite", name: "Арьергард Девятого обоза", cost: 150, models: 12, armor_type: "medium", morale: 6, abilities: [ "orderlyRetreat" ] },
+  { template_key: "red_mark_hunters", recruit_tier: "elite", name: "Егеря Красной зарубки", cost: 150, models: 8, ranged: 1, shooting_range: 10, weapon_type: "ranged", initiative: 4, shooting_template: "common", abilities: [ "ranged", "quarryMark" ] },
+  { template_key: "caravan_company", recruit_tier: "elite", name: "Караванная артель", cost: 450, models: 12, armor_type: "medium", melee: 2, skill: 4, morale: 6, abilities: [ "reserveIncome" ] },
+  { template_key: "port_skyhunters", recruit_tier: "rare", name: "Неболовы Вольных портов", cost: 250, models: 4, model_health: 2, armor_type: "medium", ranged: 1, shooting_range: 8, weapon_type: "ranged", movement: 2, shooting_template: "common", abilities: [ "ranged", "skySnare" ] },
+  { template_key: "counterbattery_guild", recruit_tier: "rare", name: "Контрбатарейная гильдия", cost: 250, models: 1, model_health: 6, width: 1, model_class: "machine", armor_type: "machine", ranged: 1, shooting_range: 18, weapon_type: "ranged", movement: 2, skill: 4, shooting_template: "common", abilities: [ "ranged", "machine", "counterBattery" ] },
+  { template_key: "last_grave_brotherhood", recruit_tier: "rare", name: "Братство последней могилы", cost: 200, models: 8, abilities: [ "banishSummons" ] },
+  { template_key: "iron_palisade", recruit_tier: "rare", name: "Роты Железного частокола", cost: 200, models: 10, armor_type: "medium", weapon_type: "puncture", movement: 2, morale: 6, abilities: [ "chargeBarricade" ] },
+  { template_key: "treasury_guard", recruit_tier: "rare", name: "Стража большой казны", cost: 275, models: 12, armor_type: "heavy", skill: 4, morale: 6, abilities: [ "treasuryGuard" ] }
+]
+templates.concat(mercenaries.map { |profile| template_cost_profile(mercenary_defaults.merge(profile)) })
 
 upgrades = [
   # ── Общие ──────────────────────────────────────────────────

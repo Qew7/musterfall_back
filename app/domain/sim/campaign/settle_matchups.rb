@@ -54,6 +54,7 @@ module Sim
 
         @campaign.round += 1
         grant_round_income!
+        grant_rule_income!
         crown_winner_if_finished!
 
         @campaign.last_round_report = report
@@ -65,6 +66,23 @@ module Sim
       end
 
       private
+
+      def grant_rule_income!
+        @battles.each do |battle|
+          %i[left right].each do |key|
+            side = battle[key] || battle[key.to_s]
+            next unless side
+
+            player = @campaign.find_player(side[:player_id] || side["player_id"] || side["playerId"])
+            next unless player && player[:status] == "active"
+
+            Battle::Rules.for(:campaign).income_rewards(side).each do |reward|
+              player[:treasury] += reward[:amount]
+              player[:round_notes] << "#{reward[:name]}: работа в резерве +#{reward[:amount]} к найму"
+            end
+          end
+        end
+      end
 
       def grant_round_income!
         return if @campaign.winner_id

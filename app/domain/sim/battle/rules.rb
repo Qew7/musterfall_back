@@ -23,11 +23,15 @@ module Sim
             Boar::Melee,
             Skirmisher::Melee,
             Forestkin::Melee,
+            BodyguardContract::Melee,
+            QuarryMark::Melee,
+            ChargeBarricade::Melee,
             MagicEffects::Melee
           ]
         },
         shooting: -> {
           [
+            CounterBattery::Shooting,
             SlingCatapult::Shooting,
             CorpseTrail::Shooting,
             Line::Shooting,
@@ -43,12 +47,16 @@ module Sim
             RuneArmor::Shooting,
             Forestborn::Shooting,
             Skirmisher::Melee,
+            BodyguardContract::Shooting,
+            QuarryMark::Shooting,
+            OverheadVolley::Shooting,
             MagicEffects::Shooting
           ]
         },
         morale: -> {
           [
             Undead::Morale,
+            OrderlyRetreat::Morale,
             Fear::Morale,
             Wildborn::Morale,
             Disciplined::Morale,
@@ -56,8 +64,10 @@ module Sim
             Muster::Morale
           ]
         },
-        setup: -> { [ BannerAura::Setup, ResoluteAura::Setup ] },
-        round: -> { [ LavaSpit::Round, Undead::Round, Regen::Round, Forestkin::Round ] },
+        setup: -> { [ BannerAura::Setup, ResoluteAura::Setup, ForfeitBounty::Setup, TreasuryGuard::Setup, ReserveIncome::Setup ] },
+        scoring: -> { [ ForfeitBounty::Scoring ] },
+        campaign: -> { [ ReserveIncome::Campaign ] },
+        round: -> { [ LavaSpit::Round, Undead::Round, Regen::Round, Forestkin::Round, BanishSummons::Round ] },
         turn: -> { [ MagicEffects::Turn ] },
         movement: -> {
           [
@@ -70,6 +80,8 @@ module Sim
             Wildborn::Movement,
             ThrowRocks::Movement,
             CorpseTrail::Movement,
+            SkySnare::Movement,
+            ChargeBarricade::Movement,
             MagicEffects::Movement
           ]
         }
@@ -91,6 +103,16 @@ module Sim
         army_rules.filter_map { |rule| rule.army_role(profile) if rule.respond_to?(:army_role) }
       end
 
+      def reserve_for_deployment?(profile, roster)
+        army_rules.any? { |rule| rule.respond_to?(:reserve_for_deployment?) && rule.reserve_for_deployment?(profile, roster) }
+      end
+
+      def treasury_reserve(profiles, treasury)
+        army_rules.filter_map do |rule|
+          rule.treasury_reserve(profiles, treasury) if rule.respond_to?(:treasury_reserve)
+        end.max.to_i
+      end
+
       def planner_for_movement(combatant)
         Array(combatant[:abilities]).include?("flying") ? Flying::Movement : Ground::Movement
       end
@@ -109,6 +131,60 @@ module Sim
         def before_play!(ctx)
           @rules.each do |rule|
             rule.before_play!(ctx) if rule.respond_to?(:before_play!)
+          end
+        end
+
+        def prepare_side!(side, player)
+          @rules.each { |rule| rule.prepare_side!(side, player) if rule.respond_to?(:prepare_side!) }
+        end
+
+        def unit_bounty(unit)
+          @rules.each do |rule|
+            next unless rule.respond_to?(:unit_bounty)
+
+            value = rule.unit_bounty(unit)
+            return value unless value.nil?
+          end
+          nil
+        end
+
+        def income_rewards(side)
+          @rules.flat_map { |rule| rule.respond_to?(:income_rewards) ? rule.income_rewards(side) : [] }
+        end
+
+        def prepare_movement_intents!(ctx)
+          @rules.each { |rule| rule.prepare_movement_intents!(ctx) if rule.respond_to?(:prepare_movement_intents!) }
+        end
+
+        def before_attack!(ctx)
+          @rules.each { |rule| rule.before_attack!(ctx) if rule.respond_to?(:before_attack!) }
+        end
+
+        def after_attack!(ctx)
+          @rules.each { |rule| rule.after_attack!(ctx) if rule.respond_to?(:after_attack!) }
+        end
+
+        def before_damage!(ctx)
+          @rules.each { |rule| rule.before_damage!(ctx) if rule.respond_to?(:before_damage!) }
+        end
+
+        def reroll_miss?(ctx)
+          @rules.any? { |rule| rule.respond_to?(:reroll_miss?) && rule.reroll_miss?(ctx) }
+        end
+
+        def missed_hit_rerolls(attacker, defender, attack_type)
+          @rules.sum { |rule| rule.respond_to?(:missed_hit_rerolls) ? rule.missed_hit_rerolls(attacker, defender, attack_type).to_i : 0 }
+        end
+
+        def filter_line_of_sight_blockers(attacker, target, blockers)
+          @rules.reduce(blockers) do |value, rule|
+            rule.respond_to?(:filter_line_of_sight_blockers) ? rule.filter_line_of_sight_blockers(attacker, target, value) : value
+          end
+        end
+
+        def prioritize_targets(attacker, targets, attack_type)
+          @rules.reduce(targets) do |value, rule|
+            rule.respond_to?(:prioritize_targets) ? rule.prioritize_targets(attacker, value, attack_type) : value
           end
         end
 

@@ -98,6 +98,10 @@ module Sim
               origin_pose: combatant.dup
             )
             resolve_destination_conflicts!([ packed ], reposition_obstacles, enemies: target_side[:combatants])
+            Rules.for(:movement).prepare_movement_intents!(
+              phase: phase, intents: [ packed ], acting_side: acting_side, target_side: target_side,
+              round_number: round_number, terrain: terrain
+            )
             accept_maneuver_destinations!([ packed ])
             apply_intents!([ packed ])
             # Subsequent seekers treat this pose as occupied (including wait / blocked_by_ally).
@@ -219,6 +223,10 @@ module Sim
           occupied = obstacles + group_stayers(entries, intents).map { |entry| freeze_obstacle(entry) }
           resolve_destination_conflicts!(intents, occupied, enemies: target_side[:combatants], terrain: terrain)
           apply_free_aligns!(intents, occupied)
+          Rules.for(:movement).prepare_movement_intents!(
+            phase: phase, intents: intents, acting_side: acting_side, target_side: target_side,
+            round_number: round_number, terrain: terrain
+          )
           Rules.for(:movement).prepare_melee_intents!(
             phase: phase,
             intents: intents,

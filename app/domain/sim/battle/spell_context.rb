@@ -3,7 +3,7 @@ module Sim
     class SpellContext
       attr_reader :caster, :host, :acting_side, :target_side, :terrain, :rng, :round_number, :spell
 
-      def initialize(caster:, host:, acting_side:, target_side:, terrain:, rng:, round_number:, spell:)
+      def initialize(caster:, host:, acting_side:, target_side:, terrain:, rng:, round_number:, spell:, phase: nil)
         @caster = caster
         @host = host
         @acting_side = acting_side
@@ -12,6 +12,7 @@ module Sim
         @rng = rng
         @round_number = round_number
         @spell = spell
+        @phase = phase || Phases::AttackResolution.create_phase("magic", "Фаза магии")
         @damage = 0
         @affected_ids = []
         @effect_log = []
@@ -112,6 +113,12 @@ module Sim
               weapon_type: type.to_s
             )
             dealt = [ dealt, victim[:current_health].to_f ].min
+            damage_context = {
+              phase: @phase, attacker: profile, host: host, defender: victim, damage: dealt,
+              acting_side: acting_side, target_side: target_side, attack_type: "magic", terrain: terrain
+            }
+            Rules.for(:shooting).before_damage!(damage_context)
+            dealt = damage_context[:damage]
             victim[:current_health] -= dealt
             State.sync_combatant_footprint!(victim)
             total += dealt

@@ -55,6 +55,10 @@ module Balance
         }.compact
       end
 
+      faction_ids = [ config[:faction_left].presence, config[:faction_right].presence ].compact
+      playable_ids = Faction.playable.where(slug: faction_ids).pluck(:slug)
+      raise ArgumentError, "faction must be playable" if (faction_ids - playable_ids).any?
+
       {
         army_stage: stage,
         battle_limit: config[:battle_limit].presence&.to_i,

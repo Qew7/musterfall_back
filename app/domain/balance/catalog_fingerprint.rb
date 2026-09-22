@@ -33,7 +33,7 @@ module Balance
 
     def factions_payload
       Faction.order(:slug).map { |faction|
-        [ faction.slug, faction.name, faction.passive, faction.color, faction.position ].join("|")
+        [ faction.slug, faction.name, faction.passive, faction.color, faction.position, faction.neutral? ].join("|")
       }.join("\n")
     end
 

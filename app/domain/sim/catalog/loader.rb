@@ -30,6 +30,7 @@ module Sim
           vibe: faction.vibe,
           passive: faction.passive,
           color: faction.color,
+          neutral: faction.neutral?,
           unit_pool: faction.units.map(&:template_key),
           hero_pool: faction.heroes.map(&:template_key)
         }
